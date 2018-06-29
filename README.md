@@ -19,5 +19,10 @@ of 1d quantum systems.
 
 the examples folder contains three examples of how to use it
 
+Dependencies:
+
+* scipy and numpy installation
+* ncon (https://github.com/mhauru/ncon)
+
 
 
