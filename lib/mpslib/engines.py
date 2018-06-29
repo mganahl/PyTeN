@@ -11,7 +11,7 @@ import functools as fct
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.mps as mpslib
-import lib.mpslib.Lanczos as LZ
+import lib.Lanczos.LanczosEngine as LZ
 import lib.utils.utilities as utils
 import lib.ncon as ncon
 from scipy.sparse.linalg import ArpackNoConvergence

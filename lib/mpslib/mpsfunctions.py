@@ -421,7 +421,7 @@ scale: initial scaling of the tensors
 shift: shift of the interval where random numbers are drawn from 
 """
 def MPSinit(length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
-    return MPSinitializer(np.random.random_sample,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5)
+    return MPSinitializer(np.random.random_sample,length,D,d,obc=obc,dtype=float,scale=scale,shift=shift)
 
 
 
@@ -485,14 +485,17 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             u_,s,v=np.linalg.svd(r)
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
+            
         s=s/np.linalg.norm(s)
+
         s=s[np.nonzero(s>thresh)[0]]
         if D!=None:
             if D<len(s):
                 warnings.warn('mpsfunctions.py:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
-            u=u[:,0:D]
-            v=v[0:D,:]
-            s=s[0:D]
+            s=s[0:min(D,len(s))]                
+            u=u[:,0:len(s)]
+            v=v[0:len(s),:]
+
         elif D==None:
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
@@ -517,9 +520,10 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
         if D!=None:
             if D<len(s):
                 warnings.warn('mpsfunctions.py:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
-            u=u[:,0:D]
-            v=v[0:D,:]
-            s=s[0:D]
+            s=s[0:min(D,len(s))]                
+            u=u[:,0:len(s)]
+            v=v[0:len(s),:]
+
         elif D==None:
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
@@ -1505,7 +1509,9 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         mps[N-1]=mps[N-1]/np.sqrt(Z)
         return np.eye(mps[N-1].shape[1])/np.sqrt(mps[N-1].shape[1])
     if gauge=='right':
+
         [eta,vr,numeig]=UnitcellTMeigs(mps,direction=-1,numeig=1,init=initr,nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
+
         sqrteta=np.real(eta)**(1./(2.*N))
         for site in range(N):
             mps[site]=mps[site]/sqrteta
@@ -1679,7 +1685,6 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
             Z=np.trace(np.tensordot(mps[0],np.conj(mps[0]),([1,2],[1,2])))/np.shape(mps[0])[0]
             mps[0]=mps[0]/np.sqrt(Z)
             return regaugeIMPS(mps,gauge='symmetric',ldens=None,rdens=None,truncate=1E-16,D=10,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=thresh)        
-
 
 """
 simple truncation method for a list of mps tensors

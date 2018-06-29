@@ -5,6 +5,11 @@
 #the following code employes the left gauge fixing through out, which results in l=11. Hence, l
 #does not appear in the code
 
+import sys,os
+root=os.getcwd()
+os.chdir('../../')
+sys.path.append(os.getcwd())#add parent directory to path
+os.chdir(root)
 
 import unittest
 import numpy as np
@@ -403,9 +408,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         lb=np.expand_dims(np.eye(self.mps[0].shape[0]),2)
         #note that lam is a diagonal matrix
         rb=np.expand_dims(lam**2,2)
-        Sz=np.zeros((1,1,2,2)).astype(dtype)
-        Sz[0,0,0,0]=1.0
-        Sz[0,0,1,1]=-1.0
+        Sz=np.diag([1,-1])
         
         m1=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps))
@@ -415,6 +418,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         lb=np.expand_dims(np.eye(self.mps[0].shape[0]),2)
         #note that lam is a diagonal matrix
         rb=np.expand_dims(lam**2,2)
+        
         self.assertTrue(shapes!=list(map(np.shape,self.mps)))
         m2=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
@@ -428,9 +432,8 @@ class UCMPSTruncationTests(unittest.TestCase):
         lb=np.expand_dims(np.eye(self.mps[0].shape[0]),2)
         #note that lam is a diagonal matrix
         rb=np.expand_dims(lam**2,2)
-        Sz=np.zeros((1,1,2,2)).astype(dtype)
-        Sz[0,0,0,0]=1.0
-        Sz[0,0,1,1]=-1.0
+        Sz=np.diag([1,-1])        
+
         m1=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps))
         lam=mf.regaugeIMPS(self.mps,'symmetric',truncate=1E-6,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
@@ -439,8 +442,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         #note that lam is a diagonal matrix
         rb=np.expand_dims(lam**2,2)
         self.assertTrue(shapes!=list(map(np.shape,self.mps)))
-        print(shapes)
-        print (list(map(np.shape,self.mps)))
+
         m2=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
 
@@ -529,9 +531,7 @@ class MPSTests(unittest.TestCase):
         rb=np.expand_dims(self.mps._mat**2,2)
         Ops=[]
         for n in range(len(self.mps)):
-            op=np.zeros((1,1,self.mps._d[n],self.mps._d[n])).astype(dtype)
-            op[0,0,:,:]=np.diag(np.random.rand(self.mps._d[n]))
-            Ops.append(op)
+            Ops.append(np.diag(np.random.rand(self.mps._d[n])))
         m1=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
@@ -562,9 +562,7 @@ class MPSTests(unittest.TestCase):
         rb=np.expand_dims(self.mps._mat**2,2)
         Ops=[]
         for n in range(len(self.mps)):
-            op=np.zeros((1,1,self.mps._d[n],self.mps._d[n])).astype(dtype)
-            op[0,0,:,:]=np.diag(np.random.rand(self.mps._d[n]))
-            Ops.append(op)
+            Ops.append(np.diag(np.random.rand(self.mps._d[n])))
         m1=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
@@ -601,7 +599,7 @@ class MPSTests(unittest.TestCase):
         meanSz=[]
 
         for n in range(self.N):
-            meanSz.append(dmrg._mps.__measure__(Sz,n))
+            meanSz=dmrg._mps.__measureLocal__([Sz]*self.N)
         for n in range(self.N):
             meanSzSz.append(dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n])))        
             
@@ -702,12 +700,12 @@ if __name__ == "__main__":
     suite5 = unittest.TestLoader().loadTestsFromTestCase(UCMPSTruncationTests)
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
     suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
-    #unittest.TextTestRunner(verbosity=2).run(suite2)
-    #unittest.TextTestRunner(verbosity=2).run(suite3)
-    #unittest.TextTestRunner(verbosity=2).run(suite4)
-    #unittest.TextTestRunner(verbosity=2).run(suite5)
-    #unittest.TextTestRunner(verbosity=2).run(suite6)
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite2)
+    unittest.TextTestRunner(verbosity=2).run(suite3)
+    unittest.TextTestRunner(verbosity=2).run(suite4)
+    unittest.TextTestRunner(verbosity=2).run(suite5)
+    unittest.TextTestRunner(verbosity=2).run(suite6)
     unittest.TextTestRunner(verbosity=2).run(suite7) 
 
     
