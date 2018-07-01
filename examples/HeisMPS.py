@@ -21,7 +21,7 @@ plt.ion()
 if __name__ == "__main__":
     D=60        #final bond dimension
     d=2         #local hilbert space dimension
-    N=20        #number of sites
+    N=100        #number of sites
     Jz=np.ones(N) #Hamiltonian parameters
     Jxy=np.ones(N)
 

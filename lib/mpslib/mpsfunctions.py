@@ -23,15 +23,32 @@ herm=lambda x:np.conj(np.transpose(x))
 
 """
 calculates the overlap between two mps 
+mps1, mps2; list of mps tensors or MPS-objects
 """
 def overlap(mps1,mps2):
-    assert(len(mps1)==len(mps2))
+    if len(mps1)!=len(mps2):
+        raise ValueError("overlap(mps1,mps2): mps have to be of same length")
+    if (mps1[0].shape[0]!=1):
+        raise ValueError("overlap(mps1,mps2): mps1[0].shape[0]!=1")
+    if (mps1[-1].shape[1]!=1):
+        raise ValueError("overlap(mps1,mps2): mps1[-1].shape[1]!=1")
+    if (mps2[0].shape[0]!=1):
+        raise ValueError("overlap(mps1,mps2): mps2[0].shape[0]!=1")
+    if (mps2[-1].shape[1]!=1):
+        raise ValueError("overlap(mps1,mps2): mps2[-1].shape[1]!=1")
+
     L=np.reshape(ncon.ncon([mps1[0],np.conj(mps2[0])],[[1,2,-1],[1,2,-2]]),(mps1[0].shape[1],mps2[0].shape[1],1))
     for n in range(1,len(mps1)):
         L=addELayer(L,mps1[n],mps2[n],direction=1)
 
     return np.trace(L[:,:,0])
 
+
+"""
+checks if tensor obeys left or right orthogonalization;
+tensor: an mps tensor of dimensions (D,D,d)
+which: 'l' or 'r'; the orthogonality to be checked
+"""
 def check_normalization(tensor,which,thresh=1E-10):
     if which=='l':
         Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([0,2],[0,2]))-np.eye(tensor.shape[1]))
@@ -44,6 +61,10 @@ def check_normalization(tensor,which,thresh=1E-10):
     return Z
 
 #finegrains a d=2 MPS by a factor of 2
+
+"""
+fine-grains an MPS by splitting a single site into 2 sites (see paper by Dolfi et al)
+"""
 def FinegrainDolfi(mps):
     assert(mps[0].shape[2]==2)
     T=np.zeros((2,2,2)).astype(mps[0].dtype)
@@ -53,7 +74,8 @@ def FinegrainDolfi(mps):
     mpsfine=[]
     for n in range(len(mps)):
         D1,D2,d=mps[n].shape
-        assert(d==2)
+        if d!=2:
+            raise ValueError("in FinegrainDolfi: local hilbert space dimension d has to be 2")
         tensor=np.transpose(np.tensordot(mps[n],T,([2],[0])),(0,2,1,3))
         matrix=np.reshape(tensor,(D1*2,D2*2))
         U,S,V=np.linalg.svd(matrix)
@@ -85,8 +107,6 @@ def svd(mat,full_matrices=False,r_thresh=1E-14):
 """
 a simple wrapper around numpy qr, allows signfixing of the diagonal of r or q
 """
-
-
 def qr(mat,signfix):
     dtype=type(mat[0,0])
     q,r=np.linalg.qr(mat)
@@ -100,7 +120,9 @@ def qr(mat,signfix):
         return q.dot(herm(unit)),unit.dot(r)
 
     
-#returns the direct sum of two matrices; used below in the addMPS routine
+"""
+returns the direct sum of two matrices; used below in the addMPS routine
+"""
 def directsum(m1,m2):
     dtype=type(m1[0,0])
     out=np.zeros((list(map(sum,zip(m1.shape,m2.shape)))),dtype=dtype)
@@ -109,30 +131,41 @@ def directsum(m1,m2):
     return out
     
 
+
+"""
+
+"""
 def addMPS(mps1,mps2,obc=True):
     if obc==True:
         dtype=type(mps1[0][0,0,0])
-        assert(len(mps1)==len(mps2))
+        if len(mps1)!=len(mps2):
+            raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
+
         mps=[]
         shape=(1,mps1[0].shape[1]+mps2[0].shape[1],mps1[0].shape[2])
-        assert(mps1[0].shape[2]==mps2[0].shape[2])
+        if mps1[0].shape[2]!=mps2[0].shape[2]:
+            raise ValueError("in addMPS: mps1[0] and mps2[0] have different hilbert space dimensions")
+
         mat=np.zeros(shape,dtype=dtype)
         for n in range(mps1[0].shape[2]):
             mat[0,0:mps1[0].shape[1],n]=mps1[0][0,:,n]
             mat[0,mps1[0].shape[1]:mps1[0].shape[1]+mps2[0].shape[1],n]=mps2[0][0,:,n]
         mps.append(mat)
         for site in range(1,len(mps1)-1):
+            if mps1[site].shape[2]!=mps2[site].shape[2]:
+                raise ValueError("in addMPS: mps1[{0}] and mps2[{0}] have different hilbert space dimensions".format(site))
+            
             l=list(map(sum,zip(mps1[site].shape[0:2],mps2[site].shape[0:2])))
             l.append(mps1[site].shape[2])
             shape=tuple(l)
             mat=np.zeros(shape,dtype=dtype)
-            assert(mps1[site].shape[2]==mps2[site].shape[2])
             for n in range(mps1[site].shape[2]):
                 mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
             mps.append(mat)
         
         shape=(mps1[-1].shape[0]+mps2[-1].shape[0],1,mps1[-1].shape[2])
-        assert(mps1[-1].shape[2]==mps2[-1].shape[2])
+        if mps1[-1].shape[2]!=mps2[-1].shape[2]:
+            raise ValueError("in addMPS: mps1[-1] and mps2[-1] have different hilbert space dimensions")
         mat=np.zeros(shape,dtype=dtype)
         for n in range(mps1[-1].shape[2]):
             mat[0:mps1[-1].shape[0],0,n]=mps1[-1][:,0,n]
@@ -141,16 +174,17 @@ def addMPS(mps1,mps2,obc=True):
         
     if obc==False:
         dtype=type(mps1[0][0,0,0])
-        assert(len(mps1)==len(mps2))
+        if len(mps1)!=len(mps2):
+            raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
         mps=[]
-        shape=(1,mps1[0].shape[1]+mps2[0].shape[1],mps1[0].shape[2])
-        assert(mps1[0].shape[2]==mps2[0].shape[2])
         for site in range(len(mps1)):
+            if mps1[site].shape[2]!=mps2[site].shape[2]:
+                raise ValueError("in addMPS: mps1[{0}] and mps2[{0}] have different hilbert space dimensions".format(site))
+            
             l=list(map(sum,zip(mps1[site].shape[0:2],mps2[site].shape[0:2])))
             l.append(mps1[site].shape[2])
             shape=tuple(l)
             mat=np.zeros(shape,dtype=dtype)
-            assert(mps1[site].shape[2]==mps2[site].shape[2])
             for n in range(mps1[site].shape[2]):
                 mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
             mps.append(mat)
@@ -990,21 +1024,70 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
             vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp)))
         return es,vs
 
-
+#
+#def evolveTensorSexpmv(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
+#    dtype=mps.dtype
+#    if dtype==float:
+#        assert(L.dtype==dtype)
+#        assert(mpo.dtype==dtype)
+#        assert(R.dtype==dtype)
+#
+#    [chi1,chi2,d]=np.shape(mps)
+#    chi1p=np.shape(L)[1]
+#    chi2p=np.shape(R)[1]
+#    dp=np.shape(mpo)[3]
+#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+#    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+#    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(mv, np.reshape(mps,chi1*chi2*d), tau, anorm=1.0)
+#    return np.reshape(v,mps.shape)
+#    
+#
+#
+#def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
+#    dtype=mps.dtype
+#    if dtype==float:
+#        assert(L.dtype==dtype)
+#        assert(mpo.dtype==dtype)
+#        assert(R.dtype==dtype)
+#
+#    [chi1,chi2,d]=np.shape(mps)
+#    chi1p=np.shape(L)[1]
+#    chi2p=np.shape(R)[1]
+#    dp=np.shape(mpo)[3]
+#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+#    #LanczosTimeEvolution(mv,np.dot,tau,Ndiag=100,ncv=krylov_dimension,delta=1E-10,deltaEta=1E-10):   
+#    lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
+#    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
+#    return np.reshape(v,mps.shape)
+#
+#def evolveMatrixLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
+#    dtype=mps.dtype
+#    if dtype==float:
+#        assert(L.dtype==dtype)
+#        assert(mpo.dtype==dtype)
+#        assert(R.dtype==dtype)
+#
+#    [chi1,chi2,d]=np.shape(mps)
+#    chi1p=np.shape(L)[1]
+#    chi2p=np.shape(R)[1]
+#    dp=np.shape(mpo)[3]
+#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+#    #LanczosTimeEvolution(mv,np.dot,tau,Ndiag=10,ncv=krylov_dimension,delta=1E-10,deltaEta=1E-10):   
+#    lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
+#    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
+#    return np.reshape(v,mps.shape)
+#
+#
 
 
 #calls a sparse eigensolver to find the lowest eigenvalue
 #takes only L and R blocks, and finds the ground state
 def eigshbondsimple(L,R,mat0,tolerance=1e-6,numvecs=1,numcv=10):
-    dtype=mat0.dtype
     [chi1,chi2]=np.shape(mat0)
-    #return -1.0,np.reshape(np.reshape(mat0,chi1*chi2),(chi1,chi2))
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,R])
-
-    #return -1.0,np.reshape(mv(np.reshape(mat0,chi1*chi2)),(chi1,chi2))
-    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=mat0.dtype)
     e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
     return [e,np.reshape(v,(chi1p,chi2p))]
 

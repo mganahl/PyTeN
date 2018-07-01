@@ -7,7 +7,7 @@
 
 import sys,os
 root=os.getcwd()
-os.chdir('../../')
+os.chdir('../')
 sys.path.append(os.getcwd())#add parent directory to path
 os.chdir(root)
 

@@ -29,7 +29,7 @@ lb, rb: left and right boundary conditions;  if None, obc are assumed;
 class DMRGengine:
     #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1.0,1.0,1.0)) for obc simulation
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
-        if (lb!=None) and (rb!=None):
+        if (np.all(lb)!=None) and (np.all(rb)!=None):
             self._lb=np.copy(lb)
             self._rb=np.copy(rb)            
         else:
@@ -41,7 +41,12 @@ class DMRGengine:
         self._mps=mps
         self._mpo=mpo
         self._filename=filename
-        self._N=mps._N
+        self._N=self._mps._N
+        self._mps.__position__(0)
+        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+        self._L.insert(0,np.copy(self._lb))
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,np.copy(self._rb))
 
 
     """
@@ -61,24 +66,11 @@ class DMRGengine:
     """
     def __simulate__(self,Nmax,Econv,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         assert((solver=='AR') or (solver=='LAN'))
-        self._N=self._mps._N
-        self._mps.__position__(0)
-        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-        self._L.insert(0,np.copy(self._lb))
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,np.copy(self._rb))
-        #self._Ndiag=Ndiag
-        #self._nmaxlan=nmaxlan
-        #self._landelta=landelta
-        #self._landeltaEta=landeltaEta
-
-        
-
         converged=False
         energy=100000.0
         it=1
         Es=np.zeros(self._mps._N)
-
+        self._mps.__position__(0)
         while not converged:
             for n in range(0,self._mps._N-1):
                 if solver=='AR':
@@ -153,18 +145,11 @@ class DMRGengine:
         
     def __simulateTwoSite__(self,Nmax,Econv,tol,ncv,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         assert((solver=='AR') or (solver=='LAN'))
-        self._N=self._mps._N
-        self._mps.__position__(0)
-        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-        self._L.insert(0,self._lb)
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,self._rb)        
-
-        #assert(self._N%2==0)
         converged=False
         energy=100000.0
         it=1
         Es=np.zeros(self._mps._N)
+        self._mps.__position__(0)        
         while not converged:
             for n in range(0,self._mps._N-2):
                 self._mps.__position__(n+1)
@@ -248,118 +233,74 @@ class DMRGengine:
                 break
         return e
         #returns the center bond matrix and the gs energy
-"""
-infinite dmrg optimization ala mcculloch
-"""        
-class IDMRGengine:
-    #left/rightboundary are boundary mpo expressions
-    #def __init__(self,mps,mpo0,mpo1,mpo2,filename,lb,rb):
+
+
+class IDMRGengine(DMRGengine):
     def __init__(self,mps,mpo,filename):
-        self._mps=mps
-        self._mpo=mpo #mpo used for the simulations
-        self._filename=filename
-        self._N=self._mps._N
-        self._L=[]
-        self._R=[]
-        self._Ntot=0
+        lb,rb,lbound,rbound=mf.getBoundaryHams(mps,mpo)                            
+        super().__init__(mps,mpo,filename,lb,rb)
+    #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
+    def __update__(self):
+        self._mps.__position__(self._mps._N)
+        for site in range(int(self._mps._N/2)):
+            self._lb=mf.addLayer(self._lb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],1)
+            
+        lamR=np.copy(self._mps._mat)
+        mps=[]
+        D=0        
+        for n in range(int(self._mps._N/2),self._mps._N):
+            if self._mps._tensors[n].shape[0]>D:
+                D=self._mps._tensors[n].shape[0]
+            mps.append(np.copy(self._mps._tensors[n]))
+
+        self._mps.__position__(int(self._mps._N/2))
+        lamC=np.copy(self._mps._mat)
+        connector=np.copy(np.linalg.pinv(lamC))
+
+        for site in range(self._mps._N-1,int(self._mps._N/2)-1,-1):
+            self._rb=mf.addLayer(self._rb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],-1)
+
+        self._R[0]=np.copy(self._rb)
+        self._L[0]=np.copy(self._lb)
+        self._mps.__position__(0)
+        lamL=np.copy(self._mps._mat)
+        for n in range(int(self._mps._N/2)):
+            if self._mps._tensors[n].shape[0]>D:
+                D=self._mps._tensors[n].shape[0]
+            mps.append(np.copy(self._mps._tensors[n]))
+        for n in range(self._mps._N):
+            self._mps._tensors[n]=np.copy(mps[n])
+            
+        self._mps._position=int(self._mps._N/2)
+        self._mps._mat=lamR.dot(self._mps._connector).dot(lamL)
+        self._mps._connector=np.copy(connector)
+        self._mps.__position__(0)
+        mf.patchmpo(self._mpo,int(self._mps._N/2))        
+        return D
 
     def __simulate__(self,Nmax,NUC,Econv,tol,ncv,cp=10,verbose=0):
-        N=len(self._mpo)
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
         print ('# of sweeps per unit cell: {0}'.format(NUC))
         print ('# Econv: {0}'.format(Econv))
         print ('# Arnoldi tolerance: {0}'.format(tol))
         print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
-        
         it=0
         converged=False
-
-        #self._mps.__regauge__('symmetric')
-        self._lb,self._rb,lbound,rbound=mf.getBoundaryHams(self._mps,self._mpo)                    
-        self._mps.__position__(0)
-        dmrg=DMRGengine(self._mps,self._mpo,'intermediate',self._lb,self._rb)
-        eold=dmrg.__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
-
-        dmrg._mps.__position__(dmrg._mps._N)
-        for site in range(int(dmrg._mps._N/2)):
-            dmrg._lb=mf.addLayer(dmrg._lb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],1)
-            
-        lamR=np.copy(dmrg._mps._mat)
-        mps=[]
-        for n in range(int(dmrg._mps._N/2),dmrg._mps._N):
-            mps.append(np.copy(dmrg._mps._tensors[n]))
-
-
-        dmrg._mps.__position__(int(dmrg._mps._N/2))
-        lamC=np.copy(dmrg._mps._mat)
-        connector=np.copy(np.linalg.pinv(lamC))
-
-        for site in range(dmrg._mps._N-1,int(dmrg._mps._N/2)-1,-1):
-            dmrg._rb=mf.addLayer(dmrg._rb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],-1)
-
-        dmrg._R[0]=np.copy(dmrg._rb)
-        dmrg._L[0]=np.copy(dmrg._lb)
-        dmrg._mps.__position__(0)
-        lamL=np.copy(dmrg._mps._mat)
-        for n in range(int(dmrg._mps._N/2)):
-            mps.append(np.copy(dmrg._mps._tensors[n]))
-        for n in range(dmrg._mps._N):
-            dmrg._mps._tensors[n]=np.copy(mps[n])
-            
-        dmrg._mps._position=int(dmrg._mps._N/2)
-        dmrg._mps._mat=lamR.dot(dmrg._mps._connector).dot(lamL)
-        dmrg._mps._connector=np.copy(connector)
-        dmrg._mps.__position__(0)
-
+        #eold=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
+        #self.__update__()
+        eold=0.0
         while not converged:
-            e=dmrg.__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
-            dmrg._mps.__position__(dmrg._mps._N)
-            for site in range(int(dmrg._mps._N/2)):
-                dmrg._lb=mf.addLayer(dmrg._lb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],1)
-            
-            lamR=np.copy(dmrg._mps._mat)
-            mps=[]
-            D=0
-            for n in range(int(dmrg._mps._N/2),dmrg._mps._N):
-                if dmrg._mps._tensors[n].shape[0]>D:
-                    D=dmrg._mps._tensors[n].shape[0]
-                mps.append(np.copy(dmrg._mps._tensors[n]))
-            dmrg._mps.__position__(int(dmrg._mps._N/2))
-            lamC=np.copy(dmrg._mps._mat)
-            connector=np.copy(np.linalg.pinv(lamC))
-            
-            for site in range(dmrg._mps._N-1,int(dmrg._mps._N/2)-1,-1):
-                dmrg._rb=mf.addLayer(dmrg._rb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],-1)
-            dmrg._R[0]=np.copy(dmrg._rb)            
-
-
-            dmrg._L[0]=np.copy(dmrg._lb)
-            dmrg._mps.__position__(0)
-            lamL=np.copy(dmrg._mps._mat)
-            for n in range(int(dmrg._mps._N/2)):
-                if dmrg._mps._tensors[n].shape[0]>D:
-                    D=dmrg._mps._tensors[n].shape[0]
-                mps.append(np.copy(dmrg._mps._tensors[n]))
-            
-            for n in range(dmrg._mps._N):
-                dmrg._mps._tensors[n]=np.copy(mps[n])
-                
-            dmrg._mps._position=int(dmrg._mps._N/2)
-            dmrg._mps._mat=lamR.dot(dmrg._mps._connector).dot(lamL)
-            dmrg._mps._connector=np.copy(connector)
-            dmrg._mps.__position__(dmrg._mps._N)
-
-            mf.patchmpo(dmrg._mpo,int(dmrg._mps._N/2))
+            e=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
+            D=self.__update__()
             if verbose>0:
-                stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(dmrg._mps._N)),np.imag((e-eold)/(dmrg._mps._N)),D))
+                stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
                 #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
             if cp!=None and it>0 and it%cp==0:                
                 np.save(self._filename+'_dmrg_cp',self._mps._tensors)
-
             eold=e
             it=it+1
             if it>Nmax:
@@ -367,116 +308,34 @@ class IDMRGengine:
                 break
         it=it+1
 
-    #important note: at the moment, the user has to provide an mpo which covers TWO unitcells!
     def __simulateTwoSite__(self,Nmax,NUC,Econv,tol,ncv,cp=10,verbose=0,truncation=1E-10):
-        N=len(self._mpo)
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
         print ('# of sweeps per unit cell: {0}'.format(NUC))
         print ('# Econv: {0}'.format(Econv))
         print ('# Arnoldi tolerance: {0}'.format(tol))
         print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
-        
         it=0
         converged=False
-
-        #self._mps.__regauge__('symmetric')
-        self._lb,self._rb,lbound,rbound=mf.getBoundaryHams(self._mps,self._mpo)                    
-        self._mps.__position__(0)
-        dmrg=DMRGengine(self._mps,self._mpo,'intermediate',self._lb,self._rb)
-        eold=dmrg.__simulateTwoSite__(NUC,Econv,tol,ncv,verbose=verbose-1,truncation=truncation)
-
-        dmrg._mps.__position__(dmrg._mps._N)
-        for site in range(int(dmrg._mps._N/2)):
-            dmrg._lb=mf.addLayer(dmrg._lb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],1)
-
-        lamR=np.copy(dmrg._mps._mat)
-        mps=[]
-        for n in range(int(dmrg._mps._N/2),dmrg._mps._N):
-            mps.append(np.copy(dmrg._mps._tensors[n]))
-
-        dmrg._mps.__position__(int(dmrg._mps._N/2))
-        lamC=np.copy(dmrg._mps._mat)
-        connector=np.copy(np.linalg.pinv(lamC))
-
-        for site in range(dmrg._mps._N-1,int(dmrg._mps._N/2)-1,-1):
-            dmrg._rb=mf.addLayer(dmrg._rb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],-1)
-
-        dmrg._R[0]=np.copy(dmrg._rb)
-        #dmrg._lb=np.copy(dmrg._L[int(dmrg._mps._N/2)-1+1])
-        dmrg._L[0]=np.copy(dmrg._lb)
-
-        dmrg._mps.__position__(0)
-        lamL=np.copy(dmrg._mps._mat)
-        for n in range(int(dmrg._mps._N/2)):
-            mps.append(np.copy(dmrg._mps._tensors[n]))
-
-        for n in range(dmrg._mps._N):
-            dmrg._mps._tensors[n]=np.copy(mps[n])
-            
-        dmrg._mps._position=int(dmrg._mps._N/2)
-        dmrg._mps._mat=lamR.dot(dmrg._mps._connector).dot(lamL)
-        dmrg._mps._connector=np.copy(connector)
-        dmrg._mps.__position__(0)
-
+        #eold=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
+        #self.__update__()
+        eold=0.0
         while not converged:
-            e=dmrg.__simulateTwoSite__(NUC,Econv,tol,ncv,verbose=verbose-1,truncation=truncation)  
-            dmrg._mps.__position__(dmrg._mps._N)
-            for site in range(int(dmrg._mps._N/2)):
-                dmrg._lb=mf.addLayer(dmrg._lb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],1)
-
-            lamR=np.copy(dmrg._mps._mat)
-            mps=[]
-            D=0
-            for n in range(int(dmrg._mps._N/2),dmrg._mps._N):
-                if dmrg._mps._tensors[n].shape[0]>D:
-                    D=dmrg._mps._tensors[n].shape[0]
-
-                mps.append(np.copy(dmrg._mps._tensors[n]))
-            dmrg._mps.__position__(int(dmrg._mps._N/2))
-            lamC=np.copy(dmrg._mps._mat)
-            connector=np.copy(np.linalg.pinv(lamC))
-            
-            for site in range(dmrg._mps._N-1,int(dmrg._mps._N/2)-1,-1):
-                dmrg._rb=mf.addLayer(dmrg._rb,dmrg._mps._tensors[site],dmrg._mpo[site],dmrg._mps._tensors[site],-1)
-            dmrg._R[0]=np.copy(dmrg._rb)            
-            #dmrg._lb=np.copy(dmrg._L[int(dmrg._mps._N/2)-1+1])
-            dmrg._L[0]=np.copy(dmrg._lb)
-
-            dmrg._mps.__position__(0)
-            lamL=np.copy(dmrg._mps._mat)
-            for n in range(int(dmrg._mps._N/2)):
-                if dmrg._mps._tensors[n].shape[0]>D:
-                    D=dmrg._mps._tensors[n].shape[0]
-
-                mps.append(np.copy(dmrg._mps._tensors[n]))
-            
-            for n in range(dmrg._mps._N):
-                dmrg._mps._tensors[n]=np.copy(mps[n])
-                
-            dmrg._mps._position=int(dmrg._mps._N/2)
-            dmrg._mps._mat=lamR.dot(dmrg._mps._connector).dot(lamL)
-            dmrg._mps._connector=np.copy(connector)
-            dmrg._mps.__position__(dmrg._mps._N)
-
-            mf.patchmpo(dmrg._mpo,int(dmrg._mps._N/2))
+            e=super().__simulateTwoSite__(NUC,Econv,tol,ncv,verbose=verbose-1,truncation=truncation)
+            D=self.__update__()
             if verbose>0:
-                stdout.write("\rTS-IDMRG: it=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(dmrg._mps._N)),np.imag((e-eold)/(dmrg._mps._N)),D))
+                stdout.write("\rTS-IDMRG: it=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
-                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
-            if cp!=None and it>0 and it%cp==0:                                
+            if cp!=None and it>0 and it%cp==0:                
                 np.save(self._filename+'_dmrg_cp',self._mps._tensors)
-
             eold=e
             it=it+1
             if it>Nmax:
                 converged=True
                 break
         it=it+1
-
-
 
 """
 MPS optimization methods for homogeneous systems
@@ -754,58 +613,59 @@ class TimeEvolutionEngine:
         =============================================================         everyting below IS STILL UNDER CONSTRUCTION AND NOT WORKING ============================================================
         """
         
-    def __doTDVP__(self,mps,mpo,filename,dt):
-        return NotImplemented
-        self._N=self._mps._N
-        self._mps.__position__(0)
-        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-        self._L.insert(0,np.copy(self._lb))
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,np.copy(self._rb))
-        while not converged:
-            for n in range(0,self._mps._N-1):
-                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
-                Dnew=opt.shape[1]
-                if verbose>0:
-                    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()                    
-                Es[n]=e
-                tensor,r=mf.prepareTensor(opt,1)
-                self._mps[n]=np.copy(tensor)
-                self._mps._mat=np.copy(r)
-                self._mps._position=n+1
-
-                self._L[n+1]=np.copy(mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1))
-                
-            for n in range(self._mps._N-1,0,-1):
-                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)
-                Dnew=opt.shape[1]
-                if verbose>0:
-                    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()                                        
-                    #
-                    #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
-                Es[n]=e
-                tensor,r=mf.prepareTensor(opt,-1)
-                self._mps[n]=np.copy(tensor)
-                self._mps._mat=np.copy(r)
-                self._mps._position=n
-                
-                self._R[self._mps._N-1-n+1]=np.copy(mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1))
-                    
-            if np.abs(e-energy)<Econv:
-                converged=True
-            energy=e
-            if cp!=None and it>0 and it%cp==0:
-                np.save(self._filename+'_dmrg_cp',self._mps._tensors)
-            it=it+1
-            if it>Nmax:
-                if verbose>0:
-                    print()
-                    print ('reached maximum iteration number ',Nmax)
-                break
-        return e
-        #returns the center bond matrix and the gs energy
+#    def __doTDVP__(self,mps,mpo,filename,dt):
+#        return NotImplemented
+#        self._N=self._mps._N
+#        self._mps.__position__(0)
+#        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+#        self._L.insert(0,np.copy(self._lb))
+#        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+#        self._R.insert(0,np.copy(self._rb))
+#        while not converged:
+#            for n in range(0,self._mps._N-1):
+#                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
+#                mf. evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):                
+#                #Dnew=opt.shape[1]
+#                #if verbose>0:
+#                #    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
+#                #    stdout.flush()                    
+#                #Es[n]=e
+#                #tensor,r=mf.prepareTensor(opt,1)
+#                #self._mps[n]=np.copy(tensor)
+#                #self._mps._mat=np.copy(r)
+#                #self._mps._position=n+1
+#
+#                self._L[n+1]=np.copy(mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1))
+#                
+#            for n in range(self._mps._N-1,0,-1):
+#                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)
+#                Dnew=opt.shape[1]
+#                if verbose>0:
+#                    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
+#                    stdout.flush()                                        
+#                    #
+#                    #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
+#                Es[n]=e
+#                tensor,r=mf.prepareTensor(opt,-1)
+#                self._mps[n]=np.copy(tensor)
+#                self._mps._mat=np.copy(r)
+#                self._mps._position=n
+#                
+#                self._R[self._mps._N-1-n+1]=np.copy(mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1))
+#                    
+#            if np.abs(e-energy)<Econv:
+#                converged=True
+#            energy=e
+#            if cp!=None and it>0 and it%cp==0:
+#                np.save(self._filename+'_dmrg_cp',self._mps._tensors)
+#            it=it+1
+#            if it>Nmax:
+#                if verbose>0:
+#                    print()
+#                    print ('reached maximum iteration number ',Nmax)
+#                break
+#        return e
+#        #returns the center bond matrix and the gs energy
 
 
 """
