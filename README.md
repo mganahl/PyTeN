@@ -17,7 +17,7 @@ of 1d quantum systems.
 * ground states for translationally invariant systems using gradient optimization
 * ground states for systems with finite unit-cells using IDMRG
 
-the examples folder contains three examples of how to use it
+the examples folder contains examples of how to use it
 
 Dependencies:
 
