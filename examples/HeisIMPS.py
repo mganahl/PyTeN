@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
-#cmps program for ground state calculations of the inhomogeneous Lieb-Liniger model in the thermodynamic limit
-#in the following comments, [,] is the commutator and {,} is the anti commutator of operators
-#the following code employes the left gauge fixing through out, which results in l=11. Hence, l
-#does not appear in the code
+#program for ground state calculations of the Heisenberg model in the thermodynamic limit
 import sys,os
 root=os.getcwd()
 os.chdir('../')
