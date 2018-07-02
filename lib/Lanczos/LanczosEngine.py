@@ -72,7 +72,7 @@ class LanczosEngine:
 
             if reortho==True:
                 for v in self._vecs:
-                    xn-=self._dot(np.conj(v),xn)*v
+                    xn-=self._dot(v.conjugate(),xn)*v
             self._vecs.append(xn)                    
             Hxn=self._matvec(xn)                    
             epsn.append(self._dot(xn.conjugate(),Hxn))
