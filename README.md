@@ -10,7 +10,7 @@ of 1d quantum systems.
 ## finite systems:
 
 * ground states using DMRG
-* Real time evolution using TEBD
+* Real time evolution using TEBD or TDVP
 
 ## infinite systems
 
