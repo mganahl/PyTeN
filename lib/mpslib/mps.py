@@ -1,3 +1,7 @@
+"""
+@author: Martin Ganahl
+"""
+
 from sys import stdout
 import numpy as np
 import os,copy
@@ -66,34 +70,30 @@ class MPS:
     and puts the resulting tensor at the corresponding position.
     
     self._connector contains a connector matrix such that the tensors can be connected back to themselves: self._tensors[-1]*self._mat*self._connector*self._tensors[0]
-    (where * is a tensor contraction) is correctly gauge-matched.
+    (where * is a tensor contraction) is correctly gauge-matched. This is relevant for infinite system simulations
 
     if schmidt_thresh is set below 1E-15, some mps methods, like e.g. __position__, switch 
     to qr instead of svd orthogonalization
 
-    The maximum bond dimension of the MPS is self._D. 
-    """
-
-    """ 
-    returns an mps with no tensors
-    """
-
-    """
-    N (int): length of the mps
-    D (int): initial bond dimensions
-    d (int or array of int): local Hilbert space dimension
-    obc (bool): boundary condition
-    scaling (float): initial scaling of mps matrices
-    dtype (python "float" type or "complex" type: data type
-    shift: shift of interval of random number generation for initial mps
-    schmidt_thresh: truncation limit of the mps
-    r_thresh: internal parameter (ignore it)
-    """
+    The maximum bond dimension of the MPS is self._D. Methods will try to truncate the state such that this limit is respected
     
+    for generating an mps, use the decorators random, zeros, ones or productState (see below)
+    """
     def __init__(self):
         pass
     @classmethod
     def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-16):
+        """
+        N (int): length of the mps
+        D (int): initial bond dimensions
+        d (int or array of int): local Hilbert space dimension
+        obc (bool): boundary condition
+        scaling (float): initial scaling of mps matrices
+        dtype (python "float" type or "complex" type: data type
+        shift: shift of interval of random number generation for initial mps
+        schmidt_thresh: truncation limit of the mps
+        r_thresh: internal parameter (ignore it)
+        """
         mps=cls()
         mps._N=N
         mps._D=D
@@ -116,7 +116,17 @@ class MPS:
 
 
     @classmethod
-    def zeros(cls,N,D,d,obc,scaling=0.0,dtype=float,shift=0.0,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def zeros(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+        """
+        N (int): length of the mps
+        D (int): initial bond dimensions
+        d (int or array of int): local Hilbert space dimension
+        obc (bool): boundary condition
+        dtype (python "float" type or "complex" type: data type
+        schmidt_thresh: truncation limit of the mps
+        r_thresh: internal parameter (ignore it)
+        """
+        
         mps=cls()
 
         mps._N=N
@@ -126,7 +136,7 @@ class MPS:
         mps._schmidt_thresh=schmidt_thresh
         mps._r_thresh=r_thresh
 
-        mps._tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scaling,shift)
+        mps._tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
         mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
         mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
         mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
@@ -137,7 +147,17 @@ class MPS:
         return mps
 
     @classmethod
-    def ones(cls,N,D,d,obc,scaling=1.0,dtype=float,shift=0.0,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def ones(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+        """
+        N (int): length of the mps
+        D (int): initial bond dimensions
+        d (int or array of int): local Hilbert space dimension
+        obc (bool): boundary condition
+        dtype (python "float" type or "complex" type: data type
+        schmidt_thresh: truncation limit of the mps
+        r_thresh: internal parameter (ignore it)
+        """
+
         mps=cls()
         mps._N=N
         mps._D=D
@@ -146,7 +166,7 @@ class MPS:
         mps._schmidt_thresh=schmidt_thresh
         mps._r_thresh=r_thresh
 
-        mps._tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scaling,shift)
+        mps._tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
         mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
         mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
         mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
@@ -159,7 +179,17 @@ class MPS:
         return mps
         
     @classmethod
-    def productState(cls,localstate,d,obc,scaling=1.0,dtype=float,shift=0.0,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def productState(cls,localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+        """
+        initialize a product state;
+        localstate: an array of int specifying the local positions; i.e. localstate[n]=i 
+                    sets the state at position n to i, where 0<i<d[n]
+        d:          int or array of int; local hilbert space dimensions
+        obc:        boundary condition of the mps
+        dtype (python "float" type or "complex" type: data type
+        schmidt_thresh: truncation limit of the mps
+        r_thresh: internal parameter (ignore it)
+        """
         mps=cls()
         mps._N=len(localstate)
         mps._D=1
@@ -182,8 +212,11 @@ class MPS:
         return mps
         
     def __copy__(self):
-        cop=MPS.zeros(self._N,self._D,self._d,self._obc,dtype=self._dtype,schmidt_thresh=self._schmidt_thresh,r_thresh=self._r_thresh)
+        """
+        return a copy of self
 
+        """
+        cop=MPS.zeros(self._N,self._D,self._d,self._obc,dtype=self._dtype,schmidt_thresh=self._schmidt_thresh,r_thresh=self._r_thresh)
         cop._tensors=copy.deepcopy(self._tensors)
         cop._d=copy.deepcopy(self._d)
         cop._mat=copy.deepcopy(self._mat)
@@ -194,9 +227,6 @@ class MPS:
         return cop
 
 
-    def __len__(self):
-        return self._N
-    
     def __getitem__(self,n):
         if isinstance(n,int):
             assert(abs(n)<len(self))
@@ -269,10 +299,8 @@ class MPS:
     """
 
     def __absorbConnector__(self,location):
-        try:
-            assert(location=='left' or location=='right')
-        except AssertionError:
-            sys.exit('mps.__absorbConnector__(self,location): wrong value for "location"; use "location"="left" or "right"')
+        if not ((location=='left') or (location=='right')):
+            raise ValueError('mps.__absorbConnector__(self,location): wrong value for "location"; use "location"="left" or "right"')
 
         if location=='right':
             self._tensors[self._N-1]=np.transpose(np.tensordot(self._tensors[self._N-1],self._connector,([1],[0])),(0,2,1))
@@ -328,7 +356,6 @@ class MPS:
             D.append(self[n].shape[0])
         D.append(self[len(self)-1].shape[1])
         return D
-
 
     """
     shifts the center site to "bond"
@@ -409,9 +436,6 @@ class MPS:
                 L=mf.measureLocal(self,ops,lb=np.ones((1,1,1)),rb=np.ones((1,1,1)),ortho='right')
                 self.__position__(pos)
                 return L
-
-
-
 
         
     """ 
@@ -529,12 +553,14 @@ class MPS:
             out=np.tensordot(self._mat,self._tensors[site],([1],[0]))
             if clear==True:
                 self._mat=np.eye(np.shape(self._tensors[site])[0])
+                self._mat/=np.linalg.norm(self._mat)                                
             return out
 
         if (site==(self._position-1)):
             out=np.transpose(np.tensordot(self._tensors[site],self._mat,([1],[0])),(0,2,1))            
             if clear==True:
                 self._mat=np.eye(np.shape(self._tensors[site])[1])
+                self._mat/=np.linalg.norm(self._mat)                
             return out
 
     """
@@ -635,6 +661,23 @@ class MPS:
         self._tensors[site+1]=np.transpose(np.reshape(V,(len(S),d2,Dr)),(0,2,1))
         self._mat=np.diag(S)
         return tw,len(S)
+
+
+
+    """
+    applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
+    "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
+    site has to be the left-hand site of the operator support
+    """
+    def __applyOneSiteGate__(self,gate,site,Dmax=None,thresh=1E-10):
+        assert(len(gate.shape)==2)
+        assert(site<len(self))
+        self.__position__(site+1)
+        tensor=ncon.ncon([self.__tensor__(site,clear=True),gate],[[-1,-2,1],[1,-3]])
+        A,mat=mf.prepareTensor(tensor,1)
+        self._tensors[site]=A
+        self._mat=mat
+
     
     """
     applies an mpo to an mps; no truncation is done

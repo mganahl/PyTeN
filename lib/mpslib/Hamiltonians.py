@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+"""
+@author: Martin Ganahl
+"""
 import numpy as np
 import time
 import scipy as sp
@@ -6,6 +8,12 @@ import scipy as sp
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
+
+"""
+
+Base class for defining MPO; if you want to implement a custom MPO, derive from this class (see below for examples)
+
+"""
 class MPO:
     def __init__(self):
         #a list of mpo-tensors, to be initialized in the derived class
@@ -1502,8 +1510,6 @@ def projectedUnitcellExLiebLinigermpo(mu,interact,mass,N,dx):
     temp[6,5,:,:]=np.copy((interact*1.0/(1.0*dx))*num)
     temp[6,6,:,:]=np.eye(2)
     mpol.append(np.copy(temp))
-
-
     
     mpor=[]
     temp=np.zeros((7,7,2,2))            

@@ -6,10 +6,7 @@ sys.path.append(os.getcwd())#add parent directory to path
 os.chdir(root)
 
 import numpy as np
-import scipy as sp
-import math
 import matplotlib.pyplot as plt
-import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib
@@ -19,27 +16,14 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 if __name__ == "__main__":
+    D=100        #final bond dimension
+    d=2         #local hilbert space dimension
+    N=101        #number of sites
+    Jz=np.ones(N).astype(float) #Hamiltonian parameters
+    Jxy=np.ones(N).astype(float)
 
-
-    d=2            #local hilbert space dimension
-    N=100          #system size 
-    Jz=np.ones(N)  #Hamiltonian parameters
-    Jxy=np.ones(N) #Hamiltonian parameters
-
-
-    #initializes a random MPS with bond dimension D for open boundary conditions
-    #D=10
-    #mps=mpslib.MPS.random(N=N,D=D,d=[d]*N,obc=True)
-
-    #initializes a product state with a specific arrangement of up and down spins
-    #state is an array of length N defining which state should be put at each site;
-    #values at state[n] can be in {0,1,..,d-1}
-    state=[0]*N              #initialize with all spins down
-    state[int(N/2)-10]=1     #put an up spin at site int(N/2)-10
-    state[int(N/2)]=1        #put an up spin at site int(N/2)
-    state[int(N/2)+10]=1     #put an up spin at site int(N/2)+10
-    mps=mpslib.MPS.productState(state,[d]*N,obc=True) #this mps for now has a maximally allowed bond dimension mps._D=1;
-
+    mps=mpslib.MPS.random(N=N,D=10,d=d,obc=True,dtype=float)  #initialize a random MPS with bond dimension D'=10
+    mps._D=D     #set the mps final bond-dimension parameter to D; mps._D is the maximally allowed dimension of the mps
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     mps.__position__(N)
     mps.__position__(0)
@@ -48,18 +32,34 @@ if __name__ == "__main__":
     #the MPO class in Hamiltonians implements a routine MPO.twoSiteGate(m,n,dt), which 
     #returns the exponential exp(dt*h(m,n)), where h(m,n) is the local Hamiltonian contribution 
     #acting on sites m and n
-    mpo=H.XXZ(Jz,Jxy,np.zeros(N),obc=True)
+    mpo=H.XXZ(Jz,Jxy,Bz=np.zeros(N),obc=True)
 
+    #initialize a DMRGEngine with an mps and an mpo
+    dmrg=en.DMRGengine(mps,mpo,'blabla')
+    #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
+    #grow until it reaches mps._D
+    dmrg.__simulateTwoSite__(3,1e-10,1e-6,40,verbose=1,solver='LAN')
+    #now switch to a single site DMRG (faster) to further converge state state
+    dmrg.__simulate__(6,1e-10,1e-10,30,verbose=1,solver='LAN')
+    dmrg._mps.__position__(0)
 
     #initialize a TimeEvolutionEngine with an mps and an mpo
     #you don't have to pass an mpo here; the engine mererly assumes that
     #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
     #which should return an twosite gate
-    engine=en.TimeEvolutionEngine(mps,mpo,"insert_name_here")
+    dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),50)
+    dmrg._mps.__position__(N)
+    dmrg._mps.__position__(0)
+
+    #initialize a TEBDEngine with an mps and an mpo
+    #you don't have to pass an mpo here; the engine mererly assumes that
+    #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
+    #which should return an twosite gate
+    engine=en.TEBDEngine(dmrg._mps,mpo,"insert_name_here")
     dt=-1j*0.05  #time step
-    numsteps=20  #numnber of steps to be taken in between measurements
-    Dmax=10      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
-                 #adapted to this value in the TimeEvolutionEngine
+    numsteps=2  #numnber of steps to be taken in between measurements
+    Dmax=40      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
+                 #adapted to this value in the TEBDEngine
     thresh=1E-8  #truncation threshold
     Nmax=1000    #number of measurements
     SZ=np.zeros((Nmax,N)) #container for holding the measurements
@@ -68,13 +68,12 @@ if __name__ == "__main__":
     it=0  #counts the total iteration number
     tw=0  #accumulates the truncated weight (see below)
     for n in range(Nmax):
-        #do numsteps TEBD steps 
-        tw,it=engine.__doTEBD__(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
+
         #measure the operators 
         L=engine._mps.__measureLocal__(sz)
         #store result for later use
         SZ[n,:]=L
-
+        tw,it=engine.__doTEBD__(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
         #plot 
         plt.figure(1)
         plt.clf()
@@ -83,4 +82,4 @@ if __name__ == "__main__":
         plt.draw()
         plt.show()
         plt.pause(0.01)
-
+        input()

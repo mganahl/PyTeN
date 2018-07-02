@@ -1,7 +1,10 @@
-#!/usr/bin/env python
+"""
+@author: Martin Ganahl
+"""
 from sys import stdout
 import sys,time,copy,warnings
 import numpy as np
+import lib.mpslib.sexpmv as sexpmv
 import lib.ncon as ncon
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -594,7 +597,7 @@ def prepareTensor(tensor,direction,fixphase=None):
             r=herm(unit).dot(r)
 
         #normalize the bond matrix
-        r=r/np.sqrt(np.trace(herm(r).dot(r)))
+        r=r/np.linalg.norm(r)#np.sqrt(np.trace(herm(r).dot(r)))
         
         [size1,size2]=q.shape
         out=np.transpose(np.reshape(q,(d,l1,size2)),(1,2,0))
@@ -619,7 +622,7 @@ def prepareTensor(tensor,direction,fixphase=None):
         out=np.conjugate(np.transpose(np.reshape(q,(l2,d,size2),order='F'),(2,0,1)))
         r=np.conjugate(np.transpose(r_,(1,0)))
         #normalize the bond matrix
-        r=r/np.sqrt(np.trace(herm(r).dot(r)))
+        r=r/np.linalg.norm(r)#np.sqrt(np.trace(herm(r).dot(r)))
     return out,r
 
 #used in the lattice-cMPS context; ignore for the case of lattice MPS
@@ -1024,60 +1027,86 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
             vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp)))
         return es,vs
 
-#
-#def evolveTensorSexpmv(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
-#    dtype=mps.dtype
-#    if dtype==float:
-#        assert(L.dtype==dtype)
-#        assert(mpo.dtype==dtype)
-#        assert(R.dtype==dtype)
-#
-#    [chi1,chi2,d]=np.shape(mps)
-#    chi1p=np.shape(L)[1]
-#    chi2p=np.shape(R)[1]
-#    dp=np.shape(mpo)[3]
-#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-#    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
-#    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(mv, np.reshape(mps,chi1*chi2*d), tau, anorm=1.0)
-#    return np.reshape(v,mps.shape)
-#    
-#
-#
-#def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
-#    dtype=mps.dtype
-#    if dtype==float:
-#        assert(L.dtype==dtype)
-#        assert(mpo.dtype==dtype)
-#        assert(R.dtype==dtype)
-#
-#    [chi1,chi2,d]=np.shape(mps)
-#    chi1p=np.shape(L)[1]
-#    chi2p=np.shape(R)[1]
-#    dp=np.shape(mpo)[3]
-#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-#    #LanczosTimeEvolution(mv,np.dot,tau,Ndiag=100,ncv=krylov_dimension,delta=1E-10,deltaEta=1E-10):   
-#    lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
-#    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
-#    return np.reshape(v,mps.shape)
-#
-#def evolveMatrixLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):
-#    dtype=mps.dtype
-#    if dtype==float:
-#        assert(L.dtype==dtype)
-#        assert(mpo.dtype==dtype)
-#        assert(R.dtype==dtype)
-#
-#    [chi1,chi2,d]=np.shape(mps)
-#    chi1p=np.shape(L)[1]
-#    chi2p=np.shape(R)[1]
-#    dp=np.shape(mpo)[3]
-#    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-#    #LanczosTimeEvolution(mv,np.dot,tau,Ndiag=10,ncv=krylov_dimension,delta=1E-10,deltaEta=1E-10):   
-#    lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
-#    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
-#    return np.reshape(v,mps.shape)
-#
-#
+
+def evolveTensorSexpmv(L,mpo,R,mps,tau):
+    #dtype=mps.dtype
+    #if dtype==float:
+    #    assert(L.dtype==dtype)
+    #    assert(mpo.dtype==dtype)
+    #    assert(R.dtype==dtype)
+
+    [chi1,chi2,d]=np.shape(mps)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    if type(tau)==complex:
+        fac=np.exp(1j*np.angle(tau))
+        dt=np.abs(tau)
+    elif type(tau)==float:
+        dt=tau
+        fac=1.0        
+    else:
+        raise TypeError("evolveTensorSexpmv: unkown type for tau")
+
+    mv=fct.partial(HAproductSingleSite,*[L,fac*mpo,R])
+    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=type(tau))
+    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mps,chi1*chi2*d).astype(type(tau)), dt, anorm=1.0)
+    return np.reshape(v,mps.shape)
+
+def evolveMatrixSexpmv(L,R,mat,tau):
+    #dtype=type(tau)
+    #if dtype==float:
+    #    assert(L.dtype==dtype)
+    #    assert(R.dtype==dtype)
+    if type(tau)==complex:
+        fac=np.exp(1j*np.angle(tau))
+        dt=np.abs(tau)
+    elif type(tau)==float:
+        dt=tau
+        fac=1.0        
+    else:
+        raise TypeError("evolveTensorSexpmv: unkown type for tau")
+
+
+    [chi1,chi2]=np.shape(mat)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    mv=fct.partial(HAproductBond,*[L,fac*R])
+    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=type(tau))    
+    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mat,chi1*chi2).astype(type(tau)), dt, anorm=1.0)
+    return np.reshape(v,mat.shape)
+
+    
+def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,delta=1E-8):
+    dtype=type(tau)
+    if dtype==float:
+        assert(L.dtype==dtype)
+        assert(mpo.dtype==dtype)
+        assert(R.dtype==dtype)
+        
+    [chi1,chi2,d]=np.shape(mps)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    
+    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,tau,Ndiag=krylov_dimension,ncv=krylov_dimension,delta=delta)
+    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
+    return np.reshape(v,mps.shape)
+
+def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
+    dtype=type(tau)
+    if dtype==float:
+        assert(L.dtype==dtype)
+        assert(R.dtype==dtype)
+
+    [chi1,chi2]=np.shape(mat)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    mv=fct.partial(HAproductBond,*[L,R])
+    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,tau,Ndiag=krylov_dimension,ncv=krylov_dimension,delta=delta)
+    v=lan.__doStep__(np.reshape(mat,(chi1*chi2)))
+    return np.reshape(v,mat.shape)
 
 
 #calls a sparse eigensolver to find the lowest eigenvalue

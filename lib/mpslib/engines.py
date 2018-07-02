@@ -1,7 +1,10 @@
-#!/usr/bin/env python
+"""
+@author: Martin Ganahl
+"""
+
 from sys import stdout
 import numpy as np
-import os
+import os,copy
 import time
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -27,16 +30,24 @@ filename: filename for checkpointing and what not
 lb, rb: left and right boundary conditions;  if None, obc are assumed;
 """
 class DMRGengine:
-    #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1.0,1.0,1.0)) for obc simulation
+    #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1,1,1)) for obc simulation
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         if (np.all(lb)!=None) and (np.all(rb)!=None):
+            assert(mps[0].shape[0]==lb.shape[0])
+            assert(mps[-1].shape[1]==rb.shape[0])
+            assert(mpo[0].shape[0]==lb.shape[2])
+            assert(mpo[-1].shape[1]==rb.shape[2])
             self._lb=np.copy(lb)
-            self._rb=np.copy(rb)            
+            self._rb=np.copy(rb)
+            
         else:
+            assert(mpo[0].shape[0]==1)
+            assert(mpo[-1].shape[1]==1)
+            assert(mps[0].shape[0]==1)
+            assert(mps[-1].shape[1]==1)            
+            
             self._lb=np.ones((1,1,1))
             self._rb=np.ones((1,1,1))
-            assert(mpo[0].shape[0]==1)
-            assert(mpo[-1].shape[1]==1)            
         
         self._mps=mps
         self._mpo=mpo
@@ -49,22 +60,24 @@ class DMRGengine:
         self._R.insert(0,np.copy(self._rb))
 
 
-    """
-    performs a single site DMRG optimization
-    Nmax: maximum number of sweeps
-    Econv: deisred convergence of energy
-    tol: tolerance parameter of the eigensolver
-    ncv: number of krylov vectors in the eigensolver
-    cp: checkppointing step
-    verbose: verbosity flag
-    numvecs: number of eigenstates returned  by solver
-    solver: type of solver; current support: 'AR' (arnoldi) or 'LAN' (lanczos)
-    Ndiag: lanczos parameter
-    nmaxlan: maximum number of lanczos stesp
-    landelta: determines when lanzcos has to stop
-    landeltaEta: desired convergence of lanzcos eigenvectors
-    """
-    def __simulate__(self,Nmax,Econv,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+    def __simulate__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+        """
+        performs a single site DMRG optimization
+        Nmax: maximum number of sweeps
+        Econv: desired convergence of energy
+        tol: tolerance parameter of the eigensolver
+        ncv: number of krylov vectors in the eigensolver
+        cp: checkppointing step
+        verbose: verbosity flag
+        numvecs: number of eigenstates returned  by solver
+        solver: type of solver; current support: 'AR' (arnoldi) or 'LAN' (lanczos)
+        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
+        nmaxlan: maximum number of lanczos stesp
+        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
+        landeltaEta: desired convergence of lanzcos eigenenergies
+
+        """
+        
         assert((solver=='AR') or (solver=='LAN'))
         converged=False
         energy=100000.0
@@ -86,11 +99,11 @@ class DMRGengine:
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
                 tensor,r=mf.prepareTensor(opt,1)
-                self._mps[n]=np.copy(tensor)
-                self._mps._mat=np.copy(r)
+                self._mps[n]=tensor
+                self._mps._mat=r
                 self._mps._position=n+1
 
-                self._L[n+1]=np.copy(mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1))
+                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
                 
             for n in range(self._mps._N-1,0,-1):
                 if solver=='AR':
@@ -107,11 +120,11 @@ class DMRGengine:
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
                 tensor,r=mf.prepareTensor(opt,-1)
-                self._mps[n]=np.copy(tensor)
-                self._mps._mat=np.copy(r)
+                self._mps[n]=tensor
+                self._mps._mat=r
                 self._mps._position=n
                 
-                self._R[self._mps._N-1-n+1]=np.copy(mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1))
+                self._R[self._mps._N-1-n+1]=mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1)
 
                     
             if np.abs(e-energy)<Econv:
@@ -127,23 +140,27 @@ class DMRGengine:
                 break
         return e
         #returns the center bond matrix and the gs energy
-    """
-    performs a two site DMRG optimization
-    Nmax: maximum number of sweeps
-    Econv: deisred convergence of energy
-    tol: tolerance parameter of the eigensolver
-    ncv: number of krylov vectors in the eigensolver
-    cp: checkppointing step
-    verbose: verbosity flag
-    numvecs: number of eigenstates returned  by solver
-    solver: type of solver; current support: 'AR' (arnoldi) or 'LAN' (lanczos)
-    Ndiag: lanczos parameter
-    nmaxlan: maximum number of lanczos stesp
-    landelta: determines when lanzcos has to stop
-    landeltaEta: desired convergence of lanzcos eigenvectors
-    """
+
+
         
-    def __simulateTwoSite__(self,Nmax,Econv,tol,ncv,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+    def __simulateTwoSite__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+        """
+        performs a two site DMRG optimization
+        Nmax: maximum number of sweeps
+        Econv: desired convergence of energy
+        tol: tolerance parameter of the eigensolver
+        ncv: number of krylov vectors in the eigensolver
+        cp: checkppointing step
+        verbose: verbosity flag
+        numvecs: number of eigenstates returned  by solver
+        solver: type of solver; current support: 'AR' (arnoldi) or 'LAN' (lanczos)
+        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
+        nmaxlan: maximum number of lanczos stesp
+        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
+        landeltaEta: desired convergence of lanzcos eigenenergies
+
+        """
+
         assert((solver=='AR') or (solver=='LAN'))
         converged=False
         energy=100000.0
@@ -165,7 +182,6 @@ class DMRGengine:
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
-                #e=ncon.ncon([self._L[n],twositempo,twositemps,np.conj(twositemps),self._R[self._mps._N-1-n-1]],[[0,4,2],[2,6,1,3],[0,5,1],[4,7,3],[5,7,6]])
                 Es[n]=e
                 temp3=np.reshape(np.transpose(np.reshape(opt,(Dl,Dr,dl,dr)),(0,2,3,1)),(Dl*dl,dr*Dr))
                 U,S,V=np.linalg.svd(temp3,full_matrices=False)
@@ -180,10 +196,10 @@ class DMRGengine:
                     stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
-                self._mps[n]=np.copy(np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1)))
-                self._mps[n+1]=np.copy(np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1)))
+                self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
+                self._mps[n+1]=np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1))
                 self._mps._mat=np.diag(S)
-                self._L[n+1]=np.copy(mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1))
+                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
 
             for n in range(self._mps._N-2,-1,-1):
                 self._mps.__position__(n+1)
@@ -213,13 +229,13 @@ class DMRGengine:
                     stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
-                self._mps[n]=np.copy(np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1)))
-                self._mps[n+1]=np.copy(np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1)))
+                self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
+                self._mps[n+1]=np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1))
                 self._mps._mat=np.diag(S)
-                self._R[self._mps._N-1-n]=np.copy(mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1))
+                self._R[self._mps._N-1-n]=mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
 
             self._mps.__position__(0)
-            self._R[self._mps._N-1-n]=np.copy(mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1))
+            self._R[self._mps._N-1-n]=mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
             if np.abs(e-energy)<Econv:
                 converged=True
             energy=e
@@ -236,18 +252,27 @@ class DMRGengine:
 
 
 class IDMRGengine(DMRGengine):
+
+    """
+    performs an IDMRG optimization of the ground-state of a Hamiltonian as given by mpo
+    mps: MPS object with infinite boundary conditions
+    mpo: MPO object with infinite boundary conditions
+    filename: the name of the simulation; will be appended to the output (if there is any)
+    """
     def __init__(self,mps,mpo,filename):
         lb,rb,lbound,rbound=mf.getBoundaryHams(mps,mpo)                            
         super().__init__(mps,mpo,filename,lb,rb)
     #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
     def __update__(self):
         self._mps.__position__(self._mps._N)
+        #update the left boundary
         for site in range(int(self._mps._N/2)):
             self._lb=mf.addLayer(self._lb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],1)
             
         lamR=np.copy(self._mps._mat)
         mps=[]
-        D=0        
+        D=0
+        #cut and patch the left half of the mps
         for n in range(int(self._mps._N/2),self._mps._N):
             if self._mps._tensors[n].shape[0]>D:
                 D=self._mps._tensors[n].shape[0]
@@ -255,8 +280,9 @@ class IDMRGengine(DMRGengine):
 
         self._mps.__position__(int(self._mps._N/2))
         lamC=np.copy(self._mps._mat)
-        connector=np.copy(np.linalg.pinv(lamC))
+        connector=np.linalg.pinv(lamC)
 
+        #update the right boundary
         for site in range(self._mps._N-1,int(self._mps._N/2)-1,-1):
             self._rb=mf.addLayer(self._rb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],-1)
 
@@ -264,21 +290,40 @@ class IDMRGengine(DMRGengine):
         self._L[0]=np.copy(self._lb)
         self._mps.__position__(0)
         lamL=np.copy(self._mps._mat)
+        #cut and patch the right half of the mps
         for n in range(int(self._mps._N/2)):
             if self._mps._tensors[n].shape[0]>D:
                 D=self._mps._tensors[n].shape[0]
             mps.append(np.copy(self._mps._tensors[n]))
         for n in range(self._mps._N):
-            self._mps._tensors[n]=np.copy(mps[n])
+            self._mps._tensors[n]=mps[n]
             
         self._mps._position=int(self._mps._N/2)
         self._mps._mat=lamR.dot(self._mps._connector).dot(lamL)
-        self._mps._connector=np.copy(connector)
+        self._mps._connector=connector
         self._mps.__position__(0)
+        
+        #cut and patch the mpo
         mf.patchmpo(self._mpo,int(self._mps._N/2))        
         return D
 
-    def __simulate__(self,Nmax,NUC,Econv,tol,ncv,cp=10,verbose=0):
+    def __simulate__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):            
+        """
+        run a single site IDMRG simulation
+        Nmax: number of outer iterations
+        NUC: number of optimization sweeps when optimizing a single unitcell
+        Econv: desired convergence of energy per unitcell
+        tol: arnoldi tolerance
+        ncv: number of krylov vectors in arnoldi or lanczos
+        cp: chekpoint step
+        verbose: verbosity flag
+        numvecs: the number of eigenvectors to be calculated; should be 1
+        solver: type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
+        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
+        nmaxlan: maximum number of lanczos stesp
+        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
+        landeltaEta: desired convergence of lanzcos eigenenergies
+        """
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
         print ('# of sweeps per unit cell: {0}'.format(NUC))
@@ -291,7 +336,7 @@ class IDMRGengine(DMRGengine):
         #self.__update__()
         eold=0.0
         while not converged:
-            e=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
+            e=super().__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
             D=self.__update__()
             if verbose>0:
                 stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
@@ -307,8 +352,24 @@ class IDMRGengine(DMRGengine):
                 converged=True
                 break
         it=it+1
-
-    def __simulateTwoSite__(self,Nmax,NUC,Econv,tol,ncv,cp=10,verbose=0,truncation=1E-10):
+    def __simulateTwoSite__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+        """
+        run a twos-site IDMRG simulation
+        Nmax: number of outer iterations
+        NUC: number of optimization sweeps when optimizing a single unitcell
+        Econv: desired convergence of energy per unitcell
+        tol: arnoldi tolerance
+        ncv: number of krylov vectors in arnoldi or lanczos
+        cp: chekpoint step
+        verbose: verbosity flag
+        numvecs: the number of eigenvectors to be calculated; should be 1
+        solver: type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
+        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
+        nmaxlan: maximum number of lanczos stesp
+        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
+        landeltaEta: desired convergence of lanzcos eigenenergies
+        """
+        
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
         print ('# of sweeps per unit cell: {0}'.format(NUC))
@@ -321,7 +382,8 @@ class IDMRGengine(DMRGengine):
         #self.__update__()
         eold=0.0
         while not converged:
-            e=super().__simulateTwoSite__(NUC,Econv,tol,ncv,verbose=verbose-1,truncation=truncation)
+            e=super().__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
+                                          landelta=landelta,landeltaEta=landeltaEta)
             D=self.__update__()
             if verbose>0:
                 stdout.write("\rTS-IDMRG: it=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
@@ -337,27 +399,28 @@ class IDMRGengine(DMRGengine):
                 break
         it=it+1
 
-"""
-MPS optimization methods for homogeneous systems
-uses gradient optimization to find the ground state of a Homogeneous system
-mps (np.ndarray): an initial mps tensor 
-mpo (np.ndarray): the mpo tensor
-filename (str): filename of the simulation
-alpha (float): initial steps size
-alphas (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
-normgrads (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
-dtype: type of the mps (float or complex)
-factor (float): factor by which internal stepsize is reduced in case divergence is detected
-normtol (float): absolute value by which gradient may increase without raising a "divergence" flag
-epsilon (float): desired convergence of the gradient
-tol (float): eigensolver tolerance used in regauging
-lgmrestol (float): eigensolver tolerance used for calculating the infinite environements
-ncv (int): number of krylov vectors used in sparse eigensolvers
-numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
-Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
-"""
 
 class HomogeneousIMPSengine:
+    """
+    MPS optimization methods for homogeneous systems
+    uses gradient optimization to find the ground state of a Homogeneous system
+    mps (np.ndarray): an initial mps tensor 
+    mpo (np.ndarray): the mpo tensor
+    filename (str): filename of the simulation
+    alpha (float): initial steps size
+    alphas (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
+    normgrads (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
+    dtype: type of the mps (float or complex)
+    factor (float): factor by which internal stepsize is reduced in case divergence is detected
+    normtol (float): absolute value by which gradient may increase without raising a "divergence" flag
+    epsilon (float): desired convergence of the gradient
+    tol (float): eigensolver tolerance used in regauging
+    lgmrestol (float): eigensolver tolerance used for calculating the infinite environements
+    ncv (int): number of krylov vectors used in sparse eigensolvers
+    numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
+    Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
+    """
+
     def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
         self._Nmax=Nmax
         self._mps=np.copy(mps)
@@ -550,26 +613,26 @@ this is an engine for real or imaginary time evolution using TDVP; its not paral
 "filename" is hte file under which cp results will be stored (not yet implemented)
 """
 
-class TimeEvolutionEngine:
+class TEBDEngine:
     def __init__(self,mps,gatecontainer,filename):
-        self._mps=mps
-        self._gates=gatecontainer
+        self._mps=copy.deepcopy(mps)
+        self._gates=copy.deepcopy(gatecontainer)
         self._filename=filename
         self._N=mps._N
 
-    """
-    uses a second order trotter decomposition to evolve that state using TEBD
-    dt: step size, real negative or imaginary with negative real part; step size
-    numsteps: total number of evolution steps
-    Dmax: maximum bond dimension to be kept
-    tr_thresh: truncation threshold 
-    verbose:L verbosity flag; put to 0 for no output
-    cnterset: sets the internal iteration counter to cnterset; the internal iteration counter
-    if printed out if verbosity > 0, to have some idea of the simulation progress; 
-    cnterset is useful when when chaining multiple doTEBD calls, for example between measurements;
-    one can then pass 
-    """
-    def __doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0):
+    def __doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
+        """
+        uses a second order trotter decomposition to evolve the state using TEBD
+        dt: step size
+        numsteps: total number of evolution steps
+        Dmax: maximum bond dimension to be kept
+        tr_thresh: truncation threshold 
+        verbose: verbosity flag; put to 0 for no output
+        cnterset: sets the internal iteration counter to cnterset; the internal iteration counter
+                  is printed out if verbosity > 0, to have some idea of the simulation progress; 
+                  cnterset is useful when when chaining multiple doTEBD calls, for example between measurements;
+        """
+
         itw=tw
         it=cnterset
         maxD=1
@@ -600,7 +663,9 @@ class TimeEvolutionEngine:
                     stdout.flush()
             if verbose==1:
                 stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),itw,maxD))
-                stdout.flush()                    
+                stdout.flush()
+            if (cp!=None) and (it>0) and (it%cp==0):                
+                np.save(self._filename+'_tdvp_cp',self._mps._tensors)
                     
             it=it+1
 
@@ -612,62 +677,116 @@ class TimeEvolutionEngine:
         
         =============================================================         everyting below IS STILL UNDER CONSTRUCTION AND NOT WORKING ============================================================
         """
+
+class TDVPEngine:
+    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+        if (np.all(lb)!=None) and (np.all(rb)!=None):
+            assert(mps[0].shape[0]==lb.shape[0])
+            assert(mps[-1].shape[1]==rb.shape[0])
+            assert(mpo[0].shape[0]==lb.shape[2])
+            assert(mpo[-1].shape[1]==rb.shape[2])
+            self._lb=np.copy(lb)
+            self._rb=np.copy(rb)
+            
+        else:
+            assert(mpo[0].shape[0]==1)
+            assert(mpo[-1].shape[1]==1)
+            assert(mps[0].shape[0]==1)
+            assert(mps[-1].shape[1]==1)            
+            
+            self._lb=np.ones((1,1,1))
+            self._rb=np.ones((1,1,1))
         
-#    def __doTDVP__(self,mps,mpo,filename,dt):
-#        return NotImplemented
-#        self._N=self._mps._N
-#        self._mps.__position__(0)
-#        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-#        self._L.insert(0,np.copy(self._lb))
-#        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-#        self._R.insert(0,np.copy(self._rb))
-#        while not converged:
-#            for n in range(0,self._mps._N-1):
-#                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
-#                mf. evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,tolerance=1e-6,numvecs=4,numcv=30,numvecs_returned=1):                
-#                #Dnew=opt.shape[1]
-#                #if verbose>0:
-#                #    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-#                #    stdout.flush()                    
-#                #Es[n]=e
-#                #tensor,r=mf.prepareTensor(opt,1)
-#                #self._mps[n]=np.copy(tensor)
-#                #self._mps._mat=np.copy(r)
-#                #self._mps._position=n+1
-#
-#                self._L[n+1]=np.copy(mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1))
-#                
-#            for n in range(self._mps._N-1,0,-1):
-#                e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)
-#                Dnew=opt.shape[1]
-#                if verbose>0:
-#                    stdout.write("\rSS-DMRG: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-#                    stdout.flush()                                        
-#                    #
-#                    #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
-#                Es[n]=e
-#                tensor,r=mf.prepareTensor(opt,-1)
-#                self._mps[n]=np.copy(tensor)
-#                self._mps._mat=np.copy(r)
-#                self._mps._position=n
-#                
-#                self._R[self._mps._N-1-n+1]=np.copy(mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1))
-#                    
-#            if np.abs(e-energy)<Econv:
-#                converged=True
-#            energy=e
-#            if cp!=None and it>0 and it%cp==0:
-#                np.save(self._filename+'_dmrg_cp',self._mps._tensors)
-#            it=it+1
-#            if it>Nmax:
-#                if verbose>0:
-#                    print()
-#                    print ('reached maximum iteration number ',Nmax)
-#                break
-#        return e
-#        #returns the center bond matrix and the gs energy
+        self._mps=copy.deepcopy(mps)
+        self._mpo=copy.deepcopy(mpo)                
+        self._filename=filename
+        self._N=mps._N
+        self._mps.__position__(0)
+        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+        self._L.insert(0,self._lb)
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,self._rb)
 
 
+        
+    def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False):
+        """
+        does a TDVP real or imaginary time evolution
+        dt: step size
+        numsteps: number of steps to be performed
+        krylov_dim: if use_split_step=False, krylov_dim is the dimension of the krylov space used to perform evolution with lanczos
+                    if use_split_step=True, method uses Ash Milsted's implementation of gexpmv (see evoMPS)
+        cnterset: sets the iteration counter of the simulation to cnterset; effects terminal output; useful for chaining simulations
+        cp: checkpointing (currently not implemented)
+        verbose: verbosity flag
+        use_split_step: if False, use Lanczos time evolution WITHOUT step-size optimization
+                        if True, use Lanczos time evolution WITH step-size optimization using gexpmv from Ash Milsted's evoMPS package
+        """
+        converged=False
+        it=cnterset
+        self._mps.__position__(0)
+        for step in range(numsteps):
+            for n in range(0,self._mps._N):
+                self._mps.__position__(n+1)
+                #evolve tensor forward
+                if not use_split_step:
+                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt/2.0,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+                else:
+                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt/2)                
+                tensor,mat=mf.prepareTensor(evTen,1)
+                self._mps[n]=tensor
+                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
+
+                #evolve matrix backward                    
+                if n<(self._mps._N-1):
+                    if not use_split_step:
+                        evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt/2.0,krylov_dimension=krylov_dim)
+                    else:
+                        evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt/2)                                            
+                    evMat/=np.linalg.norm(evMat)
+                    self._mps._mat=evMat
+                else:
+                    self._mps._mat=mat
+                    
+            for n in range(self._mps._N-2,-1,-1):
+                #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
+                self._mps.__position__(n+1)
+                self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
+                
+                if not use_split_step:
+                    evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt/2,krylov_dimension=krylov_dim)
+                else:
+                    evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt/2)                                    
+                evMat/=np.linalg.norm(evMat)#normalize wavefunction
+                self._mps._mat=evMat        #set evolved matrix as new center-matrix
+
+
+                #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
+                if not use_split_step:                
+                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt/2,krylov_dimension=krylov_dim)
+                else:
+                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt/2)
+                    
+                #split of a center matrix C ("mat" in my notation)
+                tensor,mat=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
+                self._mps[n]=tensor
+                self._mps._mat=mat
+                self._mps._position=n
+
+            if verbose==1:
+                stdout.write("\rTDVP engine: t=%4.4f"%(np.abs(np.imag(it*dt))))
+                stdout.flush()
+
+            if (cp!=None) and (it>0) and (it%cp==0):
+                np.save(self._filename+'_tdvp_cp',self._mps._tensors)
+            it=it+1
+        self._mps.__position__(0)            
+        return it
+        #returns the center bond matrix and the gs energy
+
+
+
+# ============================================================================     everything below this line is still in development =================================================
 """
 
 calculates excitation spectrum for a lattice MPS

@@ -1,15 +1,14 @@
-#!/usr/bin/env python
+"""
+@author: Martin Ganahl
+"""
+
 import sys,os
 root=os.getcwd()
 os.chdir('../')
 sys.path.append(os.getcwd())#add parent directory to path
 os.chdir(root)
 
-
 import numpy as np
-import scipy as sp
-import math
-import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib

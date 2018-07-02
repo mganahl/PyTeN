@@ -1,4 +1,7 @@
-#!/usr/bin/env python
+"""
+@author: Martin Ganahl
+"""
+
 import sys,os
 root=os.getcwd()
 os.chdir('../')
@@ -20,7 +23,7 @@ if __name__ == "__main__":
     D=100
     D0=10
     d=2
-    N=4
+    N=40
     Jz=np.ones(N)
     Jxy=np.ones(N)
     #initialize MPS with bond dimension D0

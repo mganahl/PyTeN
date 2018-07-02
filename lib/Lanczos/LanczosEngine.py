@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
+import scipy as sp
 import copy
 import matplotlib.pyplot as plt
 plt.ion()
@@ -10,7 +11,8 @@ This is a general purpose Lanczos-class. It performs a Lanczos tridiagonalizatio
 of a Hamiltonian, defined by the matrix-vector product matvec. 
 matvec: python function performing matrix-vector multiplication (e.g. np.dot)
 vecvec: python function performing vector-vector dot product (e.g. np.dot)
-zeros_initializer: python function which returns a vector filled with zeros  (e.g. np.zeros)
+zeros_initializer: python function which returns a vector filled with zeros  (e.g. np.zeros), has to accept a shape and dtype argument, i.e.
+                   zeros_initializer(shape,dtype); dtype should be either float or complex
 Ndiag: iteration step at which diagonalization of the tridiagonal Hamiltonian 
        should be done, e.g. Ndiag=4 means every 4 steps the tridiagonal Hamiltonian is diagonalized
        and it is checked if the eigenvalues are sufficiently converged (see deltaEta)
@@ -39,10 +41,10 @@ class LanczosEngine:
         self._dot=vecvec
         self._zeros=zeros_initializer
         assert(Ndiag>0)
-        
+
         
     def __simulate__(self,initialstate,reortho=False,verbose=False):
-        dtype=np.result_type(self._matvec(initialstate))        
+        dtype=np.result_type(self._matvec(initialstate))
         Dim=1
         for d in initialstate.shape:
             Dim*=d
@@ -80,11 +82,9 @@ class LanczosEngine:
                 eta,u=np.linalg.eigh(Heff)
                 if first==False:
                     if np.linalg.norm(eta[0:self._numeig]-etaold[0:self._numeig])<self._deltaEta:
-                        
                         converged=True
                 first=False
                 etaold=eta[0:self._numeig]
-
             if it>0:
                 Hxn-=(self._vecs[-1]*epsn[-1])
                 Hxn-=(self._vecs[-2]*kn[-1])
@@ -95,7 +95,6 @@ class LanczosEngine:
             if it>self._ncv:
                 break
 
-        
         self._Heff=np.diag(epsn)+np.diag(kn[1:],1)+np.diag(np.conj(kn[1:]),-1)
         eta,u=np.linalg.eigh(self._Heff)
         states=[]
@@ -107,15 +106,17 @@ class LanczosEngine:
         return eta[0:min(self._numeig,len(eta))],states,converged
                 
 class LanczosTimeEvolution(LanczosEngine):
-    def __init__(self,matvec,vecvec,dt,Ndiag,ncv,delta,deltaEta):   
-        super().__init__(matvec=matvec,vecvec=vecvec,Ndiag=Ndiag,ncv=ncv,numeig=ncv,delta=delta,deltaEta=deltaEta)
+    def __init__(self,matvec,vecvec,zeros_initializer,dt,Ndiag,ncv,delta):
+        super().__init__(matvec=matvec,vecvec=vecvec,zeros_initializer=zeros_initializer,Ndiag=Ndiag,ncv=ncv,numeig=ncv,delta=delta,deltaEta=1E-10)
         self._dt=dt
+        self._dtype=type(dt)
+
     def __doStep__(self,state,verbose=False):
-        self.__simulate__(state,verbose,reortho=True)
+        self.__simulate__(state.astype(self._dtype),verbose=True,reortho=True)
         #take the expm of self._Heff
-        U=scipy.linalg.expm(-1j*self._dt*self._Heff)
-        result=np.zeros(state.shape,dtype=state.dtype)
+        U=sp.linalg.expm(self._dt*self._Heff)
+        result=np.zeros(state.shape,dtype=self._dtype)
         for n in range(min(self._ncv,self._Heff.shape[0])):
-            result+=self._vecs[n1]*U[n1,0]
+            result+=self._vecs[n]*U[n,0]
         return result
         
