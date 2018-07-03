@@ -23,6 +23,11 @@ from scipy.sparse import csc_matrix
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
+
+"""
+helper function for measuring Sz in the ED case
+
+"""
 def measureSz(state,basis,N):
     assert(len(state)==len(basis))
     SZexact=np.zeros((N))
@@ -32,6 +37,16 @@ def measureSz(state,basis,N):
             spin=bb.getBit(b,n)-0.5
             SZexact[n]+=(np.abs(state[m])**2)*spin
     return SZexact
+
+"""
+runs tests fon TEBD and TDVP: the method does the following computations:
+
+using exact diagonalization, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5, and evolve 
+the state forward;
+using dmrg, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5
+evolve the state using TDVP and TEBD; compare the results with ED
+
+"""
 class TestTimeEvolution(unittest.TestCase):        
     def setUp(self):
         D=32
@@ -173,6 +188,18 @@ class TestTimeEvolution(unittest.TestCase):
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
 
+
+"""
+runs tests fon TEBD and TDVP: the method does the following computations:
+
+using exact diagonalization, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5, and evolve 
+the state forward;
+using dmrg, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5
+evolve the state using TDVP and TEBD; compare the results with ED
+plots the results 
+
+"""
+        
 class TestPlot(unittest.TestCase):        
     def setUp(self):
         D=32
@@ -286,14 +313,14 @@ class TestPlot(unittest.TestCase):
             
             it1=engine2.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)
 
-            plt.figure(1,figsize=(10,10))
+            plt.figure(1,figsize=(10,8))
             plt.clf()
             plt.subplot(3,1,1)
             plt.plot(range(self.N),self.Szexact[n,:],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
             plt.ylim([-0.5,0.5])
             plt.xlabel('lattice site n')
             plt.ylabel(r'$\langle S^z_n\rangle$')
-            plt.legend(['exact','TDVP,TEBD'])
+            plt.legend(['exact','TDVP','TEBD'])
             plt.subplot(3,1,2)
             plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ2[n,:]))
             plt.xlabel('lattice site n')
@@ -301,7 +328,8 @@ class TestPlot(unittest.TestCase):
             plt.subplot(3,1,3)
             plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ1[n,:]))            
             plt.xlabel('lattice site n')
-            plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')                        
+            plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')
+            plt.tight_layout()
             plt.draw()
             plt.show()
             plt.pause(0.01)
@@ -310,6 +338,6 @@ class TestPlot(unittest.TestCase):
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestPlot)    
-    unittest.TextTestRunner(verbosity=2).run(suite1)
+    #unittest.TextTestRunner(verbosity=2).run(suite1)
     unittest.TextTestRunner(verbosity=2).run(suite2)     
 
