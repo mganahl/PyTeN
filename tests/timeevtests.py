@@ -32,15 +32,15 @@ def measureSz(state,basis,N):
             spin=bb.getBit(b,n)-0.5
             SZexact[n]+=(np.abs(state[m])**2)*spin
     return SZexact
-class TestTEBD(unittest.TestCase):        
+class TestTimeEvolution(unittest.TestCase):        
     def setUp(self):
         D=32
         d=2
         self.N=10
         jz=1.0 
         jxy=1.0
-        self.Nmax=100
-        self.dt=-1j*0.01  #time step
+        self.Nmax=10
+        self.dt=-1j*0.05  #time step
         self.numsteps=10  #numnber of steps to be taken in between measurements        
         Jz=np.ones(self.N)*jz
         Jxy=np.ones(self.N)*jxy
@@ -91,7 +91,7 @@ class TestTEBD(unittest.TestCase):
         self.Szexact=np.zeros((self.Nmax,self.N))
         vnew/=np.linalg.norm(vnew)
         for n in range(self.Nmax):
-            self.Szexact[n,:]=measureSz(vnew,basis2,self.N)
+            self.Szexact[n,:]=measureSz(vnew,basis2,self.N)[::-1]
             stdout.write("\rED time evolution at t/T= %4.4f/%4.4f"%(n*self.numsteps*np.abs(self.dt),self.Nmax*self.numsteps*np.abs(self.dt)))
             stdout.flush()
             for step in range(self.numsteps):            
@@ -138,9 +138,10 @@ class TestTEBD(unittest.TestCase):
             tw,it2=engine.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
             
-        self.assertTrue(np.linalg.norm(SZ-Szexact)/(self.Nmax*self.N)<1E-8)
-
-    def testTEBD(self):
+        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))
+        self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-5)        
+        
+    def testTDVP(self):
         N=self.N
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
@@ -169,10 +170,88 @@ class TestTEBD(unittest.TestCase):
             SZ[n,:]=L 
             it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)
 
-        self.assertTrue(np.linalg.norm(SZ-Szexact)/(self.Nmax*self.N)<1E-8)            
+        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
+        self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
+
+class TestPlot(unittest.TestCase):        
+    def setUp(self):
+        D=32
+        d=2
+        self.N=10
+        jz=1.0 
+        jxy=1.0
+        self.Nmax=10
+        self.dt=-1j*0.05  #time step
+        self.numsteps=10  #numnber of steps to be taken in between measurements        
+        Jz=np.ones(self.N)*jz
+        Jxy=np.ones(self.N)*jxy
+
+        N=self.N #system size
+        Nup=int(self.N/2) #number of up-spins
+        Z2=-10
+        Jzar=[0.0]*N
+        Jxyar=[0.0]*N
+        grid=[None]*N
+        for n in range(N-1):
+            grid[n]=[n+1]
+            Jzar[n]=np.asarray([jz])
+            Jxyar[n]=np.asarray([jxy])
+            
+        grid[N-1]=[]
+        Jzar[N-1]=np.asarray([0.0])
+        Jxyar[N-1]=np.asarray([0.0])
+        np.asarray(Jxyar)
+
+        Jxyar,Jzar=np.asarray(Jxyar).astype(np.float64),np.asarray(Jzar).astype(np.float64)
+        Hsparse1=ed.XXZSparseHam(Jxyar,Jzar,N,Nup,Z2,grid) #get the ground state
+        e,v=sp.sparse.linalg.eigsh(Hsparse1,k=1,which='SA',maxiter=1000000,tol=1E-8,v0=None,ncv=40)
+        #the Hamiltonian in the new sector
+        Hsparse2=ed.XXZSparseHam(Jxyar,Jzar,N,Nup+1,Z2,grid)
         
+        #flip the spin at the center of the ground state
+
+        basis1=ed.binarybasisU1(self.N,self.N/2)
+        assert(len(basis1)==Hsparse1.shape[0])
+        
+        basis2=ed.binarybasisU1(self.N,self.N/2+1)
+        vnew=np.zeros(len(basis2),v.dtype)                
+        assert(len(basis2)==Hsparse2.shape[0])        
+        for n in range(len(basis1)):
+            state1=basis1[n]
+            splus=bb.setBit(state1,(N-1)/2)
+            for m in range(len(basis2)):            
+                if splus==basis2[m]:
+                    vnew[m]=v[n]
+
+
+        def matvec(mat,vec):
+            return mat.dot(vec)
+        mv=fct.partial(matvec,*[Hsparse2])
+        
+        lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,ncv=20,delta=1E-8)
+        self.Szexact=np.zeros((self.Nmax,self.N))
+        vnew/=np.linalg.norm(vnew)
+        for n in range(self.Nmax):
+            self.Szexact[n,:]=measureSz(vnew,basis2,self.N)[::-1]
+            stdout.write("\rED time evolution at t/T= %4.4f/%4.4f"%(n*self.numsteps*np.abs(self.dt),self.Nmax*self.numsteps*np.abs(self.dt)))
+            stdout.flush()
+            for step in range(self.numsteps):            
+                vnew=lan.__doStep__(vnew,self.dt)
+                vnew/=np.linalg.norm(vnew)
+
+        mps=mpslib.MPS.random(self.N,10,d,obc=True)
+        mps._D=D
+        mps.__position__(self.N)
+        mps.__position__(0)
+        self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
+        lb=np.ones((1,1,1))
+        rb=np.ones((1,1,1))
+        self.dmrg=en.DMRGengine(mps,self.mpo,'testXXZ',lb,rb)
+        self.eps=1E-5
+
     def test_plot(self):
         N=self.N
+        
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
 
@@ -210,27 +289,27 @@ class TestTEBD(unittest.TestCase):
             plt.figure(1,figsize=(10,10))
             plt.clf()
             plt.subplot(3,1,1)
-            plt.plot(range(self.N),self.Szexact[n,::-1],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
+            plt.plot(range(self.N),self.Szexact[n,:],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
             plt.ylim([-0.5,0.5])
             plt.xlabel('lattice site n')
             plt.ylabel(r'$\langle S^z_n\rangle$')
             plt.legend(['exact','TDVP,TEBD'])
             plt.subplot(3,1,2)
-            plt.semilogy(range(self.N),np.abs(self.Szexact[n,::-1]-SZ2[n,:]))
+            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ2[n,:]))
             plt.xlabel('lattice site n')
             plt.ylabel(r'$|\langle S^z_n\rangle_{tdvp}-\langle S^z_n\rangle_{exact}|$')            
             plt.subplot(3,1,3)
-            plt.semilogy(range(self.N),np.abs(self.Szexact[n,::-1]-SZ1[n,:]))            
+            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ1[n,:]))            
             plt.xlabel('lattice site n')
             plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')                        
             plt.draw()
             plt.show()
             plt.pause(0.01)
             
-        
-
 
 if __name__ == "__main__":
-    suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTEBD)
-    unittest.TextTestRunner(verbosity=2).run(suite1) 
+    suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)
+    suite2 = unittest.TestLoader().loadTestsFromTestCase(TestPlot)    
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite2)     
 

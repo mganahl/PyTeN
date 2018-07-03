@@ -1090,8 +1090,8 @@ def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,delta=1E-8):
     dp=np.shape(mpo)[3]
     
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,tau,Ndiag=krylov_dimension,ncv=krylov_dimension,delta=delta)
-    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)))
+    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,ncv=krylov_dimension,delta=delta)
+    v=lan.__doStep__(np.reshape(mps,(chi1*chi2*d)),tau)
     return np.reshape(v,mps.shape)
 
 def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
@@ -1104,8 +1104,8 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,R])
-    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,tau,Ndiag=krylov_dimension,ncv=krylov_dimension,delta=delta)
-    v=lan.__doStep__(np.reshape(mat,(chi1*chi2)))
+    lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,ncv=krylov_dimension,delta=delta)
+    v=lan.__doStep__(np.reshape(mat,(chi1*chi2)),tau)
     return np.reshape(v,mat.shape)
 
 

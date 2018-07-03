@@ -1,4 +1,3 @@
-
 import numpy as np
 """
 flips a bit at position pos; b has to be an unsigned integer of 64 bit! (i.e. np.uint64)

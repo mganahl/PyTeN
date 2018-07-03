@@ -620,6 +620,22 @@ class TEBDEngine:
         self._filename=filename
         self._N=mps._N
 
+    def applyEven(self,tau,Dmax,tr_thresh):
+        for n in range(0,self._mps._N-1,2):
+            tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
+            self._maxD=max(self._maxD,D)
+            self._tw+=tw_
+
+    def applyOdd(self,tau,Dmax,tr_thresh):            
+        if self._mps._N%2==0:
+            lstart=self._mps._N-3
+        elif self._mps._N%2==1:
+            lstart=self._mps._N-2
+        for n in range(lstart,-1,-2):
+            tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
+            self._maxD=max(self._maxD,D)                
+            self._tw+=tw_
+        
     def __doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         """
         uses a second order trotter decomposition to evolve the state using TEBD
@@ -633,50 +649,42 @@ class TEBDEngine:
                   cnterset is useful when when chaining multiple doTEBD calls, for example between measurements;
         """
 
-        itw=tw
+        self._tw=tw
         it=cnterset
-        maxD=1
+        self._maxD=1
+        #even half-step:        
+        self.applyEven(dt/2.0,Dmax,tr_thresh)
         for step in range(numsteps):
-            #even step updates:
-            if (step==0) or (step==(numsteps-1)):
-                dt_=dt/2.0
-            else:
-                dt_=dt
-            for n in range(0,self._mps._N-1,2):
-                tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,dt_),site=n,Dmax=Dmax,thresh=tr_thresh)
-                maxD=max(maxD,D)
-                itw+=tw_
-                if verbose==2:
-                    stdout.write("\rTEBD engine: t=%4.4f, truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),itw,D))
-                    stdout.flush()                    
             #odd step updates:
-            if self._mps._N%2==0:
-                lstart=self._mps._N-3
-            elif self._mps._N%2==1:
-                lstart=self._mps._N-2
-            for n in range(lstart,-1,-2):
-                tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,dt_),site=n,Dmax=Dmax,thresh=tr_thresh)
-                maxD=max(maxD,D)                
-                itw+=tw_
-                if verbose==2:
-                    stdout.write("\rTEBD engine: t=%4.4f, truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),itw,D))
-                    stdout.flush()
+            self.applyOdd(dt,Dmax,tr_thresh)
             if verbose==1:
-                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),itw,maxD))
+                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),self._tw,self._maxD))
                 stdout.flush()
-            if (cp!=None) and (it>0) and (it%cp==0):                
-                np.save(self._filename+'_tdvp_cp',self._mps._tensors)
-                    
-            it=it+1
 
-            self._mps.__position__(0)
-            self._mps.__absorbCenterMatrix__(1)
+            #if this is a cp step, save between two half-steps
+            if (cp!=None) and (it>0) and (it%cp==0):
+                #if the cp step does not coincide with the last step, do a half step, save, and do another half step
+                if step<(numsteps-1):                
+                    self.applyEven(dt/2.0,Dmax,tr_thresh)                
+                    np.save(self._filename+'_tdvp_cp',self._mps._tensors)
+                    self.applyEven(dt/2.0,Dmax,tr_thresh)
+                #if the cp step coincides with the last step, only do a half step and save the state
+                else:
+                    self.applyEven(dt/2.0,Dmax,tr_thresh)                
+                    np.save(self._filename+'_tdvp_cp',self._mps._tensors)
+                    
+            #if step is not a cp step:
+            else:
+                #do a regular full step, unless step is the last step
+                if step<(numsteps-1):
+                    self.applyEven(dt,Dmax,tr_thresh)
+                #if step is the last step, do a half step
+                else:
+                    self.applyEven(dt/2.0,Dmax,tr_thresh)
+            it=it+1
             
-        return itw,it
-        """
-        
-        =============================================================         everyting below IS STILL UNDER CONSTRUCTION AND NOT WORKING ============================================================
-        """
+        return self._tw,it
+
 
 class TDVPEngine:
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
@@ -726,13 +734,17 @@ class TDVPEngine:
         it=cnterset
         self._mps.__position__(0)
         for step in range(numsteps):
-            for n in range(0,self._mps._N):
+            for n in range(self._mps._N):
+                if n==self._mps._N-1:
+                    dt_=dt
+                else:
+                    dt_=dt/2.0
                 self._mps.__position__(n+1)
                 #evolve tensor forward
                 if not use_split_step:
-                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt/2.0,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
                 else:
-                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt/2)                
+                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)                
                 tensor,mat=mf.prepareTensor(evTen,1)
                 self._mps[n]=tensor
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
@@ -740,36 +752,38 @@ class TDVPEngine:
                 #evolve matrix backward                    
                 if n<(self._mps._N-1):
                     if not use_split_step:
-                        evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt/2.0,krylov_dimension=krylov_dim)
+                        evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_,krylov_dimension=krylov_dim)
                     else:
-                        evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt/2)                                            
+                        evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_)                                            
                     evMat/=np.linalg.norm(evMat)
                     self._mps._mat=evMat
                 else:
                     self._mps._mat=mat
                     
             for n in range(self._mps._N-2,-1,-1):
+                dt_=dt/2.0
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.__position__(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
                 
                 if not use_split_step:
-                    evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt/2,krylov_dimension=krylov_dim)
+                    evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_,krylov_dimension=krylov_dim)
                 else:
-                    evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt/2)                                    
+                    evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_)                                    
                 evMat/=np.linalg.norm(evMat)#normalize wavefunction
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
-
-
+            
+            
                 #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
                 if not use_split_step:                
-                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt/2,krylov_dimension=krylov_dim)
+                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim)
                 else:
-                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt/2)
+                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt_)
                     
                 #split of a center matrix C ("mat" in my notation)
                 tensor,mat=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
                 self._mps[n]=tensor
+
                 self._mps._mat=mat
                 self._mps._position=n
 

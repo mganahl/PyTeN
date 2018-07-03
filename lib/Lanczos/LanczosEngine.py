@@ -106,15 +106,15 @@ class LanczosEngine:
         return eta[0:min(self._numeig,len(eta))],states,converged
                 
 class LanczosTimeEvolution(LanczosEngine):
-    def __init__(self,matvec,vecvec,zeros_initializer,dt,Ndiag,ncv,delta):
-        super().__init__(matvec=matvec,vecvec=vecvec,zeros_initializer=zeros_initializer,Ndiag=Ndiag,ncv=ncv,numeig=ncv,delta=delta,deltaEta=1E-10)
-        self._dt=dt
-        self._dtype=type(dt)
+    def __init__(self,matvec,vecvec,zeros_initializer,ncv,delta):
+        super().__init__(matvec=matvec,vecvec=vecvec,zeros_initializer=zeros_initializer,Ndiag=ncv,ncv=ncv,numeig=ncv,delta=delta,deltaEta=1E-10)
 
-    def __doStep__(self,state,verbose=False):
+
+    def __doStep__(self,state,dt,verbose=False):
+        self._dtype=type(dt)        
         self.__simulate__(state.astype(self._dtype),verbose=True,reortho=True)
         #take the expm of self._Heff
-        U=sp.linalg.expm(self._dt*self._Heff)
+        U=sp.linalg.expm(dt*self._Heff)
         result=np.zeros(state.shape,dtype=self._dtype)
         for n in range(min(self._ncv,self._Heff.shape[0])):
             result+=self._vecs[n]*U[n,0]
