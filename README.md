@@ -40,6 +40,8 @@ python TEBD.py
 python TDVP.py
 ```
 to do the evolution.
+
+The above examples-scripts are commented to explain the individual steps and help you to get started with new models.
 ### Prerequisites
 
 You need an numpy and scipy installation. To run the test cases, you additionally need the cython compiler installed on your OS (see below)
@@ -47,7 +49,7 @@ You need an numpy and scipy installation. To run the test cases, you additionall
 ### Installing
 To generate the binary files needed for testing, cd to 
 ```
-cd /PyTeN/tests/HeisED
+cd PyTeN/tests/HeisED
 ```
 and run 
 ```
@@ -64,6 +66,20 @@ python DMRGtest.py
 python timeevtests.py
 ```
 which should all finish without error (some warnings may show up).
+
+## Extending
+New models can be implemented using the MPO formalism. In lib/mpslib/Hamiltonians.py you can find a few examples of how
+this is done. Any new Hamiltonian should be implemented by declaring a new class. The class should be derived from the
+base class MPO (see top of Hamiltonians.py). I use the following convention for building nearest neighbor MPOs:
+```
+11
+O_11
+.
+.
+.
+O_N1, O_N2, ..., O_NN, 11
+```
+11 and O_ij are local physical operators appearing in the Hamiltonian. Some functions assume that the MPO has such a form (for example the member MPO.twoSiteGate(m,n,tau) for obtaining unitary gates for TEBD), so I strongly advise to conform to this convention.
 
 ## Authors
 
