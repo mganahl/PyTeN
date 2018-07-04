@@ -86,6 +86,7 @@ O_N1, O_N2, ..., O_NN, 11
 ## Authors
 
 * **Martin Ganahl** 
+If you have any question, suggestions or concerns feel free to drop me an email or use the Issues system.
 
 ## License
 
