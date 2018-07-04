@@ -44,7 +44,8 @@ to do the evolution.
 The above examples-scripts are commented to explain the individual steps and help you to get started with new models.
 ### Prerequisites
 
-You need an numpy and scipy installation. To run the test cases, you additionally need the cython compiler installed on your OS (see below)
+You need an numpy and scipy installation. I have tested the code with numpy 1.14.3 and scipy 0.19.0 and 1.1.0.
+To run the test cases, you additionally need the cython compiler installed on your OS (see below)
 
 ### Installing
 To generate the binary files needed for testing, cd to 
@@ -55,7 +56,8 @@ and run
 ```
 python setup.py build_ext --inplace
 ```
-This should create a file XXZED.so (or a similar name, depending on the installed c-compiler). 
+This should create a file XXZED.so (or a similar name, depending on the installed c compiler. gcc might
+throw some warnings at you).
 
 
 ## Running the tests
