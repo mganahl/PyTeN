@@ -38,9 +38,9 @@ if __name__ == "__main__":
     dmrg=en.DMRGengine(mps,mpo,'blabla')
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
-    dmrg.__simulateTwoSite__(3,1e-10,1e-6,40,verbose=1,solver='LAN')
+    dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1,solver='LAN')
     #now switch to a single site DMRG (faster) to further converge state state
-    dmrg.__simulate__(6,1e-10,1e-10,30,verbose=1,solver='LAN')
+    dmrg.__simulate__(3,1e-10,1e-10,30,verbose=1,solver='LAN')
     dmrg._mps.__position__(0)
 
     #initialize a TimeEvolutionEngine with an mps and an mpo
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     #which should return an twosite gate
     engine=en.TEBDEngine(dmrg._mps,mpo,"insert_name_here")
     dt=-1j*0.05  #time step
-    numsteps=2  #numnber of steps to be taken in between measurements
+    numsteps=20  #numnber of steps to be taken in between measurements
     Dmax=40      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
                  #adapted to this value in the TEBDEngine
     thresh=1E-8  #truncation threshold
@@ -82,4 +82,3 @@ if __name__ == "__main__":
         plt.draw()
         plt.show()
         plt.pause(0.01)
-        input()
