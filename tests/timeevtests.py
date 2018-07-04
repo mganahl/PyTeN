@@ -148,7 +148,7 @@ class TestTimeEvolution(unittest.TestCase):
         for n in range(self.Nmax):
             #measure the operators 
             L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            #L=engine._mps.__measureLocal__(sz)            
+            #L=engine._mps.__measureList__(sz)            
             #store result for later use
             SZ[n,:]=L 
             tw,it2=engine.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
@@ -182,7 +182,7 @@ class TestTimeEvolution(unittest.TestCase):
         for n in range(self.Nmax):
             #measure the operators
             L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]            
-            #L=engine._mps.__measureLocal__(sz)
+            #L=engine._mps.__measureList__(sz)
             #store result for later use
             SZ[n,:]=L 
             it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)

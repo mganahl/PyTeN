@@ -70,7 +70,7 @@ if __name__ == "__main__":
     for n in range(Nmax):
 
         #measure the operators 
-        L=engine._mps.__measureLocal__(sz)
+        L=engine._mps.__measureList__(sz)
         #store result for later use
         SZ[n,:]=L
         tw,it=engine.__doTEBD__(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)

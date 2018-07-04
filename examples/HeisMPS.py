@@ -50,7 +50,7 @@ if __name__ == "__main__":
     
     #measure the local spin-density
     for n in range(N):
-        meanSz=dmrg._mps.__measureLocal__(Sz)
+        meanSz=dmrg._mps.__measureList__(Sz)
 
 
     #measure the Sz-Sz correlations
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     #measure again ,now with truncated state
     for n in range(N):
-        meanSztrunc=dmrg._mps.__measureLocal__(Sz)
+        meanSztrunc=dmrg._mps.__measureList__(Sz)
 
     meanSzSztrunc=[]        
     for n in range(N):
