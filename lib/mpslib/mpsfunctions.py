@@ -24,11 +24,12 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 
-"""
-calculates the overlap between two mps 
-mps1, mps2; list of mps tensors or MPS-objects
-"""
 def overlap(mps1,mps2):
+    """
+    overlap(mps1,mps2)
+    calculates the overlap between two mps 
+    mps1, mps2; list of mps tensors, or two MPS-objects
+    """
     if len(mps1)!=len(mps2):
         raise ValueError("overlap(mps1,mps2): mps have to be of same length")
     if (mps1[0].shape[0]!=1):
@@ -46,13 +47,13 @@ def overlap(mps1,mps2):
 
     return np.trace(L[:,:,0])
 
-
-"""
-checks if tensor obeys left or right orthogonalization;
-tensor: an mps tensor of dimensions (D,D,d)
-which: 'l' or 'r'; the orthogonality to be checked
-"""
 def check_normalization(tensor,which,thresh=1E-10):
+    """
+    checks if tensor obeys left or right orthogonalization;
+    tensor: an mps tensor of dimensions (D,D,d)
+    which: 'l' or 'r'; the orthogonality to be checked
+    returns: a float giving the deviation from orthonormality
+    """
     if which=='l':
         Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([0,2],[0,2]))-np.eye(tensor.shape[1]))
         if Z>thresh:
@@ -65,10 +66,12 @@ def check_normalization(tensor,which,thresh=1E-10):
 
 #finegrains a d=2 MPS by a factor of 2
 
-"""
-fine-grains an MPS by splitting a single site into 2 sites (see paper by Dolfi et al)
-"""
 def FinegrainDolfi(mps):
+    """
+    fine-grains an MPS by splitting a single site into 2 sites (see paper by Dolfi et al)
+    takes a list of mps tensors
+    returns: a new list of the fine-grained mps tensors
+    """
     assert(mps[0].shape[2]==2)
     T=np.zeros((2,2,2)).astype(mps[0].dtype)
     T[0,0,0]=1.0
@@ -93,10 +96,13 @@ def FinegrainDolfi(mps):
     return mpsfine
 
 
-"""
-a simple wrapper around numpy svd, catches some weird LinAlgError
-"""
 def svd(mat,full_matrices=False,r_thresh=1E-14):
+    """
+    a simple wrapper around numpy svd, catches some weird LinAlgError
+    returns: exactly what you would expect!
+    r_thresh: don't worry about it
+    """
+    
     try: 
         [u,s,v]=np.linalg.svd(mat,full_matrices=False)
     except np.linalg.linalg.LinAlgError:
@@ -107,10 +113,10 @@ def svd(mat,full_matrices=False,r_thresh=1E-14):
         print('svd caught a LinAlgError')
     return u,s,v
 
-"""
-a simple wrapper around numpy qr, allows signfixing of the diagonal of r or q
-"""
 def qr(mat,signfix):
+    """
+    a simple wrapper around numpy qr, allows signfixing of the diagonal of r or q
+    """
     dtype=type(mat[0,0])
     q,r=np.linalg.qr(mat)
     if signfix=='q':
@@ -123,10 +129,13 @@ def qr(mat,signfix):
         return q.dot(herm(unit)),unit.dot(r)
 
     
-"""
-returns the direct sum of two matrices; used below in the addMPS routine
-"""
 def directsum(m1,m2):
+    """
+    directsum(m1,m2)
+    m1, m2: matrices
+    returns: the direct sum of two matrices
+    """
+
     dtype=type(m1[0,0])
     out=np.zeros((list(map(sum,zip(m1.shape,m2.shape)))),dtype=dtype)
     out[0:m1.shape[0],0:m1.shape[1]]=m1
@@ -134,11 +143,12 @@ def directsum(m1,m2):
     return out
     
 
-
-"""
-
-"""
 def addMPS(mps1,mps2,obc=True):
+    """
+    addMPS(mps1,mps2,obc=True)
+    adds two mps
+    mps1,mps2: two lists of mps tensors of dimension (D,D,d)
+    """
     if obc==True:
         dtype=type(mps1[0][0,0,0])
         if len(mps1)!=len(mps2):
@@ -194,8 +204,13 @@ def addMPS(mps1,mps2,obc=True):
 
     return mps
 
-#contracts an MPO into an MPS
+
 def applyMPO(mps,mpo,inplace=False):
+    """
+    applyMPO(mps,mpo,inplace=False)
+    applies mpo to mps
+    if inplace=True, mps is overwritten with the result
+    """
     assert(len(mpo)==len(mps))
     if not inplace:
         out=[]
@@ -212,28 +227,35 @@ def applyMPO(mps,mpo,inplace=False):
         return mps
 
 
-"""
-contraction routine for ground-state optimization
-L (np.ndarray of shape(Dl,Dl',Ml)): left Hamiltonian environment
-R (np.ndarray of shape(Dr,Dr',Mr)): right Hamiltonian environment
-mps (np.ndarray of shape (Dl,Dr,d)): mps-tensor
-mpo (np.ndarray of shape (Ml,Mr,d,d)): MPO tensor
-
-routine contracts input and returns it in an np.ndarray of shape (Dl',Dr',d)
-"""
 def contractionH(L,mps,mpo,R):
+    """
+    contraction routine for ground-state optimization
+    L (np.ndarray of shape(Dl,Dl',Ml)): left Hamiltonian environment
+    R (np.ndarray of shape(Dr,Dr',Mr)): right Hamiltonian environment
+    mps (np.ndarray of shape (Dl,Dr,d)): mps-tensor
+    mpo (np.ndarray of shape (Ml,Mr,d,d)): MPO tensor
+    routine contracts input and returns it in an np.ndarray of shape (Dl',Dr',d)
+    """
+    
     term1=np.tensordot(L,mps,([0],[0]))
     term2=np.tensordot(term1,mpo,([1,3],[0,2]))
     term3=np.tensordot(term2,R,([1,2],[0,2]))
     return np.transpose(term3,[0,2,1])
 
-"""
-contracts a left or right environment tensor "tensor" with a unitcell mps-mpo-mps expression,
-starting at site site1 and ending at site site2
-mps1 is the upper mps, mps2 the lower mps
-site2 is included in the result
-"""
 def contractMPO(mps1,mps2,mpo,tensor,site1,site2,direction):
+
+    """
+    contracts a left or right environment tensor "tensor" with a unitcell mps-mpo-mps expression,
+    starting at site site1 and ending at site site2
+    direction<0: start at site2 and end at site1
+    direction>0: start at site1 and end at site2
+    mps1 is the upper mps, mps2 the lower mps
+    site2 is included in the result
+    mps1 and mps2 can be lists of ndarrays of dimension (D,D,d) or MPS objects
+    mpo can be a list of mpo ndarrays of dimension (M,M,d,d), or an MPO object
+    returns: an ndarray of dimension (D,D,M) 
+    """
+    
     assert(site2>=site1)
     if direction>0:
         L=np.copy(tensor)
@@ -246,14 +268,18 @@ def contractMPO(mps1,mps2,mpo,tensor,site1,site2,direction):
             R=addLayer(R,mps1[site],mpo[site],mps2[site],direction)
         return R
 
-"""
-contracts a left or right environment tensor "tensor" with a unitcell mps-mps expression,
-starting at site site1 and ending at site site2
-mps1 is the upper mps, mps2 the lower mps
-site2 is included in the result
-"""
 
 def contractE(mps1,mps2,tensor,site1,site2,direction):
+    """
+    contracts a left or right environment tensor "tensor" with a unitcell mps-mps expression,
+    starting at site site1 and ending at site site2, and returns the result
+    direction<0: start at site2 and end at site1
+    direction>0: start at site1 and end at site2
+    mps1 is the upper mps, mps2 the lower mps
+    site2 is included in the result
+    mps1 and mps2 can be lists of ndarrays of dimension (D,D,d) or MPS objects
+    returns: an ndarray of dimension (D,D) 
+    """
     assert(site2>=site1)
     if direction>0:
         L=np.copy(tensor)
@@ -267,13 +293,23 @@ def contractE(mps1,mps2,tensor,site1,site2,direction):
             R=addELayer(R,mps1[site],mps2[site],direction)
         return R
         
-#fix the phase of the diagonal of a matrix; used for l and r matrices of infinite MPS 
+
 def fixPhase(matrix):
+    """
+    fix the phase of the diagonal of matrix; 
+    used for l and r matrices of infinite MPS 
+    returns: the phase-fixed matrix
+    """
     matrix=matrix/np.trace(matrix);
     return matrix/np.sqrt(np.trace(matrix.dot(herm(matrix))))
 
 
 def measure4pointCorrelation(mps,ops,P=None):
+    """
+    measures a 4-point correlation function
+    mps: an MPS object
+    ops: a list of 4 operators to be measured
+    """
     assert(len(ops)==4)
     N=len(mps)
     s=0
@@ -327,19 +363,19 @@ def measure4pointCorrelation(mps,ops,P=None):
     #return ncon.ncon([L,self._mat,np.conj(self._mat),R],[[1,2,3],[1,4],[2,5],[4,5,3]])
     
     
-"""
-measure a local operator, given an mps, a list of local operators in mpo format, left and right boundaries of the MPS, and the orthogonal state of the MPS 
-len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
-efficient methods can be used.
-
-mps: a list of mps tensors (ndarrays) (or an mpslib.mps.MPS object)
-operator: a list of operators of len(operator)=len(mps). Each operator is measured and the 
-          result is returned in a list
-lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
-rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
-ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
-"""
 def measureLocal(mps,operator,lb,rb,ortho):
+    """
+    measure a local operator, given an mps, a list of local operators, left and right boundaries of the MPS, and the orthogonal state of the MPS 
+    len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
+    efficient methods can be used.
+    
+    mps: a list of mps tensors (ndarrays), or an mpslib.mps.MPS object
+    operator: a list of operators of len(operator)=len(mps). The position within of an operator within the list is taken to be 
+    the site where it acts. Each operator is measured and the  result is returned in a list
+    lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
+    rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
+    ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
+    """
     N=len(mps)
     loc=np.zeros(N)
     if ortho=='right':
@@ -382,20 +418,21 @@ def measureLocal(mps,operator,lb,rb,ortho):
 
         return loc
 
-"""
-measure a local operator, given an mps, a list of local operators in mpo format, left and right boundaries of the MPS, and the orthogonal state of the MPS 
-len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
-efficient methods can be used.
-
-mps: a list of mps tensors (ndarrays) (or an mpslib.mps.MPS object)
-operator: a list of operators of len(operator)=len(mps). Each operator is measured and the 
-          result is returned in a list
-lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
-rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
-ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
-"""
 #measure an operator at a certain site
 def measure(operator,lb,rb,mps,site):
+    """
+    measure a local operator, given an list of ndarrays of dimension (D,D,d), a list of local operators in mpo format, left and right boundaries of the MPS, and the orthogonal state of the MPS 
+    len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
+    efficient methods can be used.
+    
+    mps: a list of mps tensors (ndarrays) (or an mpslib.mps.MPS object)
+    operator: a list of operators of len(operator)=len(mps). Each operator is measured and the 
+    result is returned in a list
+    lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
+    rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
+    ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
+    """
+    
     L=np.copy(lb)
     R=np.copy(rb)
     for n in range(site):
@@ -409,18 +446,19 @@ def measure(operator,lb,rb,mps,site):
 
 
 
-"""
-initializes a list of mps tensors with random tensors
-numpyfun: functions to be used for the initialization (note that np.random.rand is not working, use np.random.random_sample instead)
-length: length of MPS
-D: bond dimension
-obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
-dtype: tyupe of the mps matrices
-scale: initial scaling of the tensors
-shift: shift of the interval where random numbers are drawn from 
-"""
 
 def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
+    """
+    initializes a list of ndarrays of dimension (D,D,d) with random tensors
+    numpyfun: functions to be used for the initialization (note that np.random.rand is not working, use np.random.random_sample instead)
+    length: length of MPS
+    D: bond dimension
+    obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
+    dtype: tyupe of the mps matrices
+    scale: initial scaling of the tensors
+    shift: shift of the interval where random numbers are drawn from 
+    """
+    
     if isinstance(d,int):
         d=[d]*length
 
@@ -448,30 +486,32 @@ def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5)
                 mps.append((numpyfun((D,D,d[n]))-shift+1j*(numpyfun((D,D,d[n]))-shift))*scale)
         return mps
 
-"""
-initializes a list of mps tensors with random tensors
-length: length of MPS
-D: bond dimension
-obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
-dtype: tyupe of the mps matrices
-scale: initial scaling of the tensors
-shift: shift of the interval where random numbers are drawn from 
-"""
 def MPSinit(length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
+    """
+    initializes a list of mps tensors (ndarrays of dimension (D,D,d) with random tensors
+    length: length of MPS
+    D: bond dimension
+    obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
+    dtype: tyupe of the mps matrices
+    scale: initial scaling of the tensors
+    shift: shift of the interval where random numbers are drawn from 
+    """
+    
     return MPSinitializer(np.random.random_sample,length,D,d,obc=obc,dtype=float,scale=scale,shift=shift)
 
 
 
 
-"""
-prepares an mps tensor using svd decomposition 
-direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
-fixsign (bool): if True and direction>0: fixes the phase of the diagonal of u to be real and positive
-                if True and direction<0: fixes the phase of the diagonal of v to be real and positive
-this is a deprecated routine, use prepareTruncate instead
-"""
-
 def prepareTensorSVD(tensor,direction,fixphase=False):
+    """
+    prepares an mps tensor using svd decomposition 
+    direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
+    fixsign (bool): if True and direction>0: fixes the phase of the diagonal of u to be real and positive
+    if True and direction<0: fixes the phase of the diagonal of v to be real and positive
+    this is a deprecated routine, use prepareTruncate instead
+    """
+
+
     warnings.warn('prepareTensorSVD is deprecated; use prepareTruncate instead')
     assert(direction!=0),'do NOT use direction=0!'
     [l1,l2,d]=tensor.shape
@@ -500,16 +540,17 @@ def prepareTensorSVD(tensor,direction,fixphase=False):
         s=s/np.linalg.norm(s)
         [size1,size2]=v.shape
         out=np.reshape(v,(size1,l2,d))
-        return out,s,u    
+        return out,s,u
 
-
-"""
-prepares and truncates an mps tensor using svd
-TRESH: cutoff of schmidt-value truncation
-R_THRESH: only used when svd throws an exception.
-D is the maximum bond-dimension to keep (hard cutoff); if not speciefied, the bond dimension could grow indefinitely!
-"""
+    
 def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
+    """
+    prepares and truncates an mps tensor using svd
+    TRESH: cutoff of schmidt-value truncation
+    R_THRESH: only used when svd throws an exception.
+    D is the maximum bond-dimension to keep (hard cutoff); if not speciefied, the bond dimension could grow indefinitely!
+    """
+
     assert(direction!=0),'do NOT use direction=0!'
     [l1,l2,d]=tensor.shape
     if direction>0:
@@ -571,13 +612,14 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
         out=np.reshape(v,(size1,l2,d))
     return u,s,out
 
-"""
-prepares an mps tensor using qr decomposition 
-direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
-fixphase (str): {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
-"""
 
 def prepareTensor(tensor,direction,fixphase=None):
+    """
+    prepares an mps tensor using qr decomposition 
+    direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
+    fixphase (str): {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+    """
+    
     assert(direction!=0),'do NOT use direction=0!'
     dtype=type(tensor[0,0,0])
     [l1,l2,d]=tensor.shape
@@ -653,21 +695,22 @@ def prepareTensorfixA0(mps,direction):
         return tensor,matout
 
 
-
-"""
-uses QR decomposition to orthonormalize an mps from site1 to site2; 
-routine returns the last computed "r" matrix from the QR decomposition
-
-for direction>0 and site2<len(mps)-1 the mps is not altered
-for direction>0 and site2=len(mps)-1, the original state is recovered by 
-contracting "r" into mps from the right 
-
-for direction<0 and site1>0 the mps is not altered
-for direction<0 and site1=0, the original state is recovered by 
-contracting "r" into mps from the left
-
-"""
 def orthonormalizeQR(mps,direction,site1,site2):
+    
+    """
+    uses QR decomposition to orthonormalize an mps from site1 to site2; 
+    routine returns the last computed "r" matrix from the QR decomposition
+    
+    for direction>0 and site2<len(mps)-1 the mps is not altered
+    for direction>0 and site2=len(mps)-1, the original state is recovered by 
+    contracting "r" into mps from the right 
+    
+    for direction<0 and site1>0 the mps is not altered
+    for direction<0 and site1=0, the original state is recovered by 
+    contracting "r" into mps from the left
+    
+    """
+    
     assert(direction!=0),'do NOT use direction=0!'
     assert(site2<len(mps))
     assert(site1>=0)
@@ -687,21 +730,20 @@ def orthonormalizeQR(mps,direction,site1,site2):
                 mps[site-1]=np.transpose(np.tensordot(mps[site-1],r,([1],[0])),(0,2,1))
     return r
 
-
-"""
-uses SVD decomposition to orthonormalize an mps from site1 to site2; 
-routine returns the last computed "mat" matrix from the QR decomposition
-
-for direction>0 and site2<len(mps)-1 the mps is not altered
-for direction>0 and site2=len(mps)-1, the original state is recovered by 
-contracting "mat" into mps from the right 
-
-for direction<0 and site1>0 the mps is not altered
-for direction<0 and site1=0, the original state is recovered by 
-contracting "mat" into mps from the left
-"""
-
 def orthonormalizeSVD(mps,direction,site1,site2):
+    """
+    uses SVD decomposition to orthonormalize an mps from site1 to site2; 
+    routine returns the last computed "mat" matrix from the QR decomposition
+    
+    for direction>0 and site2<len(mps)-1 the mps is not altered
+    for direction>0 and site2=len(mps)-1, the original state is recovered by 
+    contracting "mat" into mps from the right 
+    
+    for direction<0 and site1>0 the mps is not altered
+    for direction<0 and site1=0, the original state is recovered by 
+    contracting "mat" into mps from the left
+    """
+    
     assert(direction!=0),'do NOT use direction=0!'
     N=len(mps)
     if direction>0:
@@ -721,16 +763,17 @@ def orthonormalizeSVD(mps,direction,site1,site2):
                 mps[site-1]=np.transpose(np.tensordot(mps[site-1],mat,([1],[0])),(0,2,1))
     return mat
 
-"""
-takes two mps matrices A,B, a density matrix x (can be either left or
-right eigenmatrix of the Transfer Matrix), a boundary mpo of either left
-or right type and a direction argument dir > or < 0; if dir > 0, x is
-assumed to be a left vector, if dir<0, then it's assumed to
-be a right vector. returns a three index object (l,l',b) by contracting the input
-l and l' are upper and lower (A and B) matrix indices, and b is the left or right auxiliary index of the mpo
-"""
 
 def initializeLayer(A,x,B,mpo,direction):
+    """
+    takes two mps matrices A,B, a density matrix x (can be either left or
+    right eigenmatrix of the Transfer Matrix), a boundary mpo of either left
+    or right type and a direction argument dir > or < 0; if dir > 0, x is
+    assumed to be a left vector, if dir<0, then it's assumed to
+    be a right vector. returns a three index object (l,l',b) by contracting the input
+    l and l' are upper and lower (A and B) matrix indices, and b is the left or right auxiliary index of the mpo
+    """
+    
     [chi1,chi2,d]=np.shape(A)
     [chi1_,chi2_,d_]=np.shape(B);
     [D1,D2,d1,d2]=np.shape(mpo);
@@ -742,24 +785,26 @@ def initializeLayer(A,x,B,mpo,direction):
         t=np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(B),([0],[1]))#that is a tensor of the form l,s,lpime,sprime ???
         return np.reshape(np.tensordot(t,mpo,([1,3],[2,3])),(chi1,chi1_,D1))
 
-"""
-adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
-environments;
-direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
-"""
 def addLayer(E,A,mpo,B,direction):
+    """
+    adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
+    environments;
+    direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
+    """
+
     if direction>0:
         return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[0])),mpo,([1,3],[0,2])),np.conj(B),([0,3],[0,2])),(0,2,1))
     if direction<0:
         return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[1])),mpo,([3,1],[2,1])),np.conj(B),([3,0],[2,1])),(0,2,1))
         
-
-"""
-adds an mps-mps layer to a left or right block; used in dmrg to calculate the left and right
-environments
-direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
-"""
 def addELayer(E,A,B,direction):
+    
+    """
+    adds an mps-mps layer to a left or right block; used in dmrg to calculate the left and right
+    environments
+    direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
+    """
+
     if direction>0:
         return np.transpose(np.tensordot(np.tensordot(E,A,([0],[0])),np.conj(B),([0,3],[0,2])),(1,2,0))
     if direction<0:
@@ -846,13 +891,14 @@ def HAproductBondMatrix(L,R,matrix):
 
 
 
-"""
-calculates all R blocks; make sure the mps is right orthogonal
-rightboundary if the right boundary to which mps-mpo-mps layers
-are attached
-returns a list of blocks (np.ndarray)
-"""
 def getR(mps,mpo,rightboundary):
+    """
+    calculates all R blocks; make sure the mps is right orthogonal
+    rightboundary if the right boundary to which mps-mpo-mps layers
+    are attached
+    returns a list of blocks (np.ndarray)
+    """
+    
     R=[]
     N=len(mps)
     R.append(addLayer(rightboundary,mps[-1],mpo[-1],mps[-1],-1))
@@ -860,13 +906,15 @@ def getR(mps,mpo,rightboundary):
         R.append(addLayer(R[n-1],mps[N-1-n],mpo[N-1-n],mps[N-1-n],-1))
     return R
 
-"""
-calculates all L blocks; make sure the mps is left orthogonal
-leftboundary if the left boundary to which mps-mpo-mps layers
-are attached
-returns a list of blocks (np.ndarray)
-"""
 def getL(mps,mpo,leftboundary):
+    
+    """
+    calculates all L blocks; make sure the mps is left orthogonal
+    leftboundary if the left boundary to which mps-mpo-mps layers
+    are attached
+    returns a list of blocks (np.ndarray)
+    """
+    
     L=[]
     N=len(mps)
     L.append(addLayer(leftboundary,mps[0],mpo[0],mps[0],1))
@@ -875,21 +923,25 @@ def getL(mps,mpo,leftboundary):
     return L
 
 
-"""
-same as getR, but does not store all intermediate blocks. Instead, it returns
-the left-most block obtained after contracting everything
-"""
 def getUCR(mps,mpo,rightboundary):
+    """
+    same as getR, but does not store all intermediate blocks. Instead, it returns
+    the left-most block obtained after contracting everything
+    """
+    
     N=len(mps)
     R=addLayer(rightboundary,mps[-1],mpo[-1],mps[-1],-1)
     for n in range(1,N):
         R=addLayer(R,mps[N-1-n],mpo[N-1-n],mps[N-1-n],-1)
     return R
-"""
-same as getL, but does not store all intermediate blocks. Instead, it returns
-the right-most block obtained after contracting everything
-"""
+
 def getUCL(mps,mpo,leftboundary):
+    
+    """
+    same as getL, but does not store all intermediate blocks. Instead, it returns
+    the right-most block obtained after contracting everything
+    """
+
     N=len(mps)
     L=addLayer(leftboundary,mps[0],mpo[0],mps[0],1)
     for n in range(1,N):
@@ -898,22 +950,23 @@ def getUCL(mps,mpo,leftboundary):
 
 
 
-"""
-calculates all R blocks and projects them onto the subspace orthogonal to |r(n))(l(n)|
-at each site n of the lattice. make sure the mps is right orthogonal 
-rightboundary: the right boundary to which mps-mpo-mps layers are attached
-ldens: left reduced density matrices at sites n of the lattice (in matrix form). ldens[0] and ldens[N] should 
-       be identical (the left unit-cell steady reduced density matrix). ldens[n] is located 
-       between tensors mps[n] and mps[n+1] (for n<N-1)
-
-rdens: right reduced density matrices at sites n of the lattice (in matrix form). rdens[0] and rdens[N] should 
-       be identical (the right unit-cell steady reduced density matrix). rdens[n] is located 
-       between tensors mps[n] and mps[n+1] (for n<N-1)
-
-returns a list of blocks (np.ndarray)
-"""
-
 def getRprojected(mps,mpo,rightboundary,ldens,rdens):
+    
+    """
+    calculates all R blocks and projects them onto the subspace orthogonal to |r(n))(l(n)|
+    at each site n of the lattice. make sure the mps is right orthogonal 
+    rightboundary: the right boundary to which mps-mpo-mps layers are attached
+    ldens: left reduced density matrices at sites n of the lattice (in matrix form). ldens[0] and ldens[N] should 
+    be identical (the left unit-cell steady reduced density matrix). ldens[n] is located 
+    between tensors mps[n] and mps[n+1] (for n<N-1)
+    
+    rdens: right reduced density matrices at sites n of the lattice (in matrix form). rdens[0] and rdens[N] should 
+    be identical (the right unit-cell steady reduced density matrix). rdens[n] is located 
+    between tensors mps[n] and mps[n+1] (for n<N-1)
+    
+    returns a list of blocks (np.ndarray)
+    """
+    
     R=[]
     N=len(mps)
     R.append(addLayer(rightboundary,mps[-1],mpo[-1],mps[-1],-1))
@@ -927,22 +980,23 @@ def getRprojected(mps,mpo,rightboundary,ldens,rdens):
         R[n][:,:,-1]=R[n][:,:,-1]-np.trace(R[n][:,:,-1].dot(lmat))*rmat
     return R
 
-"""
-calculates all L blocks and projects them onto the subspace orthogonal to |r(n))(l(n)|
-at each site n of the lattice. make sure the mps is right orthogonal 
-rightboundary: the right boundary to which mps-mpo-mps layers are attached
-ldens: left reduced density matrices at sites n of the lattice (in matrix form). ldens[0] and ldens[N] should 
-       be identical (the left unit-cell steady reduced density matrix). ldens[n] is located 
-       between tensors mps[n] and mps[n+1] (for n<N-1)
-
-rdens: right reduced density matrices at sites n of the lattice (in matrix form). rdens[0] and rdens[N] should 
-       be identical (the right unit-cell steady reduced density matrix). rdens[n] is located 
-       between tensors mps[n] and mps[n+1] (for n<N-1)
-
-returns a list of blocks (np.ndarray)
-"""
 
 def getLprojected(mps,mpo,leftboundary,ldens,rdens):
+    """
+    calculates all L blocks and projects them onto the subspace orthogonal to |r(n))(l(n)|
+    at each site n of the lattice. make sure the mps is right orthogonal 
+    rightboundary: the right boundary to which mps-mpo-mps layers are attached
+    ldens: left reduced density matrices at sites n of the lattice (in matrix form). ldens[0] and ldens[N] should 
+    be identical (the left unit-cell steady reduced density matrix). ldens[n] is located 
+    between tensors mps[n] and mps[n+1] (for n<N-1)
+    
+    rdens: right reduced density matrices at sites n of the lattice (in matrix form). rdens[0] and rdens[N] should 
+    be identical (the right unit-cell steady reduced density matrix). rdens[n] is located 
+    between tensors mps[n] and mps[n+1] (for n<N-1)
+    
+    returns a list of blocks (np.ndarray)
+    """
+    
     L=[]
     N=len(mps)
     L.append(addLayer(leftboundary,mps[0],mpo[0],mps[0],1))
@@ -984,17 +1038,18 @@ def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,de
             vs.append(np.reshape(v[n],(chi1p,chi2p,dp)))
         return es,vs
 
-    
-"""
-calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
-of the4 effective DMRG hamiltonian as given by L, mpo and R
-L (np.ndarray of shape (Dl,Dl',d)): left hamiltonian environment
-R (np.ndarray of shape (Dr,Dr',d)): right hamiltonian environment
-mpo (np.ndarray of shape (Ml,Mr,d)): MPO
-mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
-see scipy eigsh documentation for details on the other parameters
-"""
 def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
+    
+    """
+    calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
+    of the4 effective DMRG hamiltonian as given by L, mpo and R
+    L (np.ndarray of shape (Dl,Dl',d)): left hamiltonian environment
+    R (np.ndarray of shape (Dr,Dr',d)): right hamiltonian environment
+    mpo (np.ndarray of shape (Ml,Mr,d)): MPO
+    mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
+    see scipy eigsh documentation for details on the other parameters
+    """
+    
     dtype=mps0.dtype
     if dtype==float:
         assert(L.dtype==dtype)
@@ -1169,15 +1224,16 @@ def gradient(L,mpo,R,mps0):
     return mv(mps0)
 
 
-"""
-computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
-A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
-B is always the upper matrix, A is always the lower one
-direction > 0 does a left-side product; direction < 0 does a right side product;
-vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
-returns a vector 
-"""
 def TransferOperator(direction,A,vector):
+    """
+    computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
+    A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
+    B is always the upper matrix, A is always the lower one
+    direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
+    returns a vector 
+    """
+    
     [D1,D2,d]= A.shape
     if direction>0:
         x=np.reshape(vector,(D1,D1))
@@ -1185,15 +1241,17 @@ def TransferOperator(direction,A,vector):
     if direction<0:
         x=np.reshape(vector,(D2,D2))
         return np.reshape(np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(A),([0,2],[1,2])),(D1*D1))
-"""
-computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
-A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
-B is always the upper matrix, A is always the lower one
-direction > 0 does a left-side product; direction < 0 does a right side product;
-vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
-returns a vector 
-"""
+    
 def MixedTransferOperator(direction,Upper,Lower,vector):
+    """
+    computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
+    A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
+    B is always the upper matrix, A is always the lower one
+    direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
+    returns a vector 
+    """
+    
     [D1A,D2A,dA]= Lower.shape
     [D1B,D2B,dB]= Upper.shape
     if direction>0:
@@ -1203,21 +1261,23 @@ def MixedTransferOperator(direction,Upper,Lower,vector):
         x=np.reshape(vector,(D2B,D2A))
         return np.reshape(np.tensordot(np.tensordot(x,Upper,([0],[1])),np.conj(Lower),([0,2],[1,2])),(D1A*D1B))
 
-
-"""    
-defines the matrix vector product to find the largest eigenvalue of the transfermatrix;
-this function will later on be turned into a functools.partial object mv(v) using partial(GeneralizedMatrixVectorProduct,[tensor,direction])
-A is the lower, B is the upper matrix 
-"""
 def GeneralizedMatrixVectorProduct(direction,A,B,vector):
+    
+    """    
+    defines the matrix vector product to find the largest eigenvalue of the transfermatrix;
+    this function will later on be turned into a functools.partial object mv(v) using partial(GeneralizedMatrixVectorProduct,[tensor,direction])
+    A is the lower, B is the upper matrix 
+    """
+
     warnings.warn('GeneralizedMatrixVectorProduct(direction,A,B,vector) is deprecated; used MixedTransferOperator instead')
     return MixedTransferOperator(direction=direction,Upper=B,Lower=A,vector=vector)
 
-"""
-sparse computation of the left or right eigenvector of the transfer matrix, using the TransferOperator function to
-to do the matrix-vector multiplication
-"""
 def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
+    """
+    sparse computation of the left or right eigenvector of the transfer matrix, using the TransferOperator function to
+    to do the matrix-vector multiplication
+    """
+
     datatype=tensor.dtype
     #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
     [chi1,chi2,d]=np.shape(tensor)
@@ -1368,11 +1428,12 @@ def computeDensity(dens0,mps,direction,dtype=float):
         return dens
 
 
-"""
-calculates the environment of an infinite MPS
-
-"""
 def getBoundaryHams(mps,mpo):
+    """
+    calculates the environment of an infinite MPS
+    
+    """
+
     #regauge the MPS into symmetric form
     mps.__regauge__('symmetric')
     pos=mps._position
@@ -1544,27 +1605,28 @@ def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datat
 
 
 
-"""
-takes an mps (can either be a list of np.arrays or an object of type MPS from mps.py) and regauges it in place
-gauge can be either of {'left','right',symmetric'} (desired gauuge of the output mps)
-if gauge=symmetric, mps is right orthogonal; in this case the routine returns the schmidt-values in a diagonal matrix
-Note that in the case that gauge=symmetric and schmidt coefficients <= 1E-15 present, the state is truncated, and a bunch of
-additional back and forth sweeps are done 
-
-ldens,rdens: initial guesses for the left and right reduced density matrices (speeds up computation).
-
-truncate: truncation threshold; if "truncate"<=1E-15 no truncation is applied, otherwise state is truncated 
-          to the value of "truncate" or D, depending which one is reached first
-          Note that truncation is only done in the gauge=symmetric mode, since for other gauges truncation is not well defined
-
-nmaxit, tol, ncv: parameters for the sparse arnoldi eigensolver (see scipy.eig routine)
-
-pinv: pseudo-inverse threshold
-
-thresh: output threshold parameter (has no effect on the return values and can be ignored)
-
-"""
 def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12,thresh=1E-8):
+    """
+    takes an mps (can either be a list of np.arrays or an object of type MPS from mps.py) and regauges it in place
+    gauge can be either of {'left','right',symmetric'} (desired gauuge of the output mps)
+    if gauge=symmetric, mps is right orthogonal; in this case the routine returns the schmidt-values in a diagonal matrix
+    Note that in the case that gauge=symmetric and schmidt coefficients <= 1E-15 present, the state is truncated, and a bunch of
+    additional back and forth sweeps are done 
+    
+    ldens,rdens: initial guesses for the left and right reduced density matrices (speeds up computation).
+    
+    truncate: truncation threshold; if "truncate"<=1E-15 no truncation is applied, otherwise state is truncated 
+    to the value of "truncate" or D, depending which one is reached first
+    Note that truncation is only done in the gauge=symmetric mode, since for other gauges truncation is not well defined
+    
+    nmaxit, tol, ncv: parameters for the sparse arnoldi eigensolver (see scipy.eig routine)
+    
+    pinv: pseudo-inverse threshold
+    
+    thresh: output threshold parameter (has no effect on the return values and can be ignored)
+    
+    """
+
     N=len(mps)
     dtype=mps[0].dtype
     [D1l,D2l,d]=np.shape(mps[0])
@@ -1797,13 +1859,17 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
 
             Z=np.trace(np.tensordot(mps[0],np.conj(mps[0]),([1,2],[1,2])))/np.shape(mps[0])[0]
             mps[0]=mps[0]/np.sqrt(Z)
-            return regaugeIMPS(mps,gauge='symmetric',ldens=None,rdens=None,truncate=1E-16,D=10,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=thresh)        
+            return regaugeIMPS(mps,gauge='symmetric',ldens=None,rdens=None,truncate=1E-16,D=10,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=thresh)
 
-"""
-simple truncation method for a list of mps tensors
-D (int): the desired bond dimension
-"""
+
+        
 def truncateMPS(mps,D):
+    
+    """
+    simple truncation method for a list of mps tensors
+    D (int): the desired bond dimension
+    """
+    
     orthonormalizeQR(mps,-1,0,len(mps)-1)
     N=len(mps)
     lams=[]                        
@@ -1819,19 +1885,20 @@ def truncateMPS(mps,D):
     return lams
 
 
-
-"""
-canonizes an mps, i.e. it returns the Gamma and lambda matrices in a list; routine can handle
-either a mps in "list" format (i.e. a list of tensors) or an type lib.mpslib.mps.MPS object
-
-
-tr_thresh: threshold for truncation of the MPS
-r_thresh:  internal parameter for capturing exceptions (ignore it)
-
-Returns: Gamma: list of len(Gamma)=len(mps) containing the Gamma-matrices
-         Lam: list of np.arrays containing the Schmidt-values, stored as one-dimensional np.arrays
-"""
 def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
+    
+    """
+    canonizes an mps, i.e. it returns the Gamma and lambda matrices in a list; routine can handle
+    either a mps in "list" format (i.e. a list of tensors) or an type lib.mpslib.mps.MPS object
+    
+    
+    tr_thresh: threshold for truncation of the MPS
+    r_thresh:  internal parameter for capturing exceptions (ignore it)
+    
+    Returns: Gamma: list of len(Gamma)=len(mps) containing the Gamma-matrices
+    Lam: list of np.arrays containing the Schmidt-values, stored as one-dimensional np.arrays
+    """
+    
     if (mps[0].shape[0]==1) and (mps[-1].shape[1]==1):
         #check that the state is obc
         assert(mps[0].shape[0]==1)
@@ -2151,10 +2218,11 @@ def RENORMBLOCKHAMGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance=1e-10,maxiteratio
 
 
         
-"""
-Implementation of the effective matrix-vector product for calculating excitations for a translational invariant system
-"""
 def ExHAproductSingle(l,L,LAA,LAAAA,LAAAA_OneMinusEAAinv,mpsA,mpsAtilde,VL,invsqrtl,invsqrtr,mpo,r,R,RAA,RAAAA,OneMinusEAAinv_RAAAA,GSenergy,k,tol,vec1):
+    """
+    Implementation of the effective matrix-vector product for calculating excitations for a translational invariant system
+    """
+
     [D1,D2,d]=np.shape(VL)
     facp=1.0
     facm=1.0
@@ -2247,14 +2315,15 @@ def ExHAproductSingle(l,L,LAA,LAAAA,LAAAA_OneMinusEAAinv,mpsA,mpsAtilde,VL,invsq
     return np.reshape(np.tensordot(out,invsqrtr,([0],[1])),(D1*D2))#-GSenergy*vec1
 
 #tdvp upate, works only for nearest neighbors
-"""
-l,r (np.ndarray): left and right reduced density matrices a translational invariant mps given by "tensor"
-tensor (np.ndarray): mps tensor, has to be left-orthogonal!
-mpo (list or array of np.ndarray): an MPO for a nearest neighbor Hamiltonian, e.g. mpo=Hamiltonians.XXZ(Jz,Jxy,B,obc=True) (see Hamiltonians.py)
-                                   should have obc
-
-"""
 def TDVPupdate(r,tensor,mpo,kold=None,tol=1E-10):
+    """
+    l,r (np.ndarray): left and right reduced density matrices a translational invariant mps given by "tensor"
+    tensor (np.ndarray): mps tensor, has to be left-orthogonal!
+    mpo (list or array of np.ndarray): an MPO for a nearest neighbor Hamiltonian, e.g. mpo=Hamiltonians.XXZ(Jz,Jxy,B,obc=True) (see Hamiltonians.py)
+    should have obc
+    
+    """
+
     dtype=type(tensor[0,0,0])
 
     [chi1,chi2,d]=np.shape(tensor)

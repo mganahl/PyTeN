@@ -9,24 +9,26 @@ comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
-"""
-
-Base class for defining MPO; if you want to implement a custom MPO, derive from this class (see below for examples)
-
-"""
 class MPO:
+    """
+
+    Base class for defining MPO; if you want to implement a custom MPO, derive from this class (see below for examples)
+    
+    """
+
     def __init__(self):
         #a list of mpo-tensors, to be initialized in the derived class
         self._mpo=[]
         self._N=0
 
-    """
-    returns a two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
-    h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
-    Gate=scipy.linalg..expm(tau*h); Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
-    dm, dn the local hilbert space dimension at site m and n, respectively
-    """
     def twoSiteGate(self,m,n,tau):
+        """
+        returns a two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
+        h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
+        Gate=scipy.linalg..expm(tau*h); Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
+        dm, dn the local hilbert space dimension at site m and n, respectively
+        """
+
         if n<m:
             mpo1=self._mpo[n][-1,:,:,:]
             mpo2=self._mpo[m][:,0,:,:]
@@ -67,13 +69,14 @@ class MPO:
     def __len__(self):
         return len(self._mpo)
 
-
-""" 
-transverse field Ising MPO
-convention: sigma_z=diag([-0.5,0.5])
-
-"""
 class TFI(MPO):
+
+    """ 
+    transverse field Ising MPO
+    convention: sigma_z=diag([-0.5,0.5])
+    
+    """
+    
     def __init__(self,Jx,Bz,obc=True):
         self._obc=obc
         self._Jx=Jx
@@ -160,10 +163,11 @@ class TFI(MPO):
         
                 self._mpo.append(np.copy(temp))
         
-"""
-the famous Heisenberg Hamiltonian, which we all know and love so much!
-"""    
 class XXZ(MPO):
+    """
+    the famous Heisenberg Hamiltonian, which we all know and love so much!
+    """    
+    
     def __init__(self,Jz,Jxy,Bz,obc=True):
         self._obc=obc
         self._Jz=Jz
@@ -271,12 +275,13 @@ class XXZ(MPO):
                 self._mpo.append(np.copy(temp))
 
 
-
-"""
-again the famous Heisenberg Hamiltonian, but in a slightly less common form
-"""    
                 
 class XXZflipped(MPO):
+
+    """
+    again the famous Heisenberg Hamiltonian, but in a slightly less common form
+    """    
+    
     def __init__(self,Delta,J,obc=True):
         self._Delta=Delta
         self._J=J
@@ -384,11 +389,12 @@ class XXZflipped(MPO):
 
 
 
-"""
-Spinless Fermions, you know them ...
-"""    
                 
 class SpinlessFermions(MPO):
+    """
+    Spinless Fermions, you know them ...
+    """    
+    
     def __init__(self,interaction,hopping,chempot,obc,dtype=complex):
         assert(len(interaction)==len(hopping))
         assert(len(interaction)==len(chempot)-1)        
@@ -452,11 +458,12 @@ class SpinlessFermions(MPO):
 
 
 
-"""
-A discrete version of the phi^4 model!
-"""    
-
 def PhiFourmpo(mu,nu,g,N,dx,cutoff,obc=False):
+
+    """
+    A discrete version of the phi^4 model!
+    """    
+    
     mpo=[]
     c=np.zeros((cutoff,cutoff))
     for n in range(1,cutoff):
@@ -516,11 +523,12 @@ def PhiFourmpo(mu,nu,g,N,dx,cutoff,obc=False):
 
 
 
-"""
-Another discrete version of the phi^4 model!
-"""    
-
 def PhiFourmpo2(mu,nu,g,N,dx,cutoff,obc=False):
+
+    """
+    Another discrete version of the phi^4 model!
+    """    
+    
     mpo=[]
     c=np.zeros((cutoff,cutoff))
     for n in range(1,cutoff):
@@ -580,11 +588,12 @@ def PhiFourmpo2(mu,nu,g,N,dx,cutoff,obc=False):
 
     return mpo
     
-"""
-Yet another discrete version of the phi^4 model!
-"""    
 
 def PhiFourmpo3(mu,nu,g,N,dx,cutoff,obc=False):
+    """
+    Yet another discrete version of the phi^4 model!
+    """    
+
     mpo=[]
     c=np.zeros((cutoff,cutoff))
     for n in range(1,cutoff):
@@ -623,11 +632,12 @@ def PhiFourmpo3(mu,nu,g,N,dx,cutoff,obc=False):
     return mpo
 
 
-"""
-How many more Phi^4 models are there?
-"""    
-
 def PhiFourmpo4(mu,nu,g,N,dx,cutoff,obc=False):
+    
+    """
+    How many more Phi^4 models are there?
+    """    
+
     mpo=[]
     c=np.zeros((cutoff,cutoff))
     for n in range(1,cutoff):
@@ -663,11 +673,13 @@ def PhiFourmpo4(mu,nu,g,N,dx,cutoff,obc=False):
     return mpo
     
 
-"""
-There is an proliferatoin of Phi Four models!
-"""
 def TwoSitePhiFourMPO(mu,nu,g,dx,cutoff):
+    """
+    There is an proliferatoin of Phi Four models!
+    """
+    
     mpo=[]
+    
     c=np.zeros((cutoff,cutoff))
     for n in range(1,cutoff):
         c[n-1,n]=np.sqrt(n)
@@ -694,12 +706,13 @@ def TwoSitePhiFourMPO(mu,nu,g,dx,cutoff):
 
     return mpo
 
-"""
-The good old Fermi Hubbard model
-"""
 
 
 class HubbardChain(MPO):
+    """
+    The good old Fermi Hubbard model
+    """
+    
     def __init__(self,U,t_up,t_down,mu_up,mu_down,obc,dtype=complex):
         self._U=U
         self._t_up=t_up

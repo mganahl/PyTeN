@@ -147,7 +147,8 @@ class TestTimeEvolution(unittest.TestCase):
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
             #measure the operators 
-            L=engine._mps.__measureLocal__(sz)
+            L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            #L=engine._mps.__measureLocal__(sz)            
             #store result for later use
             SZ[n,:]=L 
             tw,it2=engine.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
@@ -179,8 +180,9 @@ class TestTimeEvolution(unittest.TestCase):
         it2=0  #counts the total iteration number
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
-            #measure the operators 
-            L=engine._mps.__measureLocal__(sz)
+            #measure the operators
+            L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]            
+            #L=engine._mps.__measureLocal__(sz)
             #store result for later use
             SZ[n,:]=L 
             it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)
@@ -301,11 +303,13 @@ class TestPlot(unittest.TestCase):
         it2=0  #counts the total iteration number
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
-            #measure the operators 
-            L=engine1._mps.__measureLocal__(sz)
+            #measure the operators
+            L=[engine1._mps.__measureLocal__(np.diag([-0.5,0.5]),n).real for n in range(N)]
+            #L=engine1._mps.__measureLocal__(sz)
             #store result for later use
-            SZ1[n,:]=L 
-            L=engine2._mps.__measureLocal__(sz)
+            SZ1[n,:]=L
+            L=[engine2._mps.__measureLocal__(np.diag([-0.5,0.5]),n).real for n in range(N)]            
+            #L=engine2._mps.__measureLocal__(sz)
             SZ2[n,:]=L
 
             tw,it2=engine1.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\

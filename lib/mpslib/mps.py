@@ -61,7 +61,11 @@ np.conj
 """
 class MPS:
 
-    """Generic Structure of the state: self._tensors contains the MPS matrices. self._position 
+    """
+    MPS object representing a matrix product state
+    
+
+    Generic Structure of the state: self._tensors contains the MPS matrices. self._position 
     is the bond index at which orthonormalization of self._tensor matrices switches from
     left- to right-orthonormal. self._mat contains the bond matrix (if diagonalized, the schmdit values) 
     of the cut at self._position. 
@@ -73,7 +77,7 @@ class MPS:
     (where * is a tensor contraction) is correctly gauge-matched. This is relevant for infinite system simulations
 
     if schmidt_thresh is set below 1E-15, some mps methods, like e.g. __position__, switch 
-    to qr instead of svd orthogonalization
+p    to qr instead of svd orthogonalization
 
     The maximum bond dimension of the MPS is self._D. Methods will try to truncate the state such that this limit is respected
     
@@ -84,6 +88,7 @@ class MPS:
     @classmethod
     def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        generate a random MPS
         N (int): length of the mps
         D (int): initial bond dimensions
         d (int or array of int): local Hilbert space dimension
@@ -118,6 +123,7 @@ class MPS:
     @classmethod
     def zeros(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        generate an MPS filled with zeros
         N (int): length of the mps
         D (int): initial bond dimensions
         d (int or array of int): local Hilbert space dimension
@@ -149,6 +155,7 @@ class MPS:
     @classmethod
     def ones(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        generate an MPS filled with ones
         N (int): length of the mps
         D (int): initial bond dimensions
         d (int or array of int): local Hilbert space dimension
@@ -181,7 +188,7 @@ class MPS:
     @classmethod
     def productState(cls,localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
-        initialize a product state;
+        initialize a product state MPS:
         localstate: an array of int specifying the local positions; i.e. localstate[n]=i 
                     sets the state at position n to i, where 0<i<d[n]
         d:          int or array of int; local hilbert space dimensions
@@ -236,8 +243,9 @@ class MPS:
         assert(abs(n)<len(self))
         self._tensors[n]=np.copy(tensor)
 
-    #act on all tensors with "operation"
+    #
     def __unary_operations__(self,operation,*args,**kwargs):
+        
         res=self.__copy__()
         for n in range(len(res)):
             res[n]=operation(res[n],*args,**kwargs)
@@ -257,14 +265,12 @@ class MPS:
     def conj(self,*args,**kwargs):
         return self.__conj__(self,*args,**kwargs)
 
-    #take elementwise exp
     def __exp__(self,*args,**kwargs):
         res=self.__unary_operations__(np.exp,*args,**kwargs)
         return res
     def exp(self,*args,**kwargs):
         return self.__exp__(*args,**kwargs)
        
-    #take elementwise sqrt
     def __sqrt__(self,*args,**kwargs):
         res=self.__unary_operations__(np.sqrt,*args,**kwargs)
         return res
@@ -293,12 +299,13 @@ class MPS:
     __invert__ = generate_unary_deferer(opr.invert)
 
     
-    """
-    merges self._connector into the MPS. self._connector is merged into either the 'left' most or 
-    the 'right' most mps-tensor. changes self._connector to be the identity: self._connector=11
-    """
 
     def __absorbConnector__(self,location):
+        """
+        merges self._connector into the MPS. self._connector is merged into either the 'left' most or 
+        the 'right' most mps-tensor. changes self._connector to be the identity: self._connector=11
+        """
+
         if not ((location=='left') or (location=='right')):
             raise ValueError('mps.__absorbConnector__(self,location): wrong value for "location"; use "location"="left" or "right"')
 
@@ -312,13 +319,14 @@ class MPS:
             D=np.shape(self._tensors[0])[0]
             self._connector=np.eye(D)
 
-    """
-    merges self._mat into the MPS. self._mat is merged into either the left (direction<0) or 
-    the right (direction>0) tensor at bond self._position
-    changes self._mat to be the identity: self._mat=11; does not change self._connector
-    """
 
     def __absorbCenterMatrix__(self,direction):
+        """
+        merges self._mat into the MPS. self._mat is merged into either the left (direction<0) or 
+        the right (direction>0) tensor at bond self._position
+        changes self._mat to be the identity: self._mat=11; does not change self._connector
+        """
+        
         assert(direction!=0)
         if self._position==self._N:
             if direction>0:
@@ -357,15 +365,16 @@ class MPS:
         D.append(self[len(self)-1].shape[1])
         return D
 
-    """
-    shifts the center site to "bond"
-    "schmidt_thresh" overrides the self._schmidt_thresh parameter of the MPS temporarily
-    if schmidt_thresh>1E-15, then routine uses an svd to truncate the mps
-    If "D" is specified, the bond dimension after schmidt_thresh is additionally never larger than D.
-    "D" will override self._D as the new maximum bond dimension of the MPS
-    The function does not modify self._connector
-    """
     def __position__(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
+        """
+        shifts the center site to "bond"
+        "schmidt_thresh" overrides the self._schmidt_thresh parameter of the MPS temporarily
+        if schmidt_thresh>1E-15, then routine uses an svd to truncate the mps
+        If "D" is specified, the bond dimension after schmidt_thresh is additionally never larger than D.
+        "D" will override self._D as the new maximum bond dimension of the MPS
+        The function does not modify self._connector
+        """
+        
         assert(bond<=self._N)
         assert(bond>=0)
         """
@@ -417,16 +426,17 @@ class MPS:
         self._position=bond
 
 
-
-    """
-    measure a set of local N operators "ops", where N=len(ops)=len(mps)
-    "lb" and "rb" are left and right boundary conditions to be applied 
-    if the state is pbc; for obc they can be left None
-    the routine moves the centersite to the left boundary, measures and moves
-    it back to its original position; this might cause some overhead
-    """
     
-    def __measureLocal__(self,ops,lb=None,rb=None):
+    def __measureList__(self,ops,lb=None,rb=None):
+
+        """
+        measure a list of N local operators "ops", where N=len(ops)=len(mps)
+        "lb" and "rb" are left and right boundary conditions to be applied 
+        if the state is pbc; for obc they can be left None
+        the routine moves the centersite to the left boundary, measures and moves
+        it back to its original position; this might cause some overhead
+        """
+        
         if lb==None or rb==None:
             if self._obc==False:
                 return NotImplemented
@@ -437,16 +447,40 @@ class MPS:
                 self.__position__(pos)
                 return L
 
-        
-    """ 
-    This is a quite slow function to calculate observables; it takes a list of operators "ops" and a list of sites "sites" of where the operators live, and calculates <op[1]op[2],...,op[n]>
-    "sites" has to be a list of (weakly) monotonically increasing numbers 
-    the function can also measure fermionic correlation fucntions, if the jordan wigner strings are given in P; P is a list 
-    containing the jordan-woigner operators for each site of the MPS (len(P)==len(mps))
 
-    ROUTINE MAY BE WRONG 
-    """
+
+    def __measureLocal__(self,op,site,lb=None,rb=None):
+
+        """
+        measure a local operator "op" at site "site"
+        "lb" and "rb" are left and right boundary conditions to be applied 
+        if the state is pbc (currently not implemented); for obc they can be left None
+        the routine moves the centersite to "site", measures and moves
+        it back to its original position; this might cause some overhead
+        """
+        
+        if lb==None or rb==None:
+            if self._obc==False:
+                return NotImplemented
+            else:
+                pos=self._position
+                self.__position__(site+1)
+                t=self.__tensor__(site)                
+                self.__position__(pos)
+                return ncon.ncon([t,np.conj(t),op],[[1,3,2],[1,3,4],[2,4]])
+            
+        
     def __measure__(self,ops,sites,P=None):
+        """ 
+        This is a quite slow function to calculate correlation functions; 
+        it takes a list of operators "ops" and a list of sites "sites" of where the operators live, and calculates <ops[site[0]]ops[sites[1]],...,ops[sites[n-1]]>
+        "sites" has to be a list of (weakly) monotonically increasing numbers 
+        the function can also measure fermionic correlation functions, if the jordan wigner strings are given in P; P is a list 
+        containing the jordan-woigner operators for each site of the MPS (len(P)==len(mps)); for example, P=np.diag(1,-1) for spinless fermions
+        
+        BE WEARY: ROUTINE COULD BE WRONG 
+        """
+        
         if not isinstance(sites,list):
             ops=list([ops])
             sites=list([sites])            
@@ -507,16 +541,17 @@ class MPS:
         return ncon.ncon([L,self._mat,np.conj(self._mat),R],[[1,2,3],[1,4],[2,5],[4,5,3]])
 
 
-    """ 
-    a dedicated routine for truncating an mps (for obc, this can also be done using self.__position__(self,pos))
-    For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
-    schmidt_thresh: truncation threshold
-    D: maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
-    r_thresh: internal parameter, has no effect on the outcome and can be ignored
-    returned_gauge: 'left','right' or 'symmetric': the desired gauge after truncation
-    """
 
     def __truncate__(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
+        """ 
+        a dedicated routine for truncating an mps (for obc, this can also be done using self.__position__(self,pos))
+        For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
+        schmidt_thresh: truncation threshold
+        D: maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
+        r_thresh: internal parameter, has no effect on the outcome and can be ignored
+        returned_gauge: 'left','right' or 'symmetric': the desired gauge after truncation
+        """
+        
         if D!=None and D>self._D:
             print('MPS.__truncate__(): D>self._D, no truncation neccessary')
             return
@@ -525,7 +560,6 @@ class MPS:
                 self.__position__(0)
                 self.__position__(self._N)
                 print (schmidt_thresh,D)
-                print('truncating')
                 self.__position__(0,schmidt_thresh=schmidt_thresh,D=D,r_thresh=r_thresh)
             if self._obc==False:
                 if self._position<self._N:
@@ -542,12 +576,13 @@ class MPS:
                 if returned_gauge!=None:
                     self.__regauge__(returned_gauge)                    
                 
-    """
-    returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
-    if clear=True, self._mat is replaced with an identity matrix
-    """
     
     def __tensor__(self,site,clear=False):
+        """
+        returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
+        if clear=True, self._mat is replaced with a normalized identity matrix
+        """
+        
         assert((site==self._position) or (site==(self._position-1)))
         if (site==self._position):
             out=np.tensordot(self._mat,self._tensors[site],([1],[0]))
@@ -562,28 +597,31 @@ class MPS:
                 self._mat=np.eye(np.shape(self._tensors[site])[1])
                 self._mat/=np.linalg.norm(self._mat)                
             return out
-
-    """
-    canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in the mps._gamma and mps._lambda member lists;
-    len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just 1.0
-    """
     def __canonize__(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+
+        """
+        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in the mps._gamma and mps._lambda member lists;
+        len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just [1.0]
+        funtions has no return argument
+        """
+        
         self.mps.__regauge__(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv)
         self._gamma,self._lambda=mf.canonizeMPS(self.mps)
         
     
-    """
-    regauge brings state in either left, right or symmetric orthonormal form
-    the state should be a finite unitcell state on an infinite lattice
-    gauge = 'left' or 'right' bring the state into left or right orthonormal form such that it can be connected back 
+    def __regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        """
+        regauge brings state in either left, right or symmetric orthonormal form
+        the state should be a finite unitcell state on an infinite lattice
+        gauge = 'left' or 'right' bring the state into left or right orthonormal form such that it can be connected back 
         to itself. For gauge='left' or 'right', self._mat=11 and self._connector=11 are set to be the identity. To calculate 
         any observables, one needs to additionally calculate the right (for gauge = 'left') or the left (for gauge = 'right') reduced
         density matrices
-    if gauge='symmetric' the state is brought into symmetric gauge, such that it is totally left normalized, 
-    and self._mat=lambda, self._connector=1/lambda contain the schmidt-values. note that __regauge__ uses self._schmidt_thresh
-    as effective truncation, so the bond dimensions might change
-    """
-    def __regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        if gauge='symmetric' the state is brought into symmetric gauge, such that it is totally left normalized, 
+        and self._mat=lambda, self._connector=1/lambda contain the schmidt-values. note that __regauge__ uses self._schmidt_thresh
+        as effective truncation, so the bond dimensions might change
+        """
+            
         if self._obc==True:
             print ('in MPOS.__regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20): state is OBC; regauging only applies to PBC states.')
             return 
@@ -607,11 +645,11 @@ class MPS:
 
 
     
-    """
-    checks if the orthonormalization of the mps is OK
-    """
-    
     def __orthonormalization__(self,site,direction):
+        """
+        checks if the orthonormalization of the mps is OK
+        prints out some stuff
+        """
         assert(site<self._N)
         if direction>0:
             print ('deviation from left orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1]))))
@@ -622,12 +660,13 @@ class MPS:
             #print np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))
             return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]))
 
-    """
-    returns the mps-tensors; if absorb_center=1, the centermatrix is absorbed in right direction into the MPS,
-    if absorb_center=-1, it is absorbed in left direction.  absorb_connector='left' or 'right' absorbes the
-    connector matrix into the mps
-    """
     def __tensors__(self,absorb_center=None,absorb_connector=None):
+        """
+        returns a list of a copy of the mps-tensors; if absorb_center=1, the centermatrix is absorbed in right direction into the MPS,
+        if absorb_center=-1, it is absorbed in left direction.  absorb_connector='left' or 'right' absorbes the
+        connector matrix into the mps
+        """
+        
         if absorb_center!=None:
             self.__absorbCenterMatrix__(direction=absorb_center)
         if absorb_connector!=None:
@@ -636,12 +675,13 @@ class MPS:
         return copy.deepcopy(self._tensors)
 
 
-    """
-    applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
-    "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
-    site has to be the left-hand site of the operator support
-    """
     def __applyTwoSiteGate__(self,gate,site,Dmax=None,thresh=1E-10):
+        """
+        applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
+        "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
+        site has to be the left-hand site of the operator support
+        """
+
         assert(len(gate.shape)==4)
         assert(site<len(self)-1)
         self.__position__(site+1)
@@ -663,13 +703,14 @@ class MPS:
         return tw,len(S)
 
 
-
-    """
-    applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
-    "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
-    site has to be the left-hand site of the operator support
-    """
     def __applyOneSiteGate__(self,gate,site,Dmax=None,thresh=1E-10):
+
+        """
+        applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
+        "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
+        site has to be the left-hand site of the operator support
+        """
+        
         assert(len(gate.shape)==2)
         assert(site<len(self))
         self.__position__(site+1)
@@ -679,10 +720,11 @@ class MPS:
         self._mat=mat
 
     
-    """
-    applies an mpo to an mps; no truncation is done
-    """
     def __applyMPO__(self,mpo):
+        """
+        applies an mpo to an mps; no truncation is done
+        """
+        
         assert(len(mpo)==len(mps))
         self.__position__(0)
         self.__absorbCenterMatrix__(1)
