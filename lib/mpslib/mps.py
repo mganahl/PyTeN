@@ -77,7 +77,7 @@ class MPS:
     (where * is a tensor contraction) is correctly gauge-matched. This is relevant for infinite system simulations
 
     if schmidt_thresh is set below 1E-15, some mps methods, like e.g. __position__, switch 
-p    to qr instead of svd orthogonalization
+    to qr instead of svd orthogonalization
 
     The maximum bond dimension of the MPS is self._D. Methods will try to truncate the state such that this limit is respected
     
@@ -243,7 +243,7 @@ p    to qr instead of svd orthogonalization
         assert(abs(n)<len(self))
         self._tensors[n]=np.copy(tensor)
 
-    #
+
     def __unary_operations__(self,operation,*args,**kwargs):
         
         res=self.__copy__()
