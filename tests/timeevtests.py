@@ -268,17 +268,22 @@ class TestPlot(unittest.TestCase):
                 vnew=lan.__doStep__(vnew,self.dt)
                 vnew/=np.linalg.norm(vnew)
 
-        mps=mpslib.MPS.random(self.N,10,d,obc=True)
+        mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex,schmidt_thresh=1E-16)
         mps._D=D
         mps.__position__(self.N)
         mps.__position__(0)
         self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
+
         self.dmrg=en.DMRGengine(mps,self.mpo,'testXXZ',lb,rb)
+
+
+        
         self.eps=1E-5
 
     def test_plot(self):
+        
         N=self.N
         
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
@@ -289,7 +294,7 @@ class TestPlot(unittest.TestCase):
         self.dmrg._mps.__position__(0)
 
         engine1=en.TEBDEngine(self.dmrg._mps,self.mpo,"insert_name_here")
-        engine2=en.TDVPEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
+        engine2=en.TDVPEngine(self.dmrg._mps.__copy__(),self.mpo,"TDVP_insert_name_here")        
         
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
         #adapted to this value in the TEBDEngine
@@ -302,19 +307,18 @@ class TestPlot(unittest.TestCase):
         it1=0  #counts the total iteration number
         it2=0  #counts the total iteration number
         tw=0  #accumulates the truncated weight (see below)
+
         for n in range(self.Nmax):
-            #measure the operators
-            L=[engine1._mps.__measureLocal__(np.diag([-0.5,0.5]),n).real for n in range(N)]
-            #L=engine1._mps.__measureLocal__(sz)
+            #measure a list of local operators
+            L=engine1._mps.__measureList__(sz)
             #store result for later use
             SZ1[n,:]=L
-            L=[engine2._mps.__measureLocal__(np.diag([-0.5,0.5]),n).real for n in range(N)]            
-            #L=engine2._mps.__measureLocal__(sz)
-            SZ2[n,:]=L
 
+            L=engine2._mps.__measureList__(sz)
+            SZ2[n,:]=L
             tw,it2=engine1.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
-            
+
             it1=engine2.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)
 
             plt.figure(1,figsize=(10,8))
@@ -337,7 +341,10 @@ class TestPlot(unittest.TestCase):
             plt.draw()
             plt.show()
             plt.pause(0.01)
+            #input()            
             
+
+
 
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)

@@ -149,10 +149,16 @@ def addMPS(mps1,mps2,obc=True):
     adds two mps
     mps1,mps2: two lists of mps tensors of dimension (D,D,d)
     """
+    if len(mps1)!=len(mps2):
+        raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
+    
+    dtype=int
+
+    for n in range(len(mps1)):
+        dtype=np.result_type(dtype,mps1[n].dtype)
+        dtype=np.result_type(dtype,mps2[n].dtype)
+    
     if obc==True:
-        dtype=type(mps1[0][0,0,0])
-        if len(mps1)!=len(mps2):
-            raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
 
         mps=[]
         shape=(1,mps1[0].shape[1]+mps2[0].shape[1],mps1[0].shape[2])
@@ -186,7 +192,7 @@ def addMPS(mps1,mps2,obc=True):
         mps.append(mat)
         
     if obc==False:
-        dtype=type(mps1[0][0,0,0])
+
         if len(mps1)!=len(mps2):
             raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
         mps=[]
@@ -203,7 +209,6 @@ def addMPS(mps1,mps2,obc=True):
             mps.append(mat)
 
     return mps
-
 
 def applyMPO(mps,mpo,inplace=False):
     """
@@ -550,7 +555,7 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
     R_THRESH: only used when svd throws an exception.
     D is the maximum bond-dimension to keep (hard cutoff); if not speciefied, the bond dimension could grow indefinitely!
     """
-
+    #print("in prepareTruncate: thresh=",thresh,"D=",D)
     assert(direction!=0),'do NOT use direction=0!'
     [l1,l2,d]=tensor.shape
     if direction>0:
@@ -565,15 +570,15 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
             
         s=s/np.linalg.norm(s)
-
-        s=s[np.nonzero(s>thresh)[0]]
+        s=s[s>thresh]
         if D!=None:
+
             if D<len(s):
-                warnings.warn('mpsfunctions.py:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
-            s=s[0:min(D,len(s))]                
+                warnings.warn('mpsfunctions.py dir>0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
+            s=s[0:min(D,len(s))]
+            #print("in prepareTruncate: len(s)=",len(s),"D=",D)
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
-
         elif D==None:
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
@@ -594,11 +599,12 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir<0')
         s=s/np.linalg.norm(s)
-        s=s[np.nonzero(s>thresh)[0]]
+        s=s[s>thresh]        
         if D!=None:
             if D<len(s):
-                warnings.warn('mpsfunctions.py:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
-            s=s[0:min(D,len(s))]                
+                warnings.warn('mpsfunctions.py dir<0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
+            s=s[0:min(D,len(s))]
+            #print(len(s),D)            
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
 
@@ -665,6 +671,7 @@ def prepareTensor(tensor,direction,fixphase=None):
         r=np.conjugate(np.transpose(r_,(1,0)))
         #normalize the bond matrix
         r=r/np.linalg.norm(r)#np.sqrt(np.trace(herm(r).dot(r)))
+
     return out,r
 
 #used in the lattice-cMPS context; ignore for the case of lattice MPS

@@ -648,7 +648,6 @@ class TEBDEngine:
                   is printed out if verbosity > 0, to have some idea of the simulation progress; 
                   cnterset is useful when when chaining multiple doTEBD calls, for example between measurements;
         """
-
         self._tw=tw
         it=cnterset
         self._maxD=1
@@ -682,7 +681,6 @@ class TEBDEngine:
                 else:
                     self.applyEven(dt/2.0,Dmax,tr_thresh)
             it=it+1
-            
         return self._tw,it
 
 

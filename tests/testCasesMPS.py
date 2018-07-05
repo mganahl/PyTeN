@@ -447,6 +447,33 @@ class UCMPSTruncationTests(unittest.TestCase):
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
 
 
+class MPSArithmeticTests(unittest.TestCase):
+    def setUp(self):
+        self.D=2
+        self.N=20
+        N1=random.randint(1,(self.N-(self.N%2))/2)
+        self.d=[2]*self.N
+        random.shuffle(self.d)
+        self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
+        self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
+        
+        self.eps=1E-10
+        
+    def testSub(self):
+        mps=self.mps1-self.mps2
+        sz=[np.diag([1,-1]) for n in range(self.N)]
+        for n in range(self.N-1,-1,-1):
+            #self.assertTrue(np.abs(mps.__measureLocal__(np.diag([1,-1]),n))<1E-12)
+            print(np.abs(mps.__measureLocal__(np.diag([1,-1]),n)))
+
+    #def testAdd(self):
+    #    mps=a1*self.mps1+a2*self.mps2
+    #    
+    #    sz=[np.diag([1,-1]) for n in range(self.N)]
+    #    for n in range(self.N-1,-1,-1):
+    #        self.assertTrue(np.abs(mps.__measureLocal__(np.diag([1,-1]),n))<1E-12)
+
+        
 
 class MPSTests(unittest.TestCase):
     def setUp(self):
@@ -457,6 +484,7 @@ class MPSTests(unittest.TestCase):
         random.shuffle(self.d)
 
         self.eps=1E-10
+        
     def testRegaugeLeftFloat(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
@@ -699,14 +727,16 @@ if __name__ == "__main__":
     suite4 = unittest.TestLoader().loadTestsFromTestCase(UCMPSRegaugingTests)
     suite5 = unittest.TestLoader().loadTestsFromTestCase(UCMPSTruncationTests)
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
-    suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)    
-    unittest.TextTestRunner(verbosity=2).run(suite1)
-    unittest.TextTestRunner(verbosity=2).run(suite2)
-    unittest.TextTestRunner(verbosity=2).run(suite3)
-    unittest.TextTestRunner(verbosity=2).run(suite4)
-    unittest.TextTestRunner(verbosity=2).run(suite5)
-    unittest.TextTestRunner(verbosity=2).run(suite6)
-    unittest.TextTestRunner(verbosity=2).run(suite7) 
+    suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)
+    suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)    
+    #unittest.TextTestRunner(verbosity=2).run(suite1)
+    #unittest.TextTestRunner(verbosity=2).run(suite2)
+    #unittest.TextTestRunner(verbosity=2).run(suite3)
+    #unittest.TextTestRunner(verbosity=2).run(suite4)
+    #unittest.TextTestRunner(verbosity=2).run(suite5)
+    #unittest.TextTestRunner(verbosity=2).run(suite6)
+    #unittest.TextTestRunner(verbosity=2).run(suite7)
+    unittest.TextTestRunner(verbosity=2).run(suite8) 
 
     
     

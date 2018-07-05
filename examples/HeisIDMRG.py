@@ -35,6 +35,6 @@ if __name__ == "__main__":
     rb=np.ones((D,D,1))
     idmrg=en.IDMRGengine(mps,mpo,'blabla')
     
-    idmrg.__simulateTwoSite__(Nmax=100,NUC=2,Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,truncation=1E-8) #two site idmrg
+    idmrg.__simulateTwoSite__(Nmax=1000,NUC=2,Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,truncation=1E-8) #two site idmrg
     #idmrg.__simulate__(Nmax=100,NUC=2,Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1) #single site idmrg
 

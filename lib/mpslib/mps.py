@@ -83,10 +83,34 @@ class MPS:
     
     for generating an mps, use the decorators random, zeros, ones or productState (see below)
     """
-    def __init__(self):
-        pass
+    def __init__(self,tensors,schmidt_thresh=1E-16,r_thresh=1E-14):
+        self._N=len(tensors)
+        self._D=max(list(map(lambda x: max(np.shape(x)),tensors)))
+        if (tensors[0].shape[0]==1) and (tensors[-1].shape[1]==1):
+            self._obc=True
+        else:
+            self._obc=False
+        self._dtype=float
+        for n in range(self._N):
+            self._dtype=np.result_type(self._dtype,tensors[n].dtype)
+
+        self._schmidt_thresh=schmidt_thresh
+        self._r_thresh=r_thresh
+        self._tensors=[np.copy(tensors[n]) for n in range(len(tensors))]
+        self._d=[shape[2] for shape in list(map(np.shape,self._tensors))]
+        self._mat=np.eye(np.shape(self._tensors[-1])[1])
+        self._mat=self._mat/np.sqrt(np.trace(self._mat.dot(herm(self._mat))))
+        self._connector=np.diag(1.0/np.diag(self._mat))
+        self._position=self._N
+        #self.__position__(0)        
+        #self.__position__(self._N)
+        
+        self._gamma=[]
+        self._lambda=[]
+
+
     @classmethod
-    def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         """
         generate a random MPS
         N (int): length of the mps
@@ -99,24 +123,27 @@ class MPS:
         schmidt_thresh: truncation limit of the mps
         r_thresh: internal parameter (ignore it)
         """
-        mps=cls()
-        mps._N=N
-        mps._D=D
+        tensors=mf.MPSinitializer(np.random.random_sample,N,D,d,obc,dtype,scaling,shift)        
+        mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
-        mps._dtype=dtype
-        mps._schmidt_thresh=schmidt_thresh
-        mps._r_thresh=r_thresh
-
-        mps._tensors=mf.MPSinitializer(np.random.random_sample,N,D,d,obc,dtype,scaling,shift)
-        mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
-        mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
-        mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
-        mps._connector=np.diag(1.0/np.diag(mps._mat))
-        mps._position=mps._N
-        mps.__position__(0)
+        mps.__position__(0)        
         mps.__position__(mps._N)
-        mps._gamma=[]
-        mps._lambda=[]
+        
+        #mps._N=N
+        #mps._D=D
+        #mps._obc=obc
+        #mps._dtype=dtype
+        #mps._schmidt_thresh=schmidt_thresh
+        #mps._r_thresh=r_thresh
+        #mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
+        #mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
+        #mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
+        #mps._connector=np.diag(1.0/np.diag(mps._mat))
+        #mps._position=mps._N
+        #mps.__position__(0)
+        #mps.__position__(mps._N)
+        #mps._gamma=[]
+        #mps._lambda=[]
         return mps
 
 
@@ -133,23 +160,29 @@ class MPS:
         r_thresh: internal parameter (ignore it)
         """
         
-        mps=cls()
-
-        mps._N=N
-        mps._D=D
+        
+        tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scale=1.0,shift=0.0)
+        mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
-        mps._dtype=dtype
-        mps._schmidt_thresh=schmidt_thresh
-        mps._r_thresh=r_thresh
-
-        mps._tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
-        mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
-        mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
-        mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
-        mps._connector=np.diag(1.0/np.diag(mps._mat))
-        mps._position=mps._N
-        mps._gamma=[]
-        mps._lambda=[]
+        mps.__position__(0)        
+        mps.__position__(mps._N)
+        
+        #mps=cls()
+        #mps._N=N
+        #mps._D=D
+        #mps._obc=obc
+        #mps._dtype=dtype
+        #mps._schmidt_thresh=schmidt_thresh
+        #mps._r_thresh=r_thresh
+        #
+        #mps._tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
+        #mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
+        #mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
+        #mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
+        #mps._connector=np.diag(1.0/np.diag(mps._mat))
+        #mps._position=mps._N
+        #mps._gamma=[]
+        #mps._lambda=[]
         return mps
 
     @classmethod
@@ -164,25 +197,29 @@ class MPS:
         schmidt_thresh: truncation limit of the mps
         r_thresh: internal parameter (ignore it)
         """
-
-        mps=cls()
-        mps._N=N
-        mps._D=D
-        mps._obc=obc
-        mps._dtype=dtype
-        mps._schmidt_thresh=schmidt_thresh
-        mps._r_thresh=r_thresh
-
-        mps._tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
-        mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
-        mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
-        mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
-        mps._connector=np.diag(1.0/np.diag(mps._mat))
-        mps._position=mps._N
-        mps.__position__(0)
+        tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scale=1.0,shift=0.0)
+        mps=cls(tensors,schmidt_thresh,r_thresh)
+        mps.__position__(0)        
         mps.__position__(mps._N)
-        mps._gamma=[]
-        mps._lambda=[]
+        mps._obc=obc
+        #mps=cls()
+        #mps._N=N
+        #mps._D=D
+        #mps._obc=obc
+        #mps._dtype=dtype
+        #mps._schmidt_thresh=schmidt_thresh
+        #mps._r_thresh=r_thresh
+        #
+        #mps._tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scaling=1.0,shift=0.0)
+        #mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
+        #mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
+        #mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
+        #mps._connector=np.diag(1.0/np.diag(mps._mat))
+        #mps._position=mps._N
+        #mps.__position__(0)
+        #mps.__position__(mps._N)
+        #mps._gamma=[]
+        #mps._lambda=[]
         return mps
         
     @classmethod
@@ -197,33 +234,38 @@ class MPS:
         schmidt_thresh: truncation limit of the mps
         r_thresh: internal parameter (ignore it)
         """
-        mps=cls()
-        mps._N=len(localstate)
-        mps._D=1
+        tensors=mf.MPSinitializer(np.zeros,len(localstate),D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
+        for n in range(tensors):
+            tensors[n][0,0,localstate[n]]=1.0
+        mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
-        mps._dtype=dtype
-        mps._schmidt_thresh=schmidt_thresh
-        mps._r_thresh=r_thresh
-        mps._tensors=mf.MPSinitializer(np.zeros,mps._N,D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
-        for n in range(mps._N):
-            mps._tensors[n][0,0,localstate[n]]=1.0
-        mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
-        mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
-        mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
-        mps._connector=np.diag(1.0/np.diag(mps._mat))
-        mps._position=mps._N
-        mps.__position__(0)
-        mps.__position__(mps._N)
-        mps._gamma=[]
-        mps._lambda=[]
+        #mps=cls()
+        #mps._N=len(localstate)
+        #mps._D=1
+        #mps._obc=obc
+        #mps._dtype=dtype
+        #mps._schmidt_thresh=schmidt_thresh
+        #mps._r_thresh=r_thresh
+        #mps._tensors=mf.MPSinitializer(np.zeros,mps._N,D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
+        #for n in range(mps._N):
+        #    mps._tensors[n][0,0,localstate[n]]=1.0
+        #mps._d=[shape[2] for shape in list(map(np.shape,mps._tensors))]
+        #mps._mat=np.eye(np.shape(mps._tensors[-1])[1])
+        #mps._mat=mps._mat/np.sqrt(np.trace(mps._mat.dot(herm(mps._mat))))
+        #mps._connector=np.diag(1.0/np.diag(mps._mat))
+        #mps._position=mps._N
+        #mps.__position__(0)
+        #mps.__position__(mps._N)
+        #mps._gamma=[]
+        #mps._lambda=[]
         return mps
         
     def __copy__(self):
         """
         return a copy of self
-
         """
-        cop=MPS.zeros(self._N,self._D,self._d,self._obc,dtype=self._dtype,schmidt_thresh=self._schmidt_thresh,r_thresh=self._r_thresh)
+        cop=MPS(self._tensors)
+        cop._D=self._D
         cop._tensors=copy.deepcopy(self._tensors)
         cop._d=copy.deepcopy(self._d)
         cop._mat=copy.deepcopy(self._mat)
@@ -231,6 +273,11 @@ class MPS:
         cop._position=self._position
         cop._gamma=copy.deepcopy(self._gamma)
         cop._lambda=copy.deepcopy(self._lambda)
+        cop._obc-self._obc
+        cop._dtype=self._dtype
+        cop._schmidt_thresh=self._schmidt_thresh
+        cop._r_thresh=self._r_thresh
+        
         return cop
 
 
@@ -297,8 +344,42 @@ class MPS:
     __pos__ = generate_unary_deferer(opr.pos)
     __abs__ = generate_unary_deferer(abs)
     __invert__ = generate_unary_deferer(opr.invert)
+    def __mul__(self,num):
+        try:
+            x=num
+            x+=1
+        except TypeError:
+            print("in MPS.__mul__(num): num is not a number")
+        cpy=self.__copy__()
+        cpy[0]*=num
+        cpy._dtype=np.result_type(type(num),self._dtype)
+        return cpy
+    
+    def __rmul__(self,num):
+        try:
+            x=num
+            x+=1
+        except TypeError:
+            print("in MPS.__mul__(num): num is not a number")
+        cpy=self.__copy__()
+        cpy._mat*=num
+        cpy._dtype=np.result_type(type(num),self._dtype)
+        return cpy
 
     
+    def __add__(self,other):
+        other.__position__(other._N)
+        self.__position__(self._N)
+        tens=mf.addMPS(self._tensors,other._tensors)
+        out=MPS(tensors=tens,schmidt_thresh=1E-16,r_thresh=1E-16)
+        out.__position__(0)        
+        out.__position__(out._N)
+        
+        return out
+    
+    #def __sub__(self,other):
+    #    return (other*(-1.0))+self
+        
 
     def __absorbConnector__(self,location):
         """
@@ -365,6 +446,11 @@ class MPS:
         D.append(self[len(self)-1].shape[1])
         return D
 
+
+    def getSchmidt(self,n):
+        self.__position__(n)
+        U,S,V=mf.svd(self._mat)
+        return S
     def __position__(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
         shifts the center site to "bond"
@@ -383,6 +469,7 @@ class MPS:
         in this case, one preconditions the method by first doing a qr, and setting all values in r
         which are smaller than r_thresh to 0, then does an svd.
         """
+            
         if D!=None:
             self._D=D
         if schmidt_thresh>1E-15:
@@ -415,7 +502,6 @@ class MPS:
                 if _schmidt_thresh < 1E-15 and D==None:
                     tensor,self._mat=mf.prepareTensor(self._tensors[n],direction=-1)
                 else:
-
                     u,s,tensor=mf.prepareTruncate(self._tensors[n],direction=-1,D=self._D,thresh=_schmidt_thresh,\
                                                   r_thresh=_r_thresh)
                     self._mat=u.dot(np.diag(s))
@@ -424,7 +510,7 @@ class MPS:
                 if n>bond:
                     self._tensors[n-1]=np.transpose(np.tensordot(self._tensors[n-1],self._mat,([1],[0])),(0,2,1))
         self._position=bond
-
+        #print("after __position__: self._D=",self._D)
 
     
     def __measureList__(self,ops,lb=None,rb=None):
@@ -448,7 +534,6 @@ class MPS:
                 return L
 
 
-
     def __measureLocal__(self,op,site,lb=None,rb=None):
 
         """
@@ -464,9 +549,10 @@ class MPS:
                 return NotImplemented
             else:
                 pos=self._position
-                self.__position__(site+1)
+                self.__position__(site+1)                
                 t=self.__tensor__(site)                
                 self.__position__(pos)
+                #return np.tensordot(np.tensordot(t,np.conj(t),([0,1],[0,1])),([0,1],[0,1]))
                 return ncon.ncon([t,np.conj(t),op],[[1,3,2],[1,3,4],[2,4]])
             
         
@@ -559,7 +645,7 @@ class MPS:
             if self._obc==True:
                 self.__position__(0)
                 self.__position__(self._N)
-                print (schmidt_thresh,D)
+                #print (schmidt_thresh,D)
                 self.__position__(0,schmidt_thresh=schmidt_thresh,D=D,r_thresh=r_thresh)
             if self._obc==False:
                 if self._position<self._N:
@@ -675,32 +761,34 @@ class MPS:
         return copy.deepcopy(self._tensors)
 
 
-    def __applyTwoSiteGate__(self,gate,site,Dmax=None,thresh=1E-10):
+    def __applyTwoSiteGate__(self,gate,site,Dmax=None,thresh=1E-16):
         """
         applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
         "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
         site has to be the left-hand site of the operator support
         """
-
         assert(len(gate.shape)==4)
         assert(site<len(self)-1)
-        self.__position__(site+1)
+        #print("in applyToSite; site+1=",site+1,"thresh=",thresh)
+        self.__position__(site+1)        
         newState=ncon.ncon([self.__tensor__(site,clear=True),self._tensors[site+1],gate],[[-1,1,2],[1,-4,3],[2,3,-2,-3]])
         [Dl,d1,d2,Dr]=newState.shape
         U,S,V=mf.svd(np.reshape(newState,(Dl*d1,Dr*d2)))
-        S=S[S>thresh]
         tw=0
-        if len(S)>Dmax:
-            tw+=sum(S[Dmax::]**2)
-            S=S[0:Dmax]
-        S/=np.linalg.norm(S)
-        U=U[:,0:len(S)]
-        V=V[0:len(S),:]
-        self._D=len(S)
-        self._tensors[site]=np.transpose(np.reshape(U,(Dl,d1,len(S))),(0,2,1))
-        self._tensors[site+1]=np.transpose(np.reshape(V,(len(S),d2,Dr)),(0,2,1))
-        self._mat=np.diag(S)
-        return tw,len(S)
+        Strunc=S[S>thresh]
+        #print("back in applyTwoSite Strunc=",Strunc)
+        #input()
+        tw=sum(S[len(Strunc)::]**2)        
+        if len(Strunc)>Dmax:
+            tw+=sum(Strunc[Dmax::]**2)
+            Strunc=Strunc[0:Dmax]
+        Strunc/=np.linalg.norm(Strunc)
+        U=U[:,0:len(Strunc)]
+        V=V[0:len(Strunc),:]
+        self._tensors[site]=np.transpose(np.reshape(U,(Dl,d1,len(Strunc))),(0,2,1))
+        self._tensors[site+1]=np.transpose(np.reshape(V,(len(Strunc),d2,Dr)),(0,2,1))
+        self._mat=np.diag(Strunc)
+        return tw,len(Strunc)
 
 
     def __applyOneSiteGate__(self,gate,site,Dmax=None,thresh=1E-10):
