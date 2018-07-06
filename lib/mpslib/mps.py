@@ -867,7 +867,7 @@ class MPS:
                 self._mat=np.eye(Ml*Dl)
             self[n]=np.reshape(ncon.ncon([self[n],mpo[n]],[[-1,-3,1],[-2,-4,1,-5]]),(Ml*Dl,Mr*Dr,dout))
             
-    def resetZ():
+    def resetZ(self):
         """
         resets the norm-member _Z to 1.0; it does not fully normalize the state; this can be done by sweeping once back and forth
         through the system

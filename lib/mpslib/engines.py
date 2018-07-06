@@ -681,6 +681,7 @@ class TEBDEngine:
                 else:
                     self.applyEven(dt/2.0,Dmax,tr_thresh)
             it=it+1
+            self._mps.resetZ()
         return self._tw,it
 
 
@@ -792,7 +793,8 @@ class TDVPEngine:
             if (cp!=None) and (it>0) and (it%cp==0):
                 np.save(self._filename+'_tdvp_cp',self._mps._tensors)
             it=it+1
-        self._mps.__position__(0)            
+        self._mps.__position__(0)
+        self._mps.resetZ()        
         return it
         #returns the center bond matrix and the gs energy
 
