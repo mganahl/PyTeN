@@ -1,7 +1,7 @@
 """
 @author: Martin Ganahl
 """
-
+from __future__ import absolute_import, division, print_function
 from sys import stdout
 import numpy as np
 import os,copy
@@ -98,7 +98,7 @@ class DMRGengine:
                     stdout.flush()                    
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
-                tensor,r=mf.prepareTensor(opt,1)
+                tensor,r,Z=mf.prepareTensor(opt,1)
                 self._mps[n]=tensor
                 self._mps._mat=r
                 self._mps._position=n+1
@@ -119,7 +119,7 @@ class DMRGengine:
                     #
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
-                tensor,r=mf.prepareTensor(opt,-1)
+                tensor,r,Z=mf.prepareTensor(opt,-1)
                 self._mps[n]=tensor
                 self._mps._mat=r
                 self._mps._position=n
@@ -546,7 +546,7 @@ class HomogeneousIMPSengine:
         
             self._normgradold=self._normgrad
             self._lamold=np.copy(self._lam)
-        A_,s,v=mf.prepareTruncate(self._mps,direction=1,thresh=1E-14)
+        A_,s,v,Z=mf.prepareTruncate(self._mps,direction=1,thresh=1E-14)
         s=s/np.linalg.norm(s)
         self._mps=np.transpose(np.tensordot(A_,np.diag(s).dot(v),([1],[0])),(0,2,1))
         if self._normgrad<self._epsilon:
@@ -743,7 +743,7 @@ class TDVPEngine:
                     evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
                 else:
                     evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)                
-                tensor,mat=mf.prepareTensor(evTen,1)
+                tensor,mat,Z=mf.prepareTensor(evTen,1)
                 self._mps[n]=tensor
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
 
@@ -779,7 +779,7 @@ class TDVPEngine:
                     evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt_)
                     
                 #split of a center matrix C ("mat" in my notation)
-                tensor,mat=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
+                tensor,mat,Z=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
                 self._mps[n]=tensor
 
                 self._mps._mat=mat

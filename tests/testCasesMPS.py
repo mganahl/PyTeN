@@ -20,6 +20,7 @@ import datetime as dt
 from scipy.linalg import sqrtm
 import matplotlib.pyplot as plt
 import lib.mpslib.mps as mpslib
+import lib.ncon as ncon
 import lib.mpslib.engines as en
 import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.Hamiltonians as H
@@ -45,7 +46,7 @@ class TestTMeigs(unittest.TestCase):
         self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
         self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
 
-        A,r=mf.prepareTensor(tensor,1)
+        A,r,Z=mf.prepareTensor(tensor,1)
         eta,v,numeig=mf.TMeigs(A,direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         l=np.reshape(v,(self.D,self.D))
         l=l/np.trace(l)
@@ -60,7 +61,7 @@ class TestTMeigs(unittest.TestCase):
         self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
         self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
 
-        A,r=mf.prepareTensor(tensor,1)
+        A,r,Z=mf.prepareTensor(tensor,1)
         eta,v,numeig=mf.TMeigs(A,direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         l=np.reshape(v,(self.D,self.D))
         l=l/np.trace(l)
@@ -75,7 +76,7 @@ class TestTMeigs(unittest.TestCase):
         out2=mf.GeneralizedMatrixVectorProduct(-1,tensor,tensor,np.reshape(l,(self.D**2)))
         self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
         self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
-        B,r=mf.prepareTensor(tensor,-1)
+        B,r,Z=mf.prepareTensor(tensor,-1)
         eta,v,numeig=mf.TMeigs(B,direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         r=np.reshape(v,(self.D,self.D))
         r=r/np.trace(r)
@@ -91,7 +92,7 @@ class TestTMeigs(unittest.TestCase):
         out2=mf.GeneralizedMatrixVectorProduct(-1,tensor,tensor,np.reshape(l,(self.D**2)))
         self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
         self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
-        B,r=mf.prepareTensor(tensor,-1)
+        B,r,Z=mf.prepareTensor(tensor,-1)
         eta,v,numeig=mf.TMeigs(B,direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         r=np.reshape(v,(self.D,self.D))
         r=r/np.trace(r)
@@ -149,7 +150,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
     def test_RENORMBLOCKHAMGMRES_left_real_vs_complex(self):
         np.random.seed(10)
         tensor=np.random.rand(self.D,self.D,self.d)-0.5
-        A,rest=mf.prepareTensor(tensor,1)
+        A,rest,Z=mf.prepareTensor(tensor,1)
         dtype='float64'
         eta,v,numeig=mf.TMeigs(A,direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         r=np.reshape(v,(self.D,self.D))
@@ -178,7 +179,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
 
     def test_RENORMBLOCKHAMGMRES_right_real_vs_complex(self):
         tensor=np.random.rand(self.D,self.D,self.d)-0.5
-        B,rest=mf.prepareTensor(tensor,-1)
+        B,rest,Z=mf.prepareTensor(tensor,-1)
         dtype='float64'
         eta,v,numeig=mf.TMeigs(B,direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         l=np.reshape(v,(self.D,self.D))
@@ -208,7 +209,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
 
     def test_RENORMBLOCKHAMGMRES_left_real(self):
         tensor=np.random.rand(self.D,self.D,self.d)-0.5
-        A,rest=mf.prepareTensor(tensor,1)
+        A,rest,Z=mf.prepareTensor(tensor,1)
         dtype='float64'
         eta,v,numeig=mf.TMeigs(A,direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         r=np.reshape(v,(self.D,self.D))
@@ -242,7 +243,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
 
     def test_RENORMBLOCKHAMGMRES_right_real(self):
         tensor=np.random.rand(self.D,self.D,self.d)-0.5
-        B,rest=mf.prepareTensor(tensor,-1)
+        B,rest,Z=mf.prepareTensor(tensor,-1)
         dtype='float64'
         eta,v,numeig=mf.TMeigs(B,direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         l=np.reshape(v,(self.D,self.D))
@@ -272,7 +273,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
 
     def test_RENORMBLOCKHAMGMRES_left_complex(self):
         tensor=np.random.rand(self.D,self.D,self.d)-0.5+1j*(np.random.rand(self.D,self.D,self.d)-0.5)
-        A,rest=mf.prepareTensor(tensor,1)
+        A,rest,Z=mf.prepareTensor(tensor,1)
         dtype='complex128'
         eta,v,numeig=mf.TMeigs(A,direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         r=np.reshape(v,(self.D,self.D))
@@ -304,7 +305,7 @@ class TestRENORMBLOCKHAMGMRES(unittest.TestCase):
 
     def test_RENORMBLOCKHAMGMRES_right_complex(self):
         tensor=np.random.rand(self.D,self.D,self.d)-0.5+1j*(np.random.rand(self.D,self.D,self.d)-0.5)
-        B,rest=mf.prepareTensor(tensor,-1)
+        B,rest,Z=mf.prepareTensor(tensor,-1)
         dtype='complex128'
         eta,v,numeig=mf.TMeigs(B,direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
         l=np.reshape(v,(self.D,self.D))
@@ -410,7 +411,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         rb=np.expand_dims(lam**2,2)
         Sz=np.diag([1,-1])
         
-        m1=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
+        m1=mf.measureLocal(self.mps,operators=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps))
         lam=mf.regaugeIMPS(self.mps,'symmetric',truncate=1E-5,D=40,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
 
@@ -420,7 +421,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         rb=np.expand_dims(lam**2,2)
         
         self.assertTrue(shapes!=list(map(np.shape,self.mps)))
-        m2=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
+        m2=mf.measureLocal(self.mps,operators=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
 
     def testRegaugeTruncateComplex(self):
@@ -434,7 +435,7 @@ class UCMPSTruncationTests(unittest.TestCase):
         rb=np.expand_dims(lam**2,2)
         Sz=np.diag([1,-1])        
 
-        m1=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
+        m1=mf.measureLocal(self.mps,operators=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps))
         lam=mf.regaugeIMPS(self.mps,'symmetric',truncate=1E-6,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
 
@@ -443,37 +444,66 @@ class UCMPSTruncationTests(unittest.TestCase):
         rb=np.expand_dims(lam**2,2)
         self.assertTrue(shapes!=list(map(np.shape,self.mps)))
 
-        m2=mf.measureLocal(self.mps,operator=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
+        m2=mf.measureLocal(self.mps,operators=[Sz]*len(self.mps),lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
 
 
 class MPSArithmeticTests(unittest.TestCase):
     def setUp(self):
-        self.D=2
-        self.N=20
-        N1=random.randint(1,(self.N-(self.N%2))/2)
+        self.D=20
+        self.N=10
         self.d=[2]*self.N
         random.shuffle(self.d)
-        self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
-        
         self.eps=1E-10
-        
+
+    def testAdd(self):
+        for it in range(100):
+            self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps1[-1]*=self.mps1._mat#mps1._mat could contain a minus sign
+            self.mps2[-1]*=self.mps2._mat#mps2._mat could contain a minus sign
+            self.mps1._mat=np.ones((1,1))
+            self.mps2._mat=np.ones((1,1))            
+            a1=np.random.rand(1)[0]
+            a2=np.random.rand(1)[0]
+            mps=(self.mps1*a1+self.mps2*a2)
+            sz=[np.diag([1,-1]) for n in range(self.N)]
+            ov12=self.mps1.__dot__(self.mps2)
+            ov21=np.conj(ov12)
+            ob11=(np.asarray(self.mps1.__measureList__(sz)))
+            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.__measureList__(sz)))
+            ob33=(np.asarray(mps.__measureList__(sz)))
+            ov33=mps.__dot__(mps)
+            Z=a1**2+a2**2+ov12*a1*a2+ov21*a1*a2
+            M=ob11*a1**2+ob22*a2**2+ob21*a2*a1+ob12*a1*a2
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)
+
     def testSub(self):
-        mps=self.mps1-self.mps2
-        sz=[np.diag([1,-1]) for n in range(self.N)]
-        for n in range(self.N-1,-1,-1):
-            #self.assertTrue(np.abs(mps.__measureLocal__(np.diag([1,-1]),n))<1E-12)
-            print(np.abs(mps.__measureLocal__(np.diag([1,-1]),n)))
-
-    #def testAdd(self):
-    #    mps=a1*self.mps1+a2*self.mps2
-    #    
-    #    sz=[np.diag([1,-1]) for n in range(self.N)]
-    #    for n in range(self.N-1,-1,-1):
-    #        self.assertTrue(np.abs(mps.__measureLocal__(np.diag([1,-1]),n))<1E-12)
-
-        
+        for it in range(100):
+            self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps1[-1]*=self.mps1._mat
+            self.mps2[-1]*=self.mps2._mat            
+            self.mps1._mat=np.ones((1,1))
+            self.mps2._mat=np.ones((1,1))            
+            a1=np.random.rand(1)[0]
+            a2=np.random.rand(1)[0]
+            mps=(self.mps1*a1-self.mps2*a2)
+            sz=[np.diag([1,-1]) for n in range(self.N)]
+            ov12=self.mps1.__dot__(self.mps2)
+            ov21=np.conj(ov12)
+            ob11=(np.asarray(self.mps1.__measureList__(sz)))
+            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.__measureList__(sz)))
+            ob33=(np.asarray(mps.__measureList__(sz)))
+            ov33=mps.__dot__(mps)
+            Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
+            M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)
+            
 
 class MPSTests(unittest.TestCase):
     def setUp(self):
@@ -560,7 +590,7 @@ class MPSTests(unittest.TestCase):
         Ops=[]
         for n in range(len(self.mps)):
             Ops.append(np.diag(np.random.rand(self.mps._d[n])))
-        m1=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
+        m1=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
         self.mps.__truncate__(schmidt_thresh=1E-4,D=None)
@@ -570,7 +600,7 @@ class MPSTests(unittest.TestCase):
         #print(list(map(np.shape,self.mps._tensors)))
         self.assertTrue(shapes!=list(map(np.shape,self.mps._tensors)))
 
-        m2=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
+        m2=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-4)
 
     def testRegaugeTruncateComplex(self):
@@ -591,7 +621,7 @@ class MPSTests(unittest.TestCase):
         Ops=[]
         for n in range(len(self.mps)):
             Ops.append(np.diag(np.random.rand(self.mps._d[n])))
-        m1=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
+        m1=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
         self.mps.__truncate__(schmidt_thresh=1E-5,D=None)
@@ -601,7 +631,7 @@ class MPSTests(unittest.TestCase):
         #print(list(map(np.shape,self.mps._tensors)))
         self.assertTrue(shapes!=list(map(np.shape,self.mps._tensors)))
 
-        m2=mf.measureLocal(self.mps,operator=Ops,lb=lb,rb=rb,ortho='left')
+        m2=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         self.assertTrue(np.linalg.norm(m2-m1)<1E-5)
 
 
@@ -729,14 +759,11 @@ if __name__ == "__main__":
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
     suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)
     suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
-    #unittest.TextTestRunner(verbosity=2).run(suite2)
-    #unittest.TextTestRunner(verbosity=2).run(suite3)
-    #unittest.TextTestRunner(verbosity=2).run(suite4)
-    #unittest.TextTestRunner(verbosity=2).run(suite5)
-    #unittest.TextTestRunner(verbosity=2).run(suite6)
-    #unittest.TextTestRunner(verbosity=2).run(suite7)
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite2)
+    unittest.TextTestRunner(verbosity=2).run(suite3)
+    unittest.TextTestRunner(verbosity=2).run(suite4)
+    unittest.TextTestRunner(verbosity=2).run(suite5)
+    unittest.TextTestRunner(verbosity=2).run(suite6)
+    unittest.TextTestRunner(verbosity=2).run(suite7)
     unittest.TextTestRunner(verbosity=2).run(suite8) 
-
-    
-    

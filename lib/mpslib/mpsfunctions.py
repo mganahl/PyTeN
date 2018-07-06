@@ -1,10 +1,18 @@
 """
 @author: Martin Ganahl
 """
+
+from __future__ import absolute_import, division, print_function
 from sys import stdout
 import sys,time,copy,warnings
 import numpy as np
 import lib.mpslib.sexpmv as sexpmv
+try:
+    MPSL=sys.modules['lib.mpslib.mps']
+except KeyError:
+    import lib.mpslib.mps as MPSL
+
+
 import lib.ncon as ncon
 import scipy as sp
 import matplotlib.pyplot as plt
@@ -30,6 +38,21 @@ def overlap(mps1,mps2):
     calculates the overlap between two mps 
     mps1, mps2; list of mps tensors, or two MPS-objects
     """
+    if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):
+        pos1=mps1._position
+        pos2=mps2._position        
+        if (mps1._N-mps1._position)>mps1._position:
+            mps1.__position__(0)
+            mps2.__position__(0)        
+        else:
+            mps1.__position__(mps1._N)
+            mps2.__position__(mps2._N)
+    #if (mps2._N-mps2._position)>mps2._position:
+    #    mps2.__position__(0)
+    #else:
+    #    mps2.__position__(mps2._N)        
+
+
     if len(mps1)!=len(mps2):
         raise ValueError("overlap(mps1,mps2): mps have to be of same length")
     if (mps1[0].shape[0]!=1):
@@ -41,10 +64,13 @@ def overlap(mps1,mps2):
     if (mps2[-1].shape[1]!=1):
         raise ValueError("overlap(mps1,mps2): mps2[-1].shape[1]!=1")
 
-    L=np.reshape(ncon.ncon([mps1[0],np.conj(mps2[0])],[[1,2,-1],[1,2,-2]]),(mps1[0].shape[1],mps2[0].shape[1],1))
+    L=np.reshape(ncon.ncon([mps1[0],np.conj(mps2[0])],[[1,-1,2],[1,-2,2]]),(mps1[0].shape[1],mps2[0].shape[1],1))
     for n in range(1,len(mps1)):
         L=addELayer(L,mps1[n],mps2[n],direction=1)
-
+        
+    if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):        
+        mps1.__position__(pos1)
+        mps2.__position__(pos2)    
     return np.trace(L[:,:,0])
 
 def check_normalization(tensor,which,thresh=1E-10):
@@ -143,7 +169,7 @@ def directsum(m1,m2):
     return out
     
 
-def addMPS(mps1,mps2,obc=True):
+def addMPS(mps1,Z1,mps2,Z2,obc=True):
     """
     addMPS(mps1,mps2,obc=True)
     adds two mps
@@ -165,11 +191,11 @@ def addMPS(mps1,mps2,obc=True):
         if mps1[0].shape[2]!=mps2[0].shape[2]:
             raise ValueError("in addMPS: mps1[0] and mps2[0] have different hilbert space dimensions")
 
-        mat=np.zeros(shape,dtype=dtype)
+        mat=(np.random.random_sample(shape).astype(dtype)-0.5)*1E-16
         for n in range(mps1[0].shape[2]):
-            mat[0,0:mps1[0].shape[1],n]=mps1[0][0,:,n]
-            mat[0,mps1[0].shape[1]:mps1[0].shape[1]+mps2[0].shape[1],n]=mps2[0][0,:,n]
-        mps.append(mat)
+            mat[0,0:mps1[0].shape[1],n]=mps1[0][0,:,n]*Z1
+            mat[0,mps1[0].shape[1]:mps1[0].shape[1]+mps2[0].shape[1],n]=mps2[0][0,:,n]*Z2
+        mps.append(np.copy(mat))
         for site in range(1,len(mps1)-1):
             if mps1[site].shape[2]!=mps2[site].shape[2]:
                 raise ValueError("in addMPS: mps1[{0}] and mps2[{0}] have different hilbert space dimensions".format(site))
@@ -177,19 +203,19 @@ def addMPS(mps1,mps2,obc=True):
             l=list(map(sum,zip(mps1[site].shape[0:2],mps2[site].shape[0:2])))
             l.append(mps1[site].shape[2])
             shape=tuple(l)
-            mat=np.zeros(shape,dtype=dtype)
+            mat=(np.random.random_sample(shape).astype(dtype)-0.5)*1E-16            
             for n in range(mps1[site].shape[2]):
                 mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
-            mps.append(mat)
+            mps.append(np.copy(mat))                
         
         shape=(mps1[-1].shape[0]+mps2[-1].shape[0],1,mps1[-1].shape[2])
         if mps1[-1].shape[2]!=mps2[-1].shape[2]:
             raise ValueError("in addMPS: mps1[-1] and mps2[-1] have different hilbert space dimensions")
-        mat=np.zeros(shape,dtype=dtype)
+        mat=(np.random.random_sample(shape).astype(dtype)-0.5)*1E-16
         for n in range(mps1[-1].shape[2]):
             mat[0:mps1[-1].shape[0],0,n]=mps1[-1][:,0,n]
             mat[mps1[-1].shape[0]:mps1[-1].shape[0]+mps2[-1].shape[0],0,n]=mps2[-1][:,0,n]
-        mps.append(mat)
+        mps.append(np.copy(mat))                            
         
     if obc==False:
 
@@ -203,12 +229,19 @@ def addMPS(mps1,mps2,obc=True):
             l=list(map(sum,zip(mps1[site].shape[0:2],mps2[site].shape[0:2])))
             l.append(mps1[site].shape[2])
             shape=tuple(l)
-            mat=np.zeros(shape,dtype=dtype)
-            for n in range(mps1[site].shape[2]):
-                mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
-            mps.append(mat)
+            mat=(np.random.random_sample(shape).astype(dtype)-0.5)*1E-16
+            if site==0:
+                for n in range(mps1[site].shape[2]):
+                    mat[:,:,n]=directsum(mps1[site][:,:,n]*Z1,mps2[site][:,:,n]*Z2)
+            else:
+                for n in range(mps1[site].shape[2]):
+                    mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
+                    
+            mps.append(np.copy(mat))                                        
 
     return mps
+
+
 
 def applyMPO(mps,mpo,inplace=False):
     """
@@ -368,33 +401,37 @@ def measure4pointCorrelation(mps,ops,P=None):
     #return ncon.ncon([L,self._mat,np.conj(self._mat),R],[[1,2,3],[1,4],[2,5],[4,5,3]])
     
     
-def measureLocal(mps,operator,lb,rb,ortho):
+def measureLocal(mps,operators,lb,rb,ortho):
     """
     measure a local operator, given an mps, a list of local operators, left and right boundaries of the MPS, and the orthogonal state of the MPS 
     len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
     efficient methods can be used.
     
     mps: a list of mps tensors (ndarrays), or an mpslib.mps.MPS object
-    operator: a list of operators of len(operator)=len(mps). The position within of an operator within the list is taken to be 
+    operators: a list of operators of len(operators)=len(mps). The position within of an operator within the list is taken to be 
     the site where it acts. Each operator is measured and the  result is returned in a list
     lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
     rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
     ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
     """
     N=len(mps)
+    if len(mps)!=len(operators):
+        raise ValueError("measureLocal: len(operators) does not match len(mps)")
+    if ortho != 'right' and ortho !='left':
+        raise ValueError("measureLocal: unknown orthogonality state {0}".format(ortho))
     loc=np.zeros(N)
     if ortho=='right':
         L0=np.copy(lb)
         for n in range(0,N-1):
             [D1,D2,d]=np.shape(mps[n])
-            Lmeasure=addLayer(L0,mps[n],np.expand_dims(np.expand_dims(operator[n],0),0),mps[n],1)
+            Lmeasure=addLayer(L0,mps[n],np.expand_dims(np.expand_dims(operators[n],0),0),mps[n],1)
             m=np.trace(Lmeasure[:,:,0])
             loc[n]=np.real(m)
             if np.abs(np.imag(m))>1e-12:
                 print ('detected imaginary values for observable')
                 print (np.imag(m))
             L0=addELayer(L0,mps[n],mps[n],1)
-        Lmeasure=addLayer(L0,mps[N-1],np.expand_dims(np.expand_dims(operator[N-1],0),0),mps[N-1],1)
+        Lmeasure=addLayer(L0,mps[N-1],np.expand_dims(np.expand_dims(operators[N-1],0),0),mps[N-1],1)
         m=np.trace(Lmeasure[:,:,0])
         loc[N-1]=np.real(m)
         if np.abs(np.imag(m))>1e-12:
@@ -406,7 +443,7 @@ def measureLocal(mps,operator,lb,rb,ortho):
         R0=np.copy(rb)
         for n in range(N-1,0,-1):
             [D1,D2,d]=np.shape(mps[n])
-            Rmeasure=addLayer(R0,mps[n],np.expand_dims(np.expand_dims(operator[n],0),0),mps[n],-1)
+            Rmeasure=addLayer(R0,mps[n],np.expand_dims(np.expand_dims(operators[n],0),0),mps[n],-1)
             m=np.trace(Rmeasure[:,:,-1])
             loc[n]=np.real(m)
             if np.abs(np.imag(m))>1e-12:
@@ -414,7 +451,7 @@ def measureLocal(mps,operator,lb,rb,ortho):
                 print (np.imag(m))
             R0=addELayer(R0,mps[n],mps[n],-1)
         
-        Rmeasure=addLayer(R0,mps[0],np.expand_dims(np.expand_dims(operator[0],0),0),mps[0],-1)
+        Rmeasure=addLayer(R0,mps[0],np.expand_dims(np.expand_dims(operators[0],0),0),mps[0],-1)
         m=np.trace(Rmeasure[:,:,-1])
         loc[0]=np.real(m)
         if np.abs(np.imag(m))>1e-12:
@@ -423,7 +460,49 @@ def measureLocal(mps,operator,lb,rb,ortho):
 
         return loc
 
-#measure an operator at a certain site
+
+
+def matrixElementLocal(mps1,mps2,operators,lb,rb):
+    """
+    measure the matrix elements of a list of local operators "operators", given mps1, mps2, a list of local operators, 
+    left and right boundaries of the MPS, and the orthogonal state of the MPS 
+    len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
+    efficient methods can be used.
+    
+    mps: a list of mps tensors (ndarrays), or an mpslib.mps.MPS object
+    operators: a list of operators of len(operators)=len(mps). The position within of an operator within the list is taken to be 
+    the site where it acts. Each operator is measured and the  result is returned in a list
+    lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
+    rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
+    ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
+    """
+    dtype=np.result_type(mps1[0].dtype,mps2[0].dtype)
+    N=len(mps1)
+    if len(mps1)!=len(mps2):
+        raise ValueError("matrixElementLocal: mps1 and mps2 have different lengths")
+    if len(mps1)!=len(operators):
+        raise ValueError("matrixElementLocal: len(operators) does not match len(mps1) or len(mps2)")
+    
+    loc=np.zeros(N).astype(dtype)
+    L0=np.copy(lb)
+    
+    R=[np.copy(rb)]
+    for n in range(N-1,-1,-1):
+        R.append(addELayer(R[-1],mps1[n],mps2[n],-1))
+    for n in range(0,N-1):
+        [D1,D2,d]=np.shape(mps1[n])
+        Lmeasure=addLayer(L0,mps1[n],np.expand_dims(np.expand_dims(operators[n],0),0),mps2[n],1)
+        m=np.tensordot(Lmeasure,R[N-1-n],([0,1,2],[0,1,2]))
+        loc[n]=m
+        L0=addELayer(L0,mps1[n],mps2[n],1)
+
+    
+    Lmeasure=addLayer(L0,mps1[N-1],np.expand_dims(np.expand_dims(operators[N-1],0),0),mps2[N-1],1)
+    m=np.tensordot(Lmeasure,R[0],([0,1,2],[0,1,2]))            
+    loc[N-1]=m
+    return loc
+    
+
 def measure(operator,lb,rb,mps,site):
     """
     measure a local operator, given an list of ndarrays of dimension (D,D,d), a list of local operators in mpo format, left and right boundaries of the MPS, and the orthogonal state of the MPS 
@@ -468,6 +547,8 @@ def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5)
         d=[d]*length
 
     if obc==True:
+        if length==1:
+            raise ValueError("length of an obc MPS should be larger than 1")
         mps=[]
         if dtype==float:
             mps.append((numpyfun((1,D,d[0]))-shift)*scale)
@@ -528,10 +609,11 @@ def prepareTensorSVD(tensor,direction,fixphase=False):
             unit=np.diag(np.exp(-1j*phase))
             u=u.dot(herm(unit))
             v=unit.dot(v)
-        s=s/np.linalg.norm(s)
+        Z=np.linalg.norm(s)            
+        s/=Z
         [size1,size2]=u.shape
         out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
-        return out,s,v
+        return out,s,v,Z
 
     if direction<0:
         temp=np.reshape(tensor,(l1,d*l2))
@@ -541,19 +623,31 @@ def prepareTensorSVD(tensor,direction,fixphase=False):
             unit=np.diag(np.exp(-1j*phase))
             u=u.dot(herm(unit))
             v=unit.dot(v)
-            
-        s=s/np.linalg.norm(s)
+        Z=np.linalg.norm(s)                        
+        s/=Z
         [size1,size2]=v.shape
         out=np.reshape(v,(size1,l2,d))
-        return out,s,u
+        return out,s,u,Z
 
     
-def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
+def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
     """
     prepares and truncates an mps tensor using svd
-    TRESH: cutoff of schmidt-value truncation
+    tensor: a (D1,D2,d) dimensional mps tensor
+    THRESH: cutoff of schmidt-value truncation
     R_THRESH: only used when svd throws an exception.
     D is the maximum bond-dimension to keep (hard cutoff); if not speciefied, the bond dimension could grow indefinitely!
+    returns: direction>0: out,s,v,Z
+                          out: a left isometric tensor of dimension (D1,D,d)
+                          s  : the singular values of length D
+                          v  : a right isometric matrix of dimension (D,D2)
+                          Z  : the norm of tensor, i.e. tensor"="out.dot(s).dot(v)*Z
+             direction<0: u,s,out,Z
+                          u  : a left isometric matrix of dimension (D1,D)
+                          s  : the singular values of length D
+                          out: a right isometric tensor of dimension (D,D2,d)
+                          Z  : the norm of tensor, i.e. tensor"="u.dot(s).dot(out)*Z
+
     """
     #print("in prepareTruncate: thresh=",thresh,"D=",D)
     assert(direction!=0),'do NOT use direction=0!'
@@ -569,14 +663,15 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
             
-        s=s/np.linalg.norm(s)
-        s=s[s>thresh]
+
+        if thresh>1E-16:
+            s=s[s>thresh]
+
         if D!=None:
 
             if D<len(s):
                 warnings.warn('mpsfunctions.py dir>0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
             s=s[0:min(D,len(s))]
-            #print("in prepareTruncate: len(s)=",len(s),"D=",D)
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
         elif D==None:
@@ -584,10 +679,11 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             v=v[0:len(s),:]
             s=s[0:len(s)]
 
-        s=s/np.linalg.norm(s)
+        Z=np.linalg.norm(s)            
+        s/=Z
         [size1,size2]=u.shape
         out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
-        return out,s,v
+        return out,s,v,Z
     if direction<0:
         temp=np.reshape(tensor,(l1,d*l2))
         try:
@@ -598,13 +694,13 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             u_,s,v=np.linalg.svd(r)
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir<0')
-        s=s/np.linalg.norm(s)
-        s=s[s>thresh]        
+        if thresh>1E-16:
+            s=s[s>thresh]
+
         if D!=None:
             if D<len(s):
                 warnings.warn('mpsfunctions.py dir<0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
             s=s[0:min(D,len(s))]
-            #print(len(s),D)            
             u=u[:,0:len(s)]
             v=v[0:len(s),:]
 
@@ -613,10 +709,11 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-12,r_thresh=1E-14):
             v=v[0:len(s),:]
             s=s[0:len(s)]
 
-        s=s/np.linalg.norm(s)
+        Z=np.linalg.norm(s)            
+        s/=Z
         [size1,size2]=v.shape
         out=np.reshape(v,(size1,l2,d))
-    return u,s,out
+    return u,s,out,Z
 
 
 def prepareTensor(tensor,direction,fixphase=None):
@@ -624,6 +721,9 @@ def prepareTensor(tensor,direction,fixphase=None):
     prepares an mps tensor using qr decomposition 
     direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
     fixphase (str): {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+    returns: out: a left or right isometric mps tensor
+             r  : an upper or lower triangular matrix
+             Z  : the norm of the tensor "tensor", i.e. tensor"="out.dot(r)*Z or tensor"="r.dot(out)*Z (depending on direction)
     """
     
     assert(direction!=0),'do NOT use direction=0!'
@@ -645,8 +745,8 @@ def prepareTensor(tensor,direction,fixphase=None):
             r=herm(unit).dot(r)
 
         #normalize the bond matrix
-        r=r/np.linalg.norm(r)#np.sqrt(np.trace(herm(r).dot(r)))
-        
+        Z=np.linalg.norm(r)        
+        r/=Z
         [size1,size2]=q.shape
         out=np.transpose(np.reshape(q,(d,l1,size2)),(1,2,0))
     
@@ -670,9 +770,10 @@ def prepareTensor(tensor,direction,fixphase=None):
         out=np.conjugate(np.transpose(np.reshape(q,(l2,d,size2),order='F'),(2,0,1)))
         r=np.conjugate(np.transpose(r_,(1,0)))
         #normalize the bond matrix
-        r=r/np.linalg.norm(r)#np.sqrt(np.trace(herm(r).dot(r)))
+        Z=np.linalg.norm(r)
+        r/=Z
 
-    return out,r
+    return out,r,Z
 
 #used in the lattice-cMPS context; ignore for the case of lattice MPS
 def prepareTensorfixA0(mps,direction):
@@ -684,7 +785,7 @@ def prepareTensorfixA0(mps,direction):
         A0=np.copy(mps[:,:,0])
         mat[:,:,0]=np.eye(D1)
         mat[:,:,1]=mps[:,:,1].dot(np.linalg.pinv(A0))
-        tensor,r=prepareTensor(mat,1,fixphase='q')
+        tensor,r,Z=prepareTensor(mat,1,fixphase='q')
         matout=r.dot(A0)
 
         return tensor,matout
@@ -696,7 +797,7 @@ def prepareTensorfixA0(mps,direction):
         mat[:,:,0]=np.eye(D1)
         mat[:,:,1]=np.linalg.pinv(A0).dot(mps[:,:,1])
         
-        tensor,r=prepareTensor(mat,-1,fixphase='q')
+        tensor,r,Z=prepareTensor(mat,-1,fixphase='q')
         matout=A0.dot(r)
 
         return tensor,matout
@@ -722,20 +823,23 @@ def orthonormalizeQR(mps,direction,site1,site2):
     assert(site2<len(mps))
     assert(site1>=0)
     N=len(mps)
+    Z=1
     if direction>0:
         for site in range(site1,site2+1):
-            tensor,r=prepareTensor(mps[site],direction)
+            tensor,r,Z_=prepareTensor(mps[site],direction)
             mps[site]=np.copy(tensor)
+            Z*=Z_
             if site<(N-1):
                 mps[site+1]=np.tensordot(r,mps[site+1],([1],[0]))
 
     if direction<0:
         for site in range(site2,site1-1,-1):
-            tensor,r=prepareTensor(mps[site],direction)
+            tensor,r,Z_=prepareTensor(mps[site],direction)
             mps[site]=np.copy(tensor)
+            Z*=Z_            
             if site>0:
                 mps[site-1]=np.transpose(np.tensordot(mps[site-1],r,([1],[0])),(0,2,1))
-    return r
+    return r*Z
 
 def orthonormalizeSVD(mps,direction,site1,site2):
     """
@@ -753,22 +857,25 @@ def orthonormalizeSVD(mps,direction,site1,site2):
     
     assert(direction!=0),'do NOT use direction=0!'
     N=len(mps)
+    Z=1
     if direction>0:
         for site in range(site1,site2+1):
-            tensor,lam,v=prepareTensorSVD(mps[site],direction)
+            tensor,lam,v,Z_=prepareTensorSVD(mps[site],direction)
             mat=np.diag(lam).dot(v)
             mps[site]=tensor
+            Z*=Z_
             if site<(N-1):
                 mps[site+1]=np.tensordot(mat,mps[site+1],([1],[0]))
 
     if direction<0:
         for site in range(site2,site1-1,-1):
-            tensor,lam,v=prepareTensorSVD(mps[site],direction)
+            tensor,lam,v,Z_=prepareTensorSVD(mps[site],direction)
             mat=v.dot(np.diag(lam))
             mps[site]=tensor
+            Z*=Z_            
             if site>0:
                 mps[site-1]=np.transpose(np.tensordot(mps[site-1],mat,([1],[0])),(0,2,1))
-    return mat
+    return mat*Z
 
 
 def initializeLayer(A,x,B,mpo,direction):
@@ -793,10 +900,17 @@ def initializeLayer(A,x,B,mpo,direction):
         return np.reshape(np.tensordot(t,mpo,([1,3],[2,3])),(chi1,chi1_,D1))
 
 def addLayer(E,A,mpo,B,direction):
+
     """
     adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
-    environments;
+    environments
+    E: a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
+    A: (D1,D2,d) shaped mps tensor
+    mpo: a tensor of dimension (M1,M2,d,d')
+    B: (D1',D2',d') shaped mps tensor
     direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
+    returns: E' of shape (D2,D2',M2) for direction>0
+             E' of shape (D1,D1',M1) for direction<0
     """
 
     if direction>0:
@@ -809,7 +923,12 @@ def addELayer(E,A,B,direction):
     """
     adds an mps-mps layer to a left or right block; used in dmrg to calculate the left and right
     environments
+    E: a tensor of shape (D1,D1',M) (for direction>0) or (D2,D2',M) (for direction>0)
+    A: (D1,D2,d) shaped mps tensor
+    B: (D1',D2',d) shaped mps tensor
     direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
+    returns: E' of shape (D2,D2',M) for direction>0
+             E' of shape (D1,D1',M) for direction<0
     """
 
     if direction>0:
@@ -1388,7 +1507,7 @@ def getBlockHam(mps,lbold,rbold,mpo,index):
     lb=np.copy(lbold)
     rb=np.copy(rbold)
     mps.__position__(index)
-    A,lam=prepareTensor(mps._tensors[index],1)
+    A,lam,Z=prepareTensor(mps._tensors[index],1)
     for n in range(index):
         lb=addLayer(lb,mps._tensors[n],mpo[n],mps._tensors[n],1)
     lb=addLayer(lb,A,mpo[index],A,1)
@@ -1455,7 +1574,7 @@ def getBoundaryHams(mps,mpo):
             mps.__regauge__('symmetric')
             mps.__position__(0)
 
-        temp=mps.__tensors__(absorb_center=None)
+        temp=mps._tensors
         eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')
         lbound=np.reshape(lss,(D,D))
         lbound=fixPhase(np.reshape(lss,(D,D)))
@@ -1473,7 +1592,7 @@ def getBoundaryHams(mps,mpo):
         f0r=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000,dtype=mps._dtype)
 
         mps.__position__(mps._N)
-        temp=mps.__tensors__(absorb_center=None)
+        temp=mps._tensors
         if np.linalg.norm(mps._mat-np.diag(np.diag(mps._mat)))>1E-6:
             warnings.warn('mpsfunctions.py: getBoundaryHam for pos==mps._N: mps._mat for mps._position=mps._N is not diagonal',stacklevel=2)
             #don't regauge here, this may cause gauge mismatches
@@ -1509,8 +1628,7 @@ def getBoundaryHams(mps,mpo):
             mps.__regauge__('symmetric')
             mps.__position__(mps._N)
 
-        temp=mps.__tensors__(absorb_center=None)
-
+        temp=mps._tensors
         eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D))/(D*1.0),nmax=10000,tolerance=1E-16,which='LR')
         rbound=np.reshape(rss,(D,D))
         rbound=fixPhase(np.reshape(rss,(D,D)))
@@ -1530,9 +1648,7 @@ def getBoundaryHams(mps,mpo):
             warnings.warn('mpsfunctions.py: getBoundaryHam for pos==0: mps._mat for mps._position=0 is not diagonal',stacklevel=2)
             return
 
-        temp=mps.__tensors__(absorb_center=None)        
-
-
+        temp=mps._tensors
         eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')
         lbound=np.reshape(lss,(D,D))
         lbound=fixPhase(np.reshape(lss,(D,D)))
@@ -1682,7 +1798,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         mps[0]=np.tensordot(y,mps[0],([0],[0]))
         mps[N-1]=np.transpose(np.tensordot(mps[N-1],invy,([1],[1])),(0,2,1))
         for n in range(N-1):
-            tensor,rest=prepareTensor(mps[n],1)
+            tensor,rest,Z=prepareTensor(mps[n],1)
             mps[n]=np.copy(tensor)
             if n<N-1:
                 mps[n+1]=np.tensordot(rest,mps[n+1],([1],[0]))
@@ -1728,7 +1844,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         mps[N-1]=np.copy(np.transpose(np.tensordot(mps[N-1],x,([1],[0])),(0,2,1)))
         mps[0]=np.copy(np.tensordot(invx,mps[0],([1],[0])))
         for n in range(N-1,0,-1):
-            tensor,rest=prepareTensor(mps[n],direction=-1)
+            tensor,rest,Z=prepareTensor(mps[n],direction=-1)
             mps[n]=np.copy(tensor)
             if n>0:
                 mps[n-1]=np.transpose(np.tensordot(mps[n-1],rest,([1],[0])),(0,2,1))
@@ -1813,20 +1929,20 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
             mps[N-1]=np.transpose(np.tensordot(mps[N-1],invy.dot(U),([1],[0])),(0,2,1))
             
             for n in range(N-1):#sum can stop at N-2 because state is not truncated
-                tensor,rest=prepareTensor(mps[n],1)
+                tensor,rest,Z=prepareTensor(mps[n],1)
                 mps[n]=np.copy(tensor)
                 if n<N-1:
                     mps[n+1]=np.tensordot(rest,mps[n+1],([1],[0]))
 
             if Dold!=len(lam):
                 for n in range(N-1,0,-1):
-                    tensor,rest=prepareTensor(mps[n],-1)
+                    tensor,rest,Z=prepareTensor(mps[n],-1)
                     mps[n]=np.copy(tensor)
                     if n>0:
                         mps[n-1]=np.transpose(np.tensordot(mps[n-1],rest,([1],[0])),(0,2,1))
 
                 for n in range(N-1):
-                    tensor,rest=prepareTensor(mps[n],1)
+                    tensor,rest,Z=prepareTensor(mps[n],1)
                     mps[n]=np.copy(tensor)
                     if n<N-1:
                         mps[n+1]=np.tensordot(rest,mps[n+1],([1],[0]))
@@ -1851,7 +1967,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
             mps[N-1]=np.transpose(np.tensordot(mps[N-1],invy.dot(U),([1],[0])),(0,2,1))
             
             for n in range(N-1):
-                tensor,rest=prepareTensor(mps[n],1)
+                tensor,rest,Z=prepareTensor(mps[n],1)
                 #tensor,S,V=prepareTruncate(mps[n],1,D=D,thresh=truncate)
                 #rest=np.diag(S).dot(V)
                 mps[n]=np.copy(tensor)
@@ -1859,7 +1975,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
                     mps[n+1]=np.tensordot(rest,mps[n+1],([1],[0]))
             
             for n in range(N-1,0,-1):
-                U,S,tensor=prepareTruncate(mps[n],direction=-1,D=D,thresh=truncate,r_thresh=1E-14)
+                U,S,tensor,Z=prepareTruncate(mps[n],direction=-1,D=D,thresh=truncate,r_thresh=1E-14)
                 mps[n]=np.copy(tensor)
                 if n>0:
                     mps[n-1]=np.transpose(np.tensordot(mps[n-1],U.dot(np.diag(S)),([1],[0])),(0,2,1))
@@ -1881,7 +1997,7 @@ def truncateMPS(mps,D):
     N=len(mps)
     lams=[]                        
     for site in range(N):
-        tensor,lam,v=prepareTruncate(mps[site],1,D)
+        tensor,lam,v,Z=prepareTruncate(mps[site],1,D)
         lams.append(lam)
         mat=np.diag(lam).dot(v)
         mps[site]=tensor
@@ -1916,14 +2032,14 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
         for n in range(len(mps)):
             #use QR decomposition on Gamma[n] to pruduce a left orthogonal tensor A 
             #and an upper triangular matrix r (r is normalized inside the routine)
-            A,r=prepareTensor(Gamma[n],1)
+            A,r,Z=prepareTensor(Gamma[n],1)
             Gamma[n]=A
             #multiply r to the right
             if n<(len(Gamma)-1):
                 Gamma[n+1]=np.tensordot(r,Gamma[n+1],([1],[0]))
         
         for n in range(len(Gamma)-1,-1,-1):
-            U,S,B=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=tr_thresh,r_thresh=r_thresh)
+            U,S,B,Z=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=tr_thresh,r_thresh=r_thresh)
             if n==(len(Gamma)-1):
                 Gamma[n]=B
             else:
@@ -1956,7 +2072,7 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
         Lam[-1]=np.diag(lam)
         Lam[0]=np.diag(lam)
         for n in range(len(Gamma)-1,-1,-1):
-            U,S,B=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=1E-16,r_thresh=r_thresh)
+            U,S,B,Z=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=1E-16,r_thresh=r_thresh)
             Gamma[n]=np.transpose(np.tensordot(B,np.diag(1.0/Lam[n+1]),([1],[0])),(0,2,1))
             Lam[n]=S
             if n>0:
