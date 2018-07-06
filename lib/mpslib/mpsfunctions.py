@@ -71,7 +71,7 @@ def overlap(mps1,mps2):
     if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):        
         mps1.__position__(pos1)
         mps2.__position__(pos2)    
-    return np.trace(L[:,:,0])
+    return np.trace(L[:,:,0])*mps1._Z*np.conj(mps2._Z)
 
 def check_normalization(tensor,which,thresh=1E-10):
     """

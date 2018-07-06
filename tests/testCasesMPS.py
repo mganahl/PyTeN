@@ -478,7 +478,8 @@ class MPSArithmeticTests(unittest.TestCase):
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2+ov12*a1*a2+ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2+ob21*a2*a1+ob12*a1*a2
-            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/mps._Z**2-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)            
 
     def testSub(self):
         for it in range(100):
@@ -502,7 +503,20 @@ class MPSArithmeticTests(unittest.TestCase):
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
-            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/mps._Z**2-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)            
+            
+    def testSub2(self):
+        self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+        self.mps1[-1]*=self.mps1._mat
+        self.mps1._mat=np.ones((1,1))
+        self.mps2=self.mps1.copy()
+        mps=(self.mps1-self.mps2)
+        mps.position(0)
+        mps.position(len(mps))
+        sz=[np.diag([1,-1]) for n in range(self.N)]
+        ob33=(np.asarray(mps.__measureList__(sz)))
+        self.assertTrue(np.linalg.norm(ob33)<1E-10)
             
 
 class MPSTests(unittest.TestCase):

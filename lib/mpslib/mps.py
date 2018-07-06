@@ -204,7 +204,10 @@ class MPS:
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
         return mps
-        
+    
+    def copy(self):
+        return self.__copy__()
+    
     def __copy__(self):
         """
         return a copy of self
@@ -293,14 +296,11 @@ class MPS:
     def __mul__(self,num):
         """
         left-multiplies "num" with MPS, i.e. returns MPS*num;
-                
+        note that "num" is not really multiplied into the mps matrices, but
+        instead multiplied into the internal field _Z which stores the norm of the state
         """
-
-        try:
-            x=num
-            x+=1
-        except TypeError:
-            print("in MPS.__mul__(num): num is not a number")
+        if not np.isscalar(num):
+            raise TypeError("in MPS.__mul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num
         cpy._dtype=np.result_type(type(num),self._dtype)
@@ -312,17 +312,15 @@ class MPS:
         WARNING: if you are using numpy number types, i.e. np.float, np.int, ..., 
         the right multiplication of num with MPS, i.e. num*MPS, returns 
         an np.darray instead of an MPS. 
-        """
+        note that "num" is not really multiplied into the mps matrices, but
+        instead multiplied into the internal field _Z which stores the norm of the state
 
-        try:
-            x=num
-            x+=1
-        except TypeError:
-            print("in MPS.__mul__(num): num is not a number")
+        """
+        if not np.isscalar(num):
+            raise TypeError("in MPS.__rmul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num        
         cpy._dtype=np.result_type(type(num),self._dtype)
-
         return cpy
 
     def __add__(self,other):
@@ -333,7 +331,6 @@ class MPS:
         tens=mf.addMPS(self.__tensors__(),self._Z,other.__tensors__(),other._Z)
         out=MPS(tensors=tens,schmidt_thresh=1E-16,r_thresh=1E-16) #out is an unnormalized MPS
         out._Z=1.0 #MPS.__init__ sets self._Z to -1e10, so we have to reset it here to 1
-        
         return out
     
     def __sub__(self,other):
@@ -401,17 +398,25 @@ class MPS:
 
     def __dot__(self,mps):
         return mf.overlap(self,mps)
-
     def dot(self,mps):
         return mf.overlap(self,mps)
 
     def __D__(self):
         return list(map(lambda x: np.shape(x)[0],self._tensors))
 
+
+    @property
+    def D(self):
+        return self.__D__()
+    
     def getSchmidt(self,n):
         self.__position__(n)
         U,S,V=mf.svd(self._mat)
         return S
+
+    def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
+        self.__position__(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14)
+        
     def __position__(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
         shifts the center site to "bond"
@@ -476,9 +481,19 @@ class MPS:
         self._position=bond
         #print("after __position__: self._D=",self._D)
 
+
+
+    def measureList(self,ops,lb=None,rb=None):
+        """
+        measure a list of N local operators "ops", where N=len(ops)=len(mps)
+        "lb" and "rb" are left and right boundary conditions to be applied 
+        if the state is pbc; for obc they can be left None
+        the routine moves the centersite to the left boundary, measures and moves
+        it back to its original position; this might cause some overhead
+        """
+        return self.__measureList__(ops,lb,rb)
     
     def __measureList__(self,ops,lb=None,rb=None):
-
         """
         measure a list of N local operators "ops", where N=len(ops)=len(mps)
         "lb" and "rb" are left and right boundary conditions to be applied 
@@ -493,12 +508,15 @@ class MPS:
             else:
                 pos=self._position
                 self.__position__(0)
+
                 L=mf.measureLocal(self,ops,lb=np.ones((1,1,1)),rb=np.ones((1,1,1)),ortho='right')
                 self.__position__(pos)
-                return L
+                return L*self._Z*np.conj(self._Z)
 
 
-
+    def measureMatrixElementList(self,mps,ops,lb=None,rb=None):
+        self.__measureMatrixElementList__(mps,ops,lb,rb)
+        
     def __measureMatrixElementList__(self,mps,ops,lb=None,rb=None):
 
         """
@@ -524,7 +542,9 @@ class MPS:
                 mps.__position__(mpspos)                
                 return L*v1*np.conj(v2)
 
-            
+
+    def measureLocal(self,op,site,lb=None,rb=None):
+        return self.__measureLocal__(op,site,lb,rb)
     def __measureLocal__(self,op,site,lb=None,rb=None):
 
         """
@@ -544,10 +564,14 @@ class MPS:
                 t=self.__tensor__(site)                
                 self.__position__(pos)
                 #return np.tensordot(np.tensordot(t,np.conj(t),([0,1],[0,1])),([0,1],[0,1]))
-                return ncon.ncon([t,np.conj(t),op],[[1,3,2],[1,3,4],[2,4]])
+                return ncon.ncon([t,np.conj(t),op],[[1,3,2],[1,3,4],[2,4]])*self._Z*np.conj(self._Z)
             
-        
+
+
+    def measure(self,ops,sites,P=None):
+        return self.__measure__(ops,sites,P)
     def __measure__(self,ops,sites,P=None):
+        
         """ 
         This is a quite slow function to calculate correlation functions; 
         it takes a list of operators "ops" and a list of sites "sites" of where the operators live, and calculates <ops[site[0]]ops[sites[1]],...,ops[sites[n-1]]>
@@ -615,10 +639,13 @@ class MPS:
         if not((np.abs(np.trace(self._mat.dot(herm(self._mat))))-1.0)<1E-10):
             warnings.warn('mps.py.measure(self,ops,sites): state is not normalized')
 
-        return ncon.ncon([L,self._mat,np.conj(self._mat),R],[[1,2,3],[1,4],[2,5],[4,5,3]])
+        return ncon.ncon([L,self._mat,np.conj(self._mat),R],[[1,2,3],[1,4],[2,5],[4,5,3]])*self._Z*np.conj(self._Z)
 
 
 
+    def truncate(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
+        self.__truncate__(schmidt_thresh,D,returned_gauge,nmaxit,tol,ncv,pinv,mr_thresh)
+        
     def __truncate__(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
         """ 
         a dedicated routine for truncating an mps (for obc, this can also be done using self.__position__(self,pos))
@@ -652,8 +679,11 @@ class MPS:
 
                 if returned_gauge!=None:
                     self.__regauge__(returned_gauge)                    
-                
-    
+
+
+    def tensor(self,site,clear=False):
+        return self.__tensor__(site,clear)
+        
     def __tensor__(self,site,clear=False):
         """
         returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
@@ -674,6 +704,10 @@ class MPS:
                 self._mat=np.eye(np.shape(self._tensors[site])[1])
                 self._mat/=np.linalg.norm(self._mat)                
             return out
+        
+    def canonize(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        self.__canonize__(nmaxit,tol,ncv,pinv)
+        
     def __canonize__(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
 
         """
@@ -681,11 +715,13 @@ class MPS:
         len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just [1.0]
         funtions has no return argument
         """
-        
         self.mps.__regauge__(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv)
         self._gamma,self._lambda=mf.canonizeMPS(self.mps)
         
-    
+
+    def regauge(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        self.__regauge__(gauge,nmaxit,tol,ncv,pinv)
+        
     def __regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
         """
         regauge brings state in either left, right or symmetric orthonormal form
@@ -721,7 +757,9 @@ class MPS:
         return 
 
 
-    
+
+    def orthonormalization(self,site,direction):
+        return self.__orthonormalization__(site,direction)
     def __orthonormalization__(self,site,direction):
         """
         checks if the orthonormalization of the mps is OK
@@ -737,6 +775,10 @@ class MPS:
             #print np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))
             return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]))
 
+
+    def tensors(self):
+        return self.__tensors__()
+    
     def __tensors__(self):
         
         """
@@ -752,7 +794,9 @@ class MPS:
             
         return tensors
 
-
+    def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
+        return self.__applyTwoSiteGate__(gate,site,Dmax,thresh)
+    
     def __applyTwoSiteGate__(self,gate,site,Dmax=None,thresh=1E-16):
         """
         applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
@@ -783,6 +827,9 @@ class MPS:
         return tw,len(Strunc)
 
 
+    def applyOneSiteGate(self,gate,site,preserve_position=True):
+        self.__applyOneSiteGate__(gate,site,preserve_position)
+        
     def __applyOneSiteGate__(self,gate,site,preserve_position=True):
 
         """
@@ -801,6 +848,10 @@ class MPS:
         else:
             tensor=ncon.ncon([self[site],gate],[[-1,-2,1],[1,-3]])
             self[site]=tensor
+
+
+    def applyMPO(self,mpo):
+        self.__applyMPO__(mpo)
         
     def __applyMPO__(self,mpo):
         """
@@ -816,5 +867,9 @@ class MPS:
                 self._mat=np.eye(Ml*Dl)
             self[n]=np.reshape(ncon.ncon([self[n],mpo[n]],[[-1,-3,1],[-2,-4,1,-5]]),(Ml*Dl,Mr*Dr,dout))
             
-    def resetNorm():
+    def resetZ():
+        """
+        resets the norm-member _Z to 1.0; it does not fully normalize the state; this can be done by sweeping once back and forth
+        through the system
+        """
         self._Z=1.0
