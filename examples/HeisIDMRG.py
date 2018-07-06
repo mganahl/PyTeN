@@ -25,16 +25,13 @@ if __name__ == "__main__":
     Jz=np.ones(N)
     Jxy=np.ones(N)
     #initialize MPS with bond dimension D
-    mps=mpslib.MPS.random(N=N,D=D,d=d,obc=False,dtype=float)
-
-
-    mps.__position__(N)
-    mps.__position__(0)
-    mpo=H.XXZ(Jz,Jxy,np.zeros(N),False)
-    lb=np.ones((D,D,1))
-    rb=np.ones((D,D,1))
+    dtype=float
+    mps=mpslib.MPS.random(N=N,D=D,d=d,obc=False,dtype=dtype)
+    mpo=H.XXZ(Jz,Jxy,np.zeros(N),False,dtype=dtype)
     idmrg=en.IDMRGengine(mps,mpo,'blabla')
     
-    idmrg.__simulateTwoSite__(Nmax=1000,NUC=2,Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,truncation=1E-8) #two site idmrg
-    #idmrg.__simulate__(Nmax=100,NUC=2,Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1) #single site idmrg
+    #idmrg.__simulateTwoSite__(Nmax=1000,NUC=1,Econv=1E-10,tol=1E-4,ncv=10,cp=None,verbose=1,truncation=1E-8,regaugestep=3) #two site idmrg
+    print(idmrg.__doc__)
+    print(idmrg.__simulate__.__doc__)
+    idmrg.__simulate__(Nmax=1000,NUC=2,solver='LAN',Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,regaugestep=0) #single site idmrg
 

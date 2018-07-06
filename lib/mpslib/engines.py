@@ -22,14 +22,18 @@ comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
-"""
-DMRG engine for obtaining ground state of mpos
-mps: initial state
-mpo: the hamiltonian in mpo format
-filename: filename for checkpointing and what not
-lb, rb: left and right boundary conditions;  if None, obc are assumed;
-"""
 class DMRGengine:
+    """
+    DMRGengine.__init__(mps,mpo,filename,lb=None,rb=None)
+    initialize a DRMGengine
+
+    mps: initial mps, can be obc or infinite
+    mpo: the Hamiltonian in mpo form
+    filename: filename of the simulation; will be appended to output (if there is any)
+    lb,rb: left and right Hamiltonian environment; for obc use None for either; 
+           user can provide lb and rb to fix the boundary condition of the mps
+           shapes of lb, rb, mps[0] and mps[-1] have to be consitent!
+    """
     #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1,1,1)) for obc simulation
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         if (np.all(lb)!=None) and (np.all(rb)!=None):
@@ -62,6 +66,7 @@ class DMRGengine:
 
     def __simulate__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
+        DMRGengine.__simulate__(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         performs a single site DMRG optimization
         Nmax: maximum number of sweeps
         Econv: desired convergence of energy
@@ -95,7 +100,10 @@ class DMRGengine:
                 Dnew=opt.shape[1]
                 if verbose>0:
                     stdout.write("\rSS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()                    
+                    stdout.flush()
+                if verbose>1:
+                    print("")
+                    
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
                 tensor,r,Z=mf.prepareTensor(opt,1)
@@ -115,7 +123,9 @@ class DMRGengine:
                 Dnew=opt.shape[1]
                 if verbose>0:
                     stdout.write("\rSS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()                                        
+                    stdout.flush()
+                if verbose>1:
+                    print("")
                     #
                     #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
                 Es[n]=e
@@ -138,6 +148,7 @@ class DMRGengine:
                     print()
                     print ('reached maximum iteration number ',Nmax)
                 break
+        self._mps.resetZ()
         return e
         #returns the center bond matrix and the gs energy
 
@@ -145,6 +156,7 @@ class DMRGengine:
         
     def __simulateTwoSite__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
+        DMRGengine.__simulateTwoSite__(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         performs a two site DMRG optimization
         Nmax: maximum number of sweeps
         Econv: desired convergence of energy
@@ -247,6 +259,7 @@ class DMRGengine:
                     print()
                     print ('reached maximum iteration number ',Nmax)
                 break
+        self._mps.resetZ()            
         return e
         #returns the center bond matrix and the gs energy
 
@@ -254,16 +267,19 @@ class DMRGengine:
 class IDMRGengine(DMRGengine):
 
     """
+    IDMRGengine. __init__(mps,mpo,filename):
     performs an IDMRG optimization of the ground-state of a Hamiltonian as given by mpo
     mps: MPS object with infinite boundary conditions
     mpo: MPO object with infinite boundary conditions
     filename: the name of the simulation; will be appended to the output (if there is any)
     """
     def __init__(self,mps,mpo,filename):
-        lb,rb,lbound,rbound=mf.getBoundaryHams(mps,mpo)                            
+        lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(mps,mpo)                            
         super().__init__(mps,mpo,filename,lb,rb)
     #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
-    def __update__(self):
+
+    def __update__(self,regauge=False):
+        
         self._mps.__position__(self._mps._N)
         #update the left boundary
         for site in range(int(self._mps._N/2)):
@@ -272,7 +288,7 @@ class IDMRGengine(DMRGengine):
         lamR=np.copy(self._mps._mat)
         mps=[]
         D=0
-        #cut and patch the left half of the mps
+        #cut and patch the right half of the mps
         for n in range(int(self._mps._N/2),self._mps._N):
             if self._mps._tensors[n].shape[0]>D:
                 D=self._mps._tensors[n].shape[0]
@@ -286,11 +302,9 @@ class IDMRGengine(DMRGengine):
         for site in range(self._mps._N-1,int(self._mps._N/2)-1,-1):
             self._rb=mf.addLayer(self._rb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],-1)
 
-        self._R[0]=np.copy(self._rb)
-        self._L[0]=np.copy(self._lb)
         self._mps.__position__(0)
         lamL=np.copy(self._mps._mat)
-        #cut and patch the right half of the mps
+        #cut and patch the left half of the mps
         for n in range(int(self._mps._N/2)):
             if self._mps._tensors[n].shape[0]>D:
                 D=self._mps._tensors[n].shape[0]
@@ -304,12 +318,22 @@ class IDMRGengine(DMRGengine):
         self._mps.__position__(0)
         
         #cut and patch the mpo
-        mf.patchmpo(self._mpo,int(self._mps._N/2))        
+        mf.patchmpo(self._mpo,int(self._mps._N/2))
+        if not regauge:
+            self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+            self._L.insert(0,self._lb)
+            self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+            self._R.insert(0,self._rb)
+        elif regauge:
+            lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(self._mps,self._mpo,regauge=True)
+            super().__init__(self._mps,self._mpo,self._filename,lb,rb)        
         return D
 
-    def __simulate__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):            
+    def __simulate__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):            
         """
+        IDMRGengine.__simulate__(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
         run a single site IDMRG simulation
+
         Nmax: number of outer iterations
         NUC: number of optimization sweeps when optimizing a single unitcell
         Econv: desired convergence of energy per unitcell
@@ -323,52 +347,11 @@ class IDMRGengine(DMRGengine):
         nmaxlan: maximum number of lanczos stesp
         landelta: lanczos stops if a krylov vector with norm < landelta is encountered
         landeltaEta: desired convergence of lanzcos eigenenergies
+        regaugestep: if > 0, the mps is regauged into symmetric form when it%regaugestep==0; the effective Hamiltonians 
+                     are recalculated in this case; do NOT use regaugestep==1
         """
-        print ('# simulation parameters:')
-        print ('# of idmrg iterations: {0}'.format(Nmax))
-        print ('# of sweeps per unit cell: {0}'.format(NUC))
-        print ('# Econv: {0}'.format(Econv))
-        print ('# Arnoldi tolerance: {0}'.format(tol))
-        print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
-        it=0
-        converged=False
-        #eold=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
-        #self.__update__()
-        eold=0.0
-        while not converged:
-            e=super().__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
-            D=self.__update__()
-            if verbose>0:
-                stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
-                stdout.flush()  
-                if verbose>1:
-                    print('')
-                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
-            if cp!=None and it>0 and it%cp==0:                
-                np.save(self._filename+'_dmrg_cp',self._mps._tensors)
-            eold=e
-            it=it+1
-            if it>Nmax:
-                converged=True
-                break
-        it=it+1
-    def __simulateTwoSite__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
-        """
-        run a twos-site IDMRG simulation
-        Nmax: number of outer iterations
-        NUC: number of optimization sweeps when optimizing a single unitcell
-        Econv: desired convergence of energy per unitcell
-        tol: arnoldi tolerance
-        ncv: number of krylov vectors in arnoldi or lanczos
-        cp: chekpoint step
-        verbose: verbosity flag
-        numvecs: the number of eigenvectors to be calculated; should be 1
-        solver: type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
-        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
-        nmaxlan: maximum number of lanczos stesp
-        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
-        landeltaEta: desired convergence of lanzcos eigenenergies
-        """
+        if regaugestep==1:
+            raise ValueError("IDMRGengine.__simulate__(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
         
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
@@ -378,18 +361,96 @@ class IDMRGengine(DMRGengine):
         print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
         it=0
         converged=False
-        #eold=super().__simulate__(NUC,Econv,tol,ncv,verbose=verbose-1)
-        #self.__update__()
         eold=0.0
+        verbose=1
+        skip=False
         while not converged:
-            e=super().__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
-                                          landelta=landelta,landeltaEta=landeltaEta)
-            D=self.__update__()
+            regauge=False
+            e=super().__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
+            if regaugestep>0 and it%regaugestep==0 and it>0:
+                regauge=True
+                skip=True
+            D=self.__update__(regauge)
             if verbose>0:
-                stdout.write("\rTS-IDMRG: it=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
+                if regauge==False:
+                    if skip==False:
+                        stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
+                    if skip==True:
+                        skip=False
+                if regauge==True:
+                    stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
+            #if regauge==True:
+                #input('finished updating and regauing, starting fresh now')
+                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
+            if cp!=None and it>0 and it%cp==0:                
+                np.save(self._filename+'_dmrg_cp',self._mps._tensors)
+            eold=e
+            it=it+1
+            if it>Nmax:
+                converged=True
+                break
+        self._mps.resetZ()            
+        it=it+1
+        
+    def __simulateTwoSite__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):
+        """
+        IDMRGengine.__simulateTwoSite__(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
+        run a twos-site IDMRG simulation
+
+        Nmax:        number of outer iterations
+        NUC:         number of optimization sweeps when optimizing a single unitcell
+        Econv:       desired convergence of energy per unitcell
+        tol:         arnoldi tolerance
+        ncv:         number of krylov vectors in arnoldi or lanczos
+        cp:          chekpoint step
+        verbose:     verbosity flag
+        numvecs:     the number of eigenvectors to be calculated; should be 1
+        solver:      type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
+        Ndiag:       lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
+        nmaxlan:     maximum number of lanczos stesp
+        landelta:    lanczos stops if a krylov vector with norm < landelta is encountered
+        landeltaEta: desired convergence of lanzcos eigenenergies
+        regaugestep: if > 0, the mps is regauged into symmetric form when it%regaugestep==0; the effective Hamiltonians 
+                     are recalculated in this case; do NOT use regaugestep==1
+
+        """
+        if regaugestep==1:
+            raise ValueError("IDMRGengine.__simulateTwoSite__(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
+        print ('# simulation parameters:')
+        print ('# of idmrg iterations: {0}'.format(Nmax))
+        print ('# of sweeps per unit cell: {0}'.format(NUC))
+        print ('# Econv: {0}'.format(Econv))
+        print ('# Arnoldi tolerance: {0}'.format(tol))
+        print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
+        it=0
+        converged=False
+        eold=0.0
+        skip=False
+        while not converged:
+            regauge=False
+            e=super().__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
+                                          landelta=landelta,landeltaEta=landeltaEta)
+            if regaugestep>0 and it%regaugestep==0 and it>0:
+                regauge=True
+                skip=True
+            D=self.__update__(regauge)
+            if verbose>0:
+                if regauge==False:
+                    if skip==False:
+                        stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
+                    if skip==True:
+                        skip=False
+                if regauge==True:
+                    stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
+                stdout.flush()  
+                if verbose>1:
+                    print('')
+            #if regauge==True:
+                #input('finished updating and regauing, starting fresh now')
+                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
             if cp!=None and it>0 and it%cp==0:                
                 np.save(self._filename+'_dmrg_cp',self._mps._tensors)
             eold=e
@@ -398,10 +459,14 @@ class IDMRGengine(DMRGengine):
                 converged=True
                 break
         it=it+1
-
+        self._mps.resetZ()
 
 class HomogeneousIMPSengine:
     """
+
+    HomogeneousIMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
+    initialize a homogeneous gradient optimization
+    
     MPS optimization methods for homogeneous systems
     uses gradient optimization to find the ground state of a Homogeneous system
     mps (np.ndarray): an initial mps tensor 
@@ -605,16 +670,27 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
         print
         
 
-"""
-this is an engine for real or imaginary time evolution using TDVP; its not parallel, i.e. its a bit slow;
-"mps": an initial mp
-"gatecontainer": an object or method; gatecontainer(n,n+1,tau) has to return the gate to be applied at sites n and n+1
-                 tau is a negative real (for imaginary time) or complex number with negative imaginary part (for real time)
-"filename" is hte file under which cp results will be stored (not yet implemented)
-"""
 
 class TEBDEngine:
+    """
+    TEBDEngine.__init__(mps,gatecontainer,filename):
+    initialize a TEBD simulation; this is an engine for real or imaginary time evolution using TEBD
+    mps: the initial state in mps form
+    gatecontainer: an object or method; gatecontainer(n,n+1,tau) has to return the gate to be applied at sites n and n+1
+                   tau (scalar) is the time step
+    filename: the file under which cp results will be stored (not yet implemented)
+    """
+    
     def __init__(self,mps,gatecontainer,filename):
+        """
+        TEBDEngine.__init__(mps,gatecontainer,filename):
+        initialize a TEBD simulation; this is an engine for real or imaginary time evolution using TEBD
+        mps: the initial state in mps form
+        gatecontainer: an object or method; gatecontainer(n,n+1,tau) has to return the gate to be applied at sites n and n+1
+        tau (scalar) is the time step
+        filename: the file under which cp results will be stored (not yet implemented)
+        """
+        
         self._mps=copy.deepcopy(mps)
         self._gates=copy.deepcopy(gatecontainer)
         self._filename=filename
@@ -638,8 +714,9 @@ class TEBDEngine:
         
     def __doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         """
+        TEBDengine.__doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         uses a second order trotter decomposition to evolve the state using TEBD
-        dt: step size
+        dt: step size (scalar)
         numsteps: total number of evolution steps
         Dmax: maximum bond dimension to be kept
         tr_thresh: truncation threshold 
@@ -647,6 +724,7 @@ class TEBDEngine:
         cnterset: sets the internal iteration counter to cnterset; the internal iteration counter
                   is printed out if verbosity > 0, to have some idea of the simulation progress; 
                   cnterset is useful when when chaining multiple doTEBD calls, for example between measurements;
+        cp: checkpointing flag (currently not implemented)
         """
         self._tw=tw
         it=cnterset
@@ -686,6 +764,17 @@ class TEBDEngine:
 
 
 class TDVPEngine:
+    """
+    TDVPEngine.__init__(mps,mpo,filename,lb=None,rb=None):
+    initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
+    mps: the initial state in mps form
+    mpo: the generator of the time evolution in mpo form (list of np.ndarrays or MPO object)
+    filename: the file under which cp results will be stored (not yet implemented)
+    lb,rb: left and right Hamiltonian environment; for obc use None for either; 
+           user can provide lb and rb to fix the boundary condition of the mps (as of now (July 2018), this is not tested)
+           shapes of lb, rb, mps[0] and mps[-1] have to be consitent!
+    """
+    
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         if (np.all(lb)!=None) and (np.all(rb)!=None):
             assert(mps[0].shape[0]==lb.shape[0])
@@ -718,7 +807,9 @@ class TDVPEngine:
         
     def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False):
         """
+        TDVPengine.__doTDVP__(dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False)
         does a TDVP real or imaginary time evolution
+
         dt: step size
         numsteps: number of steps to be performed
         krylov_dim: if use_split_step=False, krylov_dim is the dimension of the krylov space used to perform evolution with lanczos
@@ -728,6 +819,8 @@ class TDVPEngine:
         verbose: verbosity flag
         use_split_step: if False, use Lanczos time evolution WITHOUT step-size optimization
                         if True, use Lanczos time evolution WITH step-size optimization using gexpmv from Ash Milsted's evoMPS package
+                        the difference is that the split-step integrator chooses internal time-splitting to minimize the error
+                        of the evolution
         """
         converged=False
         it=cnterset

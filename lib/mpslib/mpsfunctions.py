@@ -1460,20 +1460,31 @@ def MixedUnitcellTransferOperator(direction,Upper,Lower,vector):
 #returns the unitcellTO eigenvector with 'LR'
 def UnitcellTMeigs(mps,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=10,which='LM'):
     #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
-    datatype=mps[0].dtype
+    if isinstance(mps,MPSL.MPS):
+        dtype=mps.dtype
+    elif isinstance(mps,list):
+        dtype=mps[0].dtype
+        
     [D1l,D2l,dl]=np.shape(mps[0])
     [D1r,D2r,dr]=np.shape(mps[-1])
     mv=fct.partial(UnitcellTransferOperator,*[direction,mps])
-    LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,rmatvec=None,matmat=None,dtype=datatype)
+    LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
     m=np.argmax(np.real(eta))
+
     while np.abs(np.imag(eta[m]))/np.abs(np.real(eta[m]))>1E-4:
         numeig=numeig+1
         print ('found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'.format(numeig))
         print (eta)
         eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
         m=np.argmax(np.real(eta))
-    return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
+    if dtype==float:
+        out=np.reshape(vec[:,m],D1l*D1l)
+        if np.linalg.norm(np.imag(out))>1E-10:
+            raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
+        return np.real(eta[m]),np.real(out),numeig
+    if dtype==complex:
+        return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
 
 
 #returns the mixed unitcellTO eigenvector with 'LR'
@@ -1530,6 +1541,22 @@ def patchmpo(mpo,index):
         mpo[n]=np.copy(temp[n])
 
 def computeDensity(dens0,mps,direction,dtype=float):
+    """
+    comuputes a reduced density matrix obtained from 
+    evolving dens0 over a mps unitcell;
+    dens0: initial density matrix of shape (D_1,D_1) or (D_N,D_N)
+    mps: list of mps tensors (ndarrays of shape(D_n,D_n,n)) for n=1,...,N, or an MPS object
+    direction: direction of contraction: direction>0: do left-to right evolution, direction<0: do a right to left evolution
+    returns dens: a list of density matrices on each bond (including the left and right bonds to the left and right of the mps, len(dens)=len(mps)+1)
+    
+    """
+    if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
+        dtype=np.result_type(dens0.dtype,mps.dtype)
+    elif isinstance(mps,list):
+        dtype=np.result_type(dens0.dtype,mps[0].dtype)
+    else:
+        raise TypeError("computeDensity: unknow type for mps")
+    
     dens=[]
     for n in range(len(mps)+1):
         dens.append(None)
@@ -1554,124 +1581,131 @@ def computeDensity(dens0,mps,direction,dtype=float):
         return dens
 
 
-def getBoundaryHams(mps,mpo):
+def getBoundaryHams(mps,mpo,regauge=False):
     """
     calculates the environment of an infinite MPS
-    
+    mps: an infinite system mps
+    mpo: an infinite system mpo
+    if regauge==True, the routine regauges mps in place into symmetric gauge
+    ToDo: allow passing precision parameters to __regauge__
     """
-
-    #regauge the MPS into symmetric form
-    mps.__regauge__('symmetric')
-    pos=mps._position
-    D=np.shape(mps._tensors[0])[0]
-    assert((mps._position==0)|(mps._position==(mps._N)))
-    #mps has to be in symmetric gauge
-    if pos==(mps._N):
-        #bring center site to the left; every tensor is now right orthonormal, and there's a non trivial bond matrix and a connector at the left end
-        mps.__position__(0)
-        if np.linalg.norm(mps._mat-np.diag(np.diag(mps._mat)))>1E-6:
-            warnings.warn('mpsfunctions.py: getBoundaryHam for pos==mps._N: mps._mat for mps._position=0 is not diagonal,regaugin the mps',stacklevel=2)
-            mps.__regauge__('symmetric')
+    if regauge:
+        mps.__regauge__('symmetric')
+    else:
+        if (len(mps)-mps.pos)<mps.pos:
+            mps.__position__(len(mps))
+        else:
             mps.__position__(0)
-
-        temp=mps._tensors
-        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')
+            
+    if mps.pos==0:
+        D=np.shape(mps[0])[0]
+        if regauge:
+            phasematrix=mps._connector.dot(mps._mat)
+            mps[0]=ncon.ncon([phasematrix,mps[0]],[[-1,1],[1,-2,-3]])
+            mps._mat=mps._mat.dot(herm(phasematrix))
+        temp=mps.tensors            
+        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         lbound=np.reshape(lss,(D,D))
         lbound=fixPhase(np.reshape(lss,(D,D)))
-        if mps._dtype==complex:
-            lbound=(lbound+herm(lbound))/2.0
-        if mps._dtype==float:
-            lbound=np.real(lbound+herm(lbound))/2.0
-
+        lbound=(lbound+herm(lbound))/2.0
+        
         Z=np.trace(lbound)
         lbound=lbound/Z
-
-        ldens=computeDensity(lbound,temp,direction=1,dtype=mps._dtype)
-        rdens=computeDensity(np.eye(D),temp,direction=-1,dtype=mps._dtype)
+        
+        ldens=computeDensity(lbound,temp,direction=1)
+        rdens=computeDensity(np.eye(D),temp,direction=-1)
         f0r=np.zeros((D*D))
-        f0r=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000,dtype=mps._dtype)
-
+        f0r,hr=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000)
+        
         mps.__position__(mps._N)
-        temp=mps._tensors
-        if np.linalg.norm(mps._mat-np.diag(np.diag(mps._mat)))>1E-6:
-            warnings.warn('mpsfunctions.py: getBoundaryHam for pos==mps._N: mps._mat for mps._position=mps._N is not diagonal',stacklevel=2)
-            #don't regauge here, this may cause gauge mismatches
-            return
-
-        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')
+        if regauge:
+            phasematrix=mps._mat.dot(mps._connector)
+            mps[-1]=ncon.ncon([mps[-1],phasematrix],[[-1,1,-3],[1,-2]])
+            mps._mat=herm(phasematrix).dot(mps._mat)
+        temp=mps.tensors
+        
+        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         rbound=np.reshape(rss,(D,D))
         rbound=fixPhase(np.reshape(rss,(D,D)))
-        if mps._dtype==complex:
-            rbound=(rbound+herm(rbound))/2.0
-        if mps._dtype==float:
-            rbound=np.real(rbound+herm(rbound))/2.0
-
-
+        rbound=(rbound+herm(rbound))/2.0
+        
         Z=np.trace(rbound)
         rbound=rbound/Z
-
-        rdens=computeDensity(rbound,temp,direction=-1,dtype=mps._dtype)
-        ldens=computeDensity(np.eye(D),temp,direction=1,dtype=mps._dtype)
-    
+        
+        rdens=computeDensity(rbound,temp,direction=-1)
+        ldens=computeDensity(np.eye(D),temp,direction=1)
+        
         f0l=np.zeros((D*D))
-        f0l=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0l,ldens,rdens,direction=1,thresh=1E-10,imax=1000,dtype=mps._dtype)
-
+        f0l,hl=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0l,ldens,rdens,direction=1,thresh=1E-10,imax=1000)
+        
         lb=np.copy(f0l)
         rb=np.copy(f0r)
-
         return lb,rb,lbound,rbound
 
-    if pos==0:
-        mps.__position__(mps._N)
-        if np.linalg.norm(mps._mat-np.diag(np.diag(mps._mat)))>1E-6:
-            warnings.warn('mpsfunctions.py: getBoundaryHam for pos==0: mps._mat for mps._position=mps._N is not diagonal',stacklevel=2)
-            mps.__regauge__('symmetric')
-            mps.__position__(mps._N)
+    if mps.pos==len(mps):
+        D=np.shape(mps[-1])[1]
+        if regauge:
+            
+            phasematrix=mps._mat.dot(mps._connector)
+            mps[-1]=ncon.ncon([mps[-1],phasematrix],[[-1,1,-3],[1,-2]])
+            mps._mat=herm(phasematrix).dot(mps._mat)
 
-        temp=mps._tensors
-        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D))/(D*1.0),nmax=10000,tolerance=1E-16,which='LR')
+        temp=mps.tensors
+        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D))/(D*1.0),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         rbound=np.reshape(rss,(D,D))
         rbound=fixPhase(np.reshape(rss,(D,D)))
         rbound=(rbound+herm(rbound))/2.0
         Z=np.trace(rbound)
         rbound=rbound/Z
         
-        rdens=computeDensity(rbound,temp,direction=-1,dtype=mps._dtype)
-        ldens=computeDensity(np.eye(D),temp,direction=1,dtype=mps._dtype)
-
+        rdens=computeDensity(rbound,temp,direction=-1)
+        ldens=computeDensity(np.eye(D),temp,direction=1)
+    
+    
         f0l=np.zeros((D*D))
-        f0l=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0l,ldens,rdens,direction=1,thresh=1E-10,imax=1000,dtype=mps._dtype)
+        f0l,hl=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0l,ldens,rdens,direction=1,thresh=1E-10,imax=1000)
         lb=np.copy(f0l)
-        
-        mps.__position__(0) 
-        if np.linalg.norm(mps._mat-np.diag(np.diag(mps._mat)))>1E-6:
-            warnings.warn('mpsfunctions.py: getBoundaryHam for pos==0: mps._mat for mps._position=0 is not diagonal',stacklevel=2)
-            return
-
-        temp=mps._tensors
-        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')
+        mps.__position__(0)
+        if regauge:
+            phasematrix=mps._connector.dot(mps._mat)
+            mps[0]=ncon.ncon([phasematrix,mps[0]],[[-1,1],[1,-2,-3]])
+            mps._mat=mps._mat.dot(herm(phasematrix))
+            
+        temp=mps.tensors
+        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         lbound=np.reshape(lss,(D,D))
+    
         lbound=fixPhase(np.reshape(lss,(D,D)))
         lbound=(lbound+herm(lbound))/2.0
         Z=np.trace(lbound)
         lbound=lbound/Z
+        lbound=(lbound+herm(lbound))/2.0
     
-        ldens=computeDensity(lbound,temp,direction=1,dtype=mps._dtype)
-        rdens=computeDensity(np.eye(D),temp,direction=-1,dtype=mps._dtype)
+    
+        ldens=computeDensity(lbound,temp,direction=1)
+        rdens=computeDensity(np.eye(D),temp,direction=-1)
             
         f0r=np.zeros((D*D))
-        f0r=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000,dtype=mps._dtype)
-
+        f0r,hr=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000)
+    
         lb=np.copy(f0l)
         rb=np.copy(f0r)
+        return lb,rb,lbound,rbound,hl,hr
 
-        return lb,rb,lbound,rbound
 
+def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,direction,thresh,imax):
 
-def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,direction,thresh,imax,dtype=float):
+    if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
+        dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,ldens[0].dtype,rdens[0].dtype)
+    elif isinstance(mps,list):
+        dtype=np.result_type(mps[0].dtype,mpopbc.dtype,boundary.dtype,ldens[0].dtype,rdens[0].dtype)        
+    else:
+        raise TypeError("computeUCsteadyStateHamiltonianGMRES: unknow type for mps")
+
+    
     NUC=len(mps)
     [D1r,D2r,d]=np.shape(mps[NUC-1])
-    [D1l,D2l,d]=np.shape(mps[NUC-1])
+    [D1l,D2l,d]=np.shape(mps[0])
     [B1,B2,d1,d2]=np.shape(mpopbc[NUC-1])
     if direction>0:
         mpo=np.zeros((1,B2,d1,d2),dtype=dtype)
@@ -1685,20 +1719,21 @@ def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,directi
         inhom=np.reshape(L[:,:,0]-h*np.transpose(np.eye(D2r)),D2r*D2r) 
         [k2,info]=TDVPGMRESUC(mps,ldens,rdens,inhom,np.reshape(boundary,(D1l*D1l)),thresh,imax,datatype=dtype,direction=1)
         L[:,:,0]=np.reshape(k2,(D2r,D2r))
-        return np.copy(L)
+        return np.copy(L),h
 
     if direction<0:
         mpo=np.zeros((B1,1,d1,d2),dtype=dtype)
         mpo[:,0,:,:]=mpopbc[0][:,0,:,:]
-        R=initializeLayer(mps[0],np.eye(D1l),mps[0],mpo,-1)
+        R=initializeLayer(mps[0],np.eye(D2l),mps[0],mpo,-1)
         for n in range(len(mps)-1,-1,-1):
             R=addLayer(R,mps[n],mpopbc[n],mps[n],-1)    
 
         h=np.trace(R[:,:,-1].dot(ldens[0]))
-        inhom=np.reshape(R[:,:,-1]-h*np.transpose(np.eye(D1l)),D2r*D2r) 
-        [k2,info]=TDVPGMRESUC(mps,ldens,rdens,inhom,np.reshape(boundary,(D1l*D1l)),thresh,imax,datatype=dtype,direction=-1)
-        R[:,:,-1]=np.reshape(k2,(D1l,D1l))
-        return np.copy(R)
+        inhom=np.reshape(R[:,:,-1]-h*np.transpose(np.eye(D1l)),D1l*D1l)
+
+        [k2,info]=TDVPGMRESUC(mps,ldens,rdens,inhom,np.reshape(boundary,(D2r*D2r)),thresh,imax,datatype=dtype,direction=-1)
+        R[:,:,-1]=np.reshape(k2,(D2r,D2r))
+        return np.copy(R),h
 
 
 def pseudoUnitcellTransferOperator(direction,mps,ldens,rdens,vector):

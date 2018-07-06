@@ -67,6 +67,7 @@ np.conj
 class MPS:
 
     """
+    MPS.__init__(tensors,schmidt_thresh=1E-16,r_thresh=1E-14):
     MPS object representing a matrix product state
     
 
@@ -120,11 +121,22 @@ class MPS:
         self._gamma=[]
         self._lambda=[]
 
+    @property
+    def dtype(self):
+        return self._dtype
+    
+    @property
+    def pos(self):
+        return self._position
+    
+    
 
     @classmethod
     def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         """
+        MPS.random(N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate a random MPS
+
         N (int): length of the mps
         D (int): initial bond dimensions
         d (int or array of int): local Hilbert space dimension
@@ -147,7 +159,9 @@ class MPS:
     @classmethod
     def zeros(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        MPS.zeros(N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS filled with zeros
+
         N (int): length of the mps
         D (int): initial bond dimensions
         d (int or array of int): local Hilbert space dimension
@@ -169,6 +183,7 @@ class MPS:
     @classmethod
     def ones(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        MPS.ones(N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS filled with ones
         N (int): length of the mps
         D (int): initial bond dimensions
@@ -189,7 +204,9 @@ class MPS:
     @classmethod
     def productState(cls,localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
+        MPS.productState(localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         initialize a product state MPS:
+
         localstate: an array of int specifying the local positions; i.e. localstate[n]=i 
                     sets the state at position n to i, where 0<i<d[n]
         d:          int or array of int; local hilbert space dimensions
@@ -305,6 +322,21 @@ class MPS:
         cpy._Z*=num
         cpy._dtype=np.result_type(type(num),self._dtype)
         return cpy
+
+    def __truediv__(self,num):
+        """
+        left-divides "num" with MPS, i.e. returns MPS/num;
+        note that "num" is not really multiplied into the mps matrices, but
+        instead multiplied into the internal field _Z which stores the norm of the state
+        """
+        if not np.isscalar(num):
+            raise TypeError("in MPS.__mul__(self,num): num is not a number")
+        cpy=self.__copy__()
+        cpy._Z/=num
+        cpy._dtype=np.result_type(type(num),self._dtype)
+        return cpy
+    
+    
     
     def __rmul__(self,num):
         """
@@ -328,7 +360,7 @@ class MPS:
         adds self with other;
         returns an unnormalized mps
         """
-        tens=mf.addMPS(self.__tensors__(),self._Z,other.__tensors__(),other._Z)
+        tens=mf.addMPS(self.tolist(),self._Z,other.tolist(),other._Z)
         out=MPS(tensors=tens,schmidt_thresh=1E-16,r_thresh=1E-16) #out is an unnormalized MPS
         out._Z=1.0 #MPS.__init__ sets self._Z to -1e10, so we have to reset it here to 1
         return out
@@ -402,7 +434,7 @@ class MPS:
         return mf.overlap(self,mps)
 
     def __D__(self):
-        return list(map(lambda x: np.shape(x)[0],self._tensors))
+        return list(map(lambda x: np.shape(x)[0],self._tensors))+[self._tensors[-1].shape[1]]
 
 
     @property
@@ -722,7 +754,7 @@ class MPS:
     def regauge(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
         self.__regauge__(gauge,nmaxit,tol,ncv,pinv)
         
-    def __regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+    def __regauge__(self,gauge,nmaxit=100000,tol=1E-12,ncv=40,pinv=1E-12):
         """
         regauge brings state in either left, right or symmetric orthonormal form
         the state should be a finite unitcell state on an infinite lattice
@@ -736,7 +768,7 @@ class MPS:
         """
             
         if self._obc==True:
-            print ('in MPOS.__regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20): state is OBC; regauging only applies to PBC states.')
+            print ('in MPS.__regauge__(self,gauge,nmaxit=100000,tol=1E-10,ncv=20): state is OBC; regauging only applies to PBC states.')
             return 
         #merge self._mat into the mps tensor
         if self._position<self._N:
@@ -758,7 +790,7 @@ class MPS:
 
 
 
-    def orthonormalization(self,site,direction):
+    def ortho(self,site,direction):
         return self.__orthonormalization__(site,direction)
     def __orthonormalization__(self,site,direction):
         """
@@ -776,32 +808,62 @@ class MPS:
             return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]))
 
 
+
+
+    @property        
     def tensors(self):
-        return self.__tensors__()
+        """
+        MPS.tensors
+        returns the list of mps-tensors as is, i.e. neither the center matrix self._mat nor self._connector 
+        are included; it you wish to include them, use self.tolist() instead
+        """
+        return self._tensors
     
-    def __tensors__(self):
+    def tolist(self):
         
         """
-        returns a list of a copy of the mps-tensors; if absorb_center=1, the centermatrix is absorbed in right direction into the MPS,
-        if absorb_center=-1, it is absorbed in left direction.  absorb_connector='left' or 'right' absorbs the
-        connector matrix into the mps
+        MPS.tolist():
+        returns a list of a copy of the mps-tensors; 
+        the center matrix mps._mat and the connector matrix  mps._connector
+        are absorbed into the mps
+
         """
         tensors=copy.deepcopy(self._tensors)
         if self._position<len(self):
-            tensors[self._position]=np.tensordot(self._mat,tensors[self._position],([1],[0]))
+            #tensors[self._position]=np.tensordot(self._mat,tensors[self._position],([1],[0]))
+            tensors[self._position]=ncon.ncon([self._mat,tensors[self._position]],[[-1,1],[1,-2,-3]])
         elif self._position==len(self):
-            tensors[self._position-1]=np.transpose(np.tensordot(tensors[self._position-1],self._mat,([1],[0])),(0,2,1))
-            
+            #tensors[self._position-1]=np.transpose(np.tensordot(tensors[self._position-1],self._mat,([1],[0])),(0,2,1))
+            tensors[self._position-1]=ncon.ncon([self._mat,tensors[self._position-1]],[[1,-2],[-1,1,-3]])            
+        #tensors[-1]=ncon.ncon([tensors[-1],self._connector],[[-1,1,-3],[1,-2]])
         return tensors
 
     def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
+        """
+        MPS.applyTwoSiteGate(gate,site,Dmax=None,thresh=1E-16):
+        
+        applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
+        gate: matrix with support on two physical sites
+        site: the left-hand site of the support of gate
+        Dmax: the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
+        
+        the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
+        returns tw, D: the truncated weight tw and the current bond dimension D on bond=site+1
+        """
+        
         return self.__applyTwoSiteGate__(gate,site,Dmax,thresh)
     
     def __applyTwoSiteGate__(self,gate,site,Dmax=None,thresh=1E-16):
         """
+        MPS.__applyTwoSiteGate__(gate,site,Dmax=None,thresh=1E-16):
+        
         applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
-        "Dmax" is the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
-        site has to be the left-hand site of the operator support
+        gate: matrix with support on two physical sites
+        site: the left-hand site of the support of gate
+        Dmax: the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
+        
+        the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
+        returns tw, D: the truncated weight tw and the current bond dimension D on bond=site+1
         """
         assert(len(gate.shape)==4)
         assert(site<len(self)-1)
@@ -828,13 +890,19 @@ class MPS:
 
 
     def applyOneSiteGate(self,gate,site,preserve_position=True):
-        self.__applyOneSiteGate__(gate,site,preserve_position)
-        
-    def __applyOneSiteGate__(self,gate,site,preserve_position=True):
-
         """
         applies a one-site gate to an mps at site "site"
         the center bond is shifted to bond site+1 
+        the _Z norm of the mps is changed
+        """
+        
+        self.__applyOneSiteGate__(gate,site,preserve_position)
+        
+    def __applyOneSiteGate__(self,gate,site,preserve_position=True):
+        """
+        applies a one-site gate to an mps at site "site"
+        the center bond is shifted to bond site+1 
+        the _Z norm of the mps is changed
         """
         assert(len(gate.shape)==2)
         assert(site<len(self))

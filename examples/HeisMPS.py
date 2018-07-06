@@ -25,6 +25,7 @@ if __name__ == "__main__":
     Jxy=np.ones(N)
 
     mps=mpslib.MPS.random(N=N,D=10,d=d,obc=True,dtype=float)  #initialize a random MPS with bond dimension D'=10
+    print(mpslib.MPS.random.__doc__)
     mps._D=D     #set the mps final bond-dimension parameter to D; mps._D is the maximally allowed dimension of the mps
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     mps.__position__(N)
@@ -38,6 +39,10 @@ if __name__ == "__main__":
 
     #initialize a DMRGEngine with an mps and an mpo
     dmrg=en.DMRGengine(mps,mpo,'blabla')
+    print(dmrg.__doc__)
+    print(dmrg.__simulate__.__doc__)
+    print(dmrg.__simulateTwoSite__.__doc__)
+    
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
     dmrg.__simulateTwoSite__(1,1e-10,1e-6,40,verbose=1,solver='LAN')

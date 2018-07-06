@@ -458,6 +458,7 @@ class MPSArithmeticTests(unittest.TestCase):
 
     def testAdd(self):
         for it in range(100):
+
             self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
             self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
             self.mps1[-1]*=self.mps1._mat#mps1._mat could contain a minus sign
@@ -773,11 +774,11 @@ if __name__ == "__main__":
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
     suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)
     suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)    
-    unittest.TextTestRunner(verbosity=2).run(suite1)
-    unittest.TextTestRunner(verbosity=2).run(suite2)
-    unittest.TextTestRunner(verbosity=2).run(suite3)
-    unittest.TextTestRunner(verbosity=2).run(suite4)
-    unittest.TextTestRunner(verbosity=2).run(suite5)
-    unittest.TextTestRunner(verbosity=2).run(suite6)
-    unittest.TextTestRunner(verbosity=2).run(suite7)
+    #unittest.TextTestRunner(verbosity=2).run(suite1)
+    #unittest.TextTestRunner(verbosity=2).run(suite2)
+    #unittest.TextTestRunner(verbosity=2).run(suite3)
+    #unittest.TextTestRunner(verbosity=2).run(suite4)
+    #unittest.TextTestRunner(verbosity=2).run(suite5)
+    #unittest.TextTestRunner(verbosity=2).run(suite6)
+    #unittest.TextTestRunner(verbosity=2).run(suite7)
     unittest.TextTestRunner(verbosity=2).run(suite8) 

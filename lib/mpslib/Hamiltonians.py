@@ -68,7 +68,10 @@ class MPO:
         self._mpo[n]=tensor
     def __len__(self):
         return len(self._mpo)
-
+    @property
+    def dtype(self):
+        return self._dtype
+    
 class TFI(MPO):
 
     """ 
@@ -77,14 +80,15 @@ class TFI(MPO):
     
     """
     
-    def __init__(self,Jx,Bz,obc=True):
+    def __init__(self,Jx,Bz,obc=True,dtype=float):
         self._obc=obc
         self._Jx=Jx
         self._Bz=Bz
         self._N=len(Bz)
+        self._dtype=dtype
         if obc==True:
             self._mpo=[]
-            temp=np.zeros((1,3,2,2))
+            temp=np.zeros((1,3,2,2),self.dtype)
             #BSz
             temp[0,0,0,0]=-0.5*self._Bz[0]
             temp[0,0,1,1]= 0.5*self._Bz[0]
@@ -98,7 +102,7 @@ class TFI(MPO):
             temp[0,2,1,1]=1.0
             self._mpo.append(np.copy(temp))
             for n in range(1,self._N-1):
-                temp=np.zeros((3,3,2,2))
+                temp=np.zeros((3,3,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -117,7 +121,7 @@ class TFI(MPO):
         
                 self._mpo.append(np.copy(temp))
         
-            temp=np.zeros((3,1,2,2))
+            temp=np.zeros((3,1,2,2),self.dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -135,7 +139,7 @@ class TFI(MPO):
             assert(len(Bz)==len(Jz))
             self._mpo=[]
             for n in range(0,self._N):
-                temp=np.zeros((5,5,2,2))
+                temp=np.zeros((5,5,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -168,15 +172,16 @@ class XXZ(MPO):
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
     
-    def __init__(self,Jz,Jxy,Bz,obc=True):
+    def __init__(self,Jz,Jxy,Bz,obc=True,dtype=float):
         self._obc=obc
         self._Jz=Jz
         self._Jxy=Jxy
+        self._dtype=dtype
         self._Bz=Bz
         self._N=len(Bz)
         if obc==True:
             self._mpo=[]
-            temp=np.zeros((1,5,2,2))
+            temp=np.zeros((1,5,2,2),self.dtype)
             #BSz
             temp[0,0,0,0]=-0.5*Bz[0]
             temp[0,0,1,1]= 0.5*Bz[0]
@@ -195,7 +200,7 @@ class XXZ(MPO):
             temp[0,4,1,1]=1.0
             self._mpo.append(np.copy(temp))
             for n in range(1,self._N-1):
-                temp=np.zeros((5,5,2,2))
+                temp=np.zeros((5,5,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -224,7 +229,7 @@ class XXZ(MPO):
         
                 self._mpo.append(np.copy(temp))
         
-            temp=np.zeros((5,1,2,2))
+            temp=np.zeros((5,1,2,2),self.dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -246,7 +251,7 @@ class XXZ(MPO):
             assert(len(Bz)==len(Jz))
             self._mpo=[]
             for n in range(0,self._N):
-                temp=np.zeros((5,5,2,2))
+                temp=np.zeros((5,5,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -282,15 +287,15 @@ class XXZflipped(MPO):
     again the famous Heisenberg Hamiltonian, but in a slightly less common form
     """    
     
-    def __init__(self,Delta,J,obc=True):
+    def __init__(self,Delta,J,obc=True,dtype=float):
         self._Delta=Delta
         self._J=J
-
+        self._dtype=dtype
         self._obc=obc
         self._mpo=[]
         if obc==True:
             self._N=len(Delta)+1
-            temp=np.zeros((1,5,2,2)).astype(complex)
+            temp=np.zeros((1,5,2,2)).astype(self.dtype)
             #Sx
             temp[0,1,0,1]=J[0]
             temp[0,1,1,0]=J[0]
@@ -306,7 +311,7 @@ class XXZflipped(MPO):
             temp[0,4,1,1]=1.0
             self._mpo.append(np.copy(temp))
             for site in range(1,self._N-1):
-                temp=np.zeros((5,5,2,2)).astype(complex)
+                temp=np.zeros((5,5,2,2)).astype(self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -337,7 +342,7 @@ class XXZflipped(MPO):
                 temp[4,4,1,1]=1.0
                 self._mpo.append(np.copy(temp))
             
-            temp=np.zeros((5,1,2,2)).astype(complex)
+            temp=np.zeros((5,1,2,2)).astype(self.dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -357,7 +362,7 @@ class XXZflipped(MPO):
         if obc==False:
             self._N=len(Delta)
             for site in range(self._N):
-                temp=np.zeros((5,5,2,2)).astype(complex)
+                temp=np.zeros((5,5,2,2)).astype(self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -405,6 +410,7 @@ class SpinlessFermions(MPO):
         self._chempot=chempot
         self._obc=obc
         self._dtype=dtype
+        
         self._N=len(chempot)
         c=np.zeros((2,2)).astype(dtype)
         c[0,1]=1.0
@@ -730,14 +736,14 @@ class HubbardChain(MPO):
         assert(len(t_down)==self._N-1)
         
         self._mpo=[]
-        c=np.zeros((2,2)).astype(dtype)
+        c=np.zeros((2,2),dtype=self.dtype)
         c[0,1]=1.0
         c_down=np.kron(c,np.eye(2))    
-        c_up=np.kron(np.diag([1.0,-1.0]).astype(dtype),c)
-        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(dtype)
+        c_up=np.kron(np.diag([1.0,-1.0]).astype(self.dtype),c)
+        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(self.dtype)
         
         if obc==True:
-            tensor=np.zeros((1,6,4,4)).astype(dtype)
+            tensor=np.zeros((1,6,4,4)).astype(self.dtype)
             tensor[0,0,:,:]=mu_up[0]*herm(c_up).dot(c_up)+mu_down[0]*herm(c_down).dot(c_down)+U[0]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
             tensor[0,1,:,:]=(-1.0)*t_up[0]*herm(c_up).dot(P)
             tensor[0,2,:,:]=(+1.0)*t_up[0]*c_up.dot(P)
@@ -747,7 +753,7 @@ class HubbardChain(MPO):
             self._mpo.append(np.copy(tensor))
         
             for n in range(1,self._N-1):        
-                tensor=np.zeros((6,6,4,4)).astype(dtype)
+                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
                 tensor[0,0,:,:]=np.eye(4)
                 tensor[1,0,:,:]=c_up
                 tensor[2,0,:,:]=herm(c_up)
@@ -764,7 +770,7 @@ class HubbardChain(MPO):
                 
                 self._mpo.append(np.copy(tensor))
         
-            tensor=np.zeros((6,1,4,4)).astype(dtype)
+            tensor=np.zeros((6,1,4,4)).astype(self.dtype)
             tensor[0,0,:,:]=np.eye(4)
             tensor[1,0,:,:]=c_up
             tensor[2,0,:,:]=herm(c_up)
@@ -775,7 +781,7 @@ class HubbardChain(MPO):
         
         if obc==False:
             for n in range(self._N):
-                tensor=np.zeros((6,6,4,4)).astype(dtype)
+                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
                 tensor[0,0,:,:]=np.eye(4)
                 tensor[1,0,:,:]=c_up
                 tensor[2,0,:,:]=herm(c_up)
@@ -796,7 +802,7 @@ class HubbardChain(MPO):
 
 
 
-def projectedTwoBosonsModel(mu1,mu2,g1,g2,m1,m2,N,dx,obc):
+def projectedTwoBosonsModel(mu1,mu2,g1,g2,m1,m2,N,dx,obc,dtype=float):
     N=len(mu)
     c=np.zeros((3,3),dtype=dtype)
     for n in range(1,2):

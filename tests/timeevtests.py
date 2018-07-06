@@ -131,9 +131,9 @@ class TestTimeEvolution(unittest.TestCase):
         self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
         self.dmrg._mps.__position__(self.N)
         self.dmrg._mps.__position__(0)
-
+        self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate        
         engine=en.TEBDEngine(self.dmrg._mps,self.mpo,"insert_name_here")
-        
+
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
         #adapted to this value in the TEBDEngine
         thresh=1E-16  #truncation threshold
@@ -147,13 +147,13 @@ class TestTimeEvolution(unittest.TestCase):
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
             #measure the operators 
-            L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            #L=engine._mps.__measureList__(sz)            
+            #L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            L=engine._mps.__measureList__(sz)            
             #store result for later use
-            SZ[n,:]=L 
+            SZ[n,:]=L
+            
             tw,it2=engine.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
-            
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-5)        
         
@@ -165,7 +165,8 @@ class TestTimeEvolution(unittest.TestCase):
         self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
         self.dmrg._mps.__position__(self.N)
         self.dmrg._mps.__position__(0)
-
+        self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
+        
         engine=en.TDVPEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
         
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
@@ -181,12 +182,10 @@ class TestTimeEvolution(unittest.TestCase):
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
             #measure the operators
-            L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]            
-            #L=engine._mps.__measureList__(sz)
+            L=engine._mps.__measureList__(sz)
             #store result for later use
             SZ[n,:]=L 
             it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=20,cnterset=it1,use_split_step=False)
-
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
 
@@ -310,10 +309,11 @@ class TestPlot(unittest.TestCase):
 
         for n in range(self.Nmax):
             #measure a list of local operators
-            L=engine1._mps.__measureList__(sz)
+            L=[engine1._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            #L=engine1._mps.__measureList__(sz)
             #store result for later use
             SZ1[n,:]=L
-
+            #L=[engine2._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
             L=engine2._mps.__measureList__(sz)
             SZ2[n,:]=L
             tw,it2=engine1.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
@@ -349,6 +349,6 @@ class TestPlot(unittest.TestCase):
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestPlot)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite1)
     unittest.TextTestRunner(verbosity=2).run(suite2)     
 
