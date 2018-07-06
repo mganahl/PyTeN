@@ -45,7 +45,7 @@ python TDVP.py
 to do the evolution.
 
 The above examples-scripts are commented to explain the individual steps and help you to get started with new models.
-## Getting help
+### Getting help
 There is currently no documentation, but most methods have docstring explaining what they do.
 
 ### Prerequisites
