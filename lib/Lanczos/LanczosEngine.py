@@ -2,9 +2,6 @@
 import numpy as np
 import scipy as sp
 import copy
-import matplotlib.pyplot as plt
-plt.ion()
-
 
 class LanczosEngine:
     """

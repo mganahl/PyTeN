@@ -14,14 +14,12 @@ import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib
-import matplotlib.pyplot as plt
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 if __name__ == "__main__":
     
-    plt.ion()
     parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
     parser.add_argument('--D', help='MPS bond dimension (8)',type=int,default=32)

@@ -1456,6 +1456,8 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
     dtype=tensor.dtype
     #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
     [chi1,chi2,d]=np.shape(tensor)
+    if chi1!=chi2:
+        raise ValueError(" in TMeigs: ancillary dimensions of the MPS tensor have to be the same on either side")
     mv=fct.partial(TransferOperator,*[direction,tensor])
     LOP=LinearOperator((chi1*chi1,chi2*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
 
@@ -1468,13 +1470,13 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
             m=np.argmax(np.real(eta))
 
         if (dtype==float) or (dtype==np.float64) or (dtype==np.float32):
-            out=np.reshape(vec[:,m],D1l*D1l)
+            out=np.reshape(vec[:,m],chi1*chi1)
             if np.linalg.norm(np.imag(out))>1E-10:
                 raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
             return np.real(eta[m]),np.real(out),numeig
         
         if (dtype==complex) or (dtype==np.complex64) or (dtype==np.complex128):        
-            return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
+            return eta[m],np.reshape(vec[:,m],chi1*chi1),numeig
 
 
             
@@ -1528,6 +1530,9 @@ def UnitcellTMeigs(mps,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=1
         
     [D1l,D2l,dl]=np.shape(mps[0])
     [D1r,D2r,dr]=np.shape(mps[-1])
+    if D1l!=D2r:
+        raise ValueError(" in UnitcellTMeigs: ancillary dimensions of the MPS tensor have to be the same on left and right side")
+    
     mv=fct.partial(UnitcellTransferOperator,*[direction,mps])
     LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
