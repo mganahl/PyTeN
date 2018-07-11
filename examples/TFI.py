@@ -65,7 +65,6 @@ if __name__ == "__main__":
     Jx=args.Jx*np.ones(N)
     B=args.B*np.ones(N)
     mpo=H.TFI(Jx,B,False)[0]
-    print (mpo.shape)
 
     #mps=(np.random.rand(args.D,args.D,2)-0.5+1j*(np.random.rand(args.D,args.D,2)-0.5))*0.5
     if args.dtype=='complex':

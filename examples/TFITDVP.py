@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser('HeisTDVP.py: ground-state simulation for the infinite XXZ model using TDVP imaginary time evolution')
-    parser.add_argument('--D', help='cMPS bond dimension (8)',type=int,default=32)
+    parser.add_argument('--D', help='cMPS bond dimension (8)',type=int,default=8)
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')    
     parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=1.0)
     parser.add_argument('--B', help='magnetic field (0.5)',type=float,default=0.5)
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     args=parser.parse_args()
     #run in left mps gauge and left mps-tangent gauge
     
-    N=2
+    N=1
     d=2
     Jx=args.Jx*np.ones(N)
     B=args.B*np.ones(N)
