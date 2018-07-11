@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')    
     parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=1.0)
     parser.add_argument('--B', help='magnetic field (0.5)',type=float,default=0.5)
-    parser.add_argument('--dt',help='time step for imaginary time evolution (0.05)',type=float,default=0.1)
+    parser.add_argument('--dt',help='time step for imaginary time evolution (0.05)',type=float,default=0.005)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-10)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-10)
     parser.add_argument('--epsilon', help='desired convergence of the state (1E-5)',type=float,default=1E-6)
