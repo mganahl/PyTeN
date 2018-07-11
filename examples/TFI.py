@@ -22,9 +22,9 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
-    parser.add_argument('--D', help='MPS bond dimension (32)',type=int,default=32)
-    parser.add_argument('--Jz', help='Sz-Sz intercation (1.0)',type=float,default=1.0)
-    parser.add_argument('--B', help='magnetic field (0.0)',type=float,default=0.0)
+    parser.add_argument('--D', help='MPS bond dimension (8)',type=int,default=8)
+    parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=1.0)
+    parser.add_argument('--B', help='magnetic field (0.5)',type=float,default=0.5)
     parser.add_argument('--rescalingfactor',help='hyperparamter: rescaling factor by which time step is rescaled if norm increase is detected (2.0)',type=float,default=2.0)
     parser.add_argument('--normtolerance',help='hyperparamter: tolerance of relative normincrease (0.1)',type=float,default=0.1)
     parser.add_argument('--alpha',help='gradient stepsize (0.05)',type=float,default=0.1)
@@ -62,10 +62,9 @@ if __name__ == "__main__":
     args=parser.parse_args()
     d=2
     N=1
-    Jz=args.Jz*np.ones(N)
-    Jxy=np.ones(N)
+    Jx=args.Jx*np.ones(N)
     B=args.B*np.ones(N)
-    mpo=H.XXZ(Jz,Jxy,B,False)[0]
+    mpo=H.TFI(Jx,B,False)[0]
     print (mpo.shape)
 
     #mps=(np.random.rand(args.D,args.D,2)-0.5+1j*(np.random.rand(args.D,args.D,2)-0.5))*0.5
@@ -79,7 +78,7 @@ if __name__ == "__main__":
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
     
         
-    filename=args.filename+'D{0}_Jz{1}_B{2}'.format(args.D,args.Jz,args.B)
+    filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.B)
     [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
     iMPS=en.HomogeneousIMPSengine(args.imax,mps,mpo,args.filename,args.alpha,args.alphas,args.normgrads,dtype,args.rescalingfactor,\
                                   args.nreset,args.normtolerance,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,\

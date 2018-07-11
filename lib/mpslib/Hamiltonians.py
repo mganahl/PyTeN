@@ -95,8 +95,8 @@ class TFI(MPO):
 
             
             #Sx
-            temp[0,1,0,1]=self._Jx[0]/2.0
-            temp[0,1,1,0]=self._Jx[0]/2.0
+            temp[0,1,0,1]=self._Jx[0]
+            temp[0,1,1,0]=self._Jx[0]
             #11
             temp[0,2,0,0]=1.0
             temp[0,2,1,1]=1.0
@@ -113,11 +113,11 @@ class TFI(MPO):
                 temp[2,0,0,0]=-0.5*self._Bz[n]
                 temp[2,0,1,1]= 0.5*self._Bz[n]
                 #Sx
-                temp[2,1,0,1]=self._Jx[n]/2.0
-                temp[2,1,1,0]=self._Jx[n]/2.0
+                temp[2,1,0,1]=self._Jx[n]
+                temp[2,1,1,0]=self._Jx[n]
                 #11
-                temp[3,3,0,0]=1.0
-                temp[3,3,1,1]=1.0
+                temp[2,2,0,0]=1.0
+                temp[2,2,1,1]=1.0
         
                 self._mpo.append(np.copy(temp))
         
@@ -134,38 +134,29 @@ class TFI(MPO):
             
             self._mpo.append(np.copy(temp))
             #return mpo
+            
         if obc==False:
-            assert(len(Jz)==len(Jxy))
-            assert(len(Bz)==len(Jz))
+            assert(len(Bz)==len(Jx))
             self._mpo=[]
             for n in range(0,self._N):
-                temp=np.zeros((5,5,2,2),self.dtype)
+                temp=np.zeros((3,3,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
-                #Sp
-                temp[1,0,1,0]=1.0
-                #Sm
-                temp[2,0,0,1]=1.0
-                #Sz
-                temp[3,0,0,0]=-0.5
-                temp[3,0,1,1]=0.5
+                #Sx
+                temp[1,0,1,0]=0.5
+                temp[1,0,0,1]=0.5                
                 #BSz
-                temp[4,0,0,0]=-0.5*Bz[n]
-                temp[4,0,1,1]= 0.5*Bz[n]
-            
-                #Sm
-                temp[4,1,0,1]=Jxy[n]/2.0*1.0
-                #Sp
-                temp[4,2,1,0]=Jxy[n]/2.0*1.0
-                #Sz
-                temp[4,3,0,0]=Jz[n]*(-0.5)
-                temp[4,3,1,1]=Jz[n]*0.5
+                temp[2,0,0,0]=-0.5*self._Bz[n]
+                temp[2,0,1,1]= 0.5*self._Bz[n]
+                #Sx
+                temp[2,1,0,1]=self._Jx[n]
+                temp[2,1,1,0]=self._Jx[n]
                 #11
-                temp[4,4,0,0]=1.0
-                temp[4,4,1,1]=1.0
-        
+                temp[2,2,0,0]=1.0
+                temp[2,2,1,1]=1.0
                 self._mpo.append(np.copy(temp))
+
         
 class XXZ(MPO):
     """
