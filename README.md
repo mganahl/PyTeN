@@ -24,6 +24,7 @@ Dependencies:
 
 * scipy and numpy installation
 * ncon (https://github.com/mhauru/ncon) (ships with this repository)
+* matplotlib
 
 ## Getting Started
 Clone the repository and cd to the examples folder:
