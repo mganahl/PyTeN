@@ -15,7 +15,6 @@ except KeyError:
 
 import lib.ncon as ncon
 import scipy as sp
-import matplotlib.pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
 import functools as fct
@@ -1350,17 +1349,26 @@ def gradient(L,mpo,R,mps0):
     return mv(mps0)
 
 
-def TransferOperator(direction,A,vector):
+def TransferOperator(direction,mps,vector):
     """
-    computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
-    A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
-    B is always the upper matrix, A is always the lower one
-    direction > 0 does a left-side product; direction < 0 does a right side product;
-    vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
-    returns a vector 
+    computes the transfer matrix vector product 
+    mps: ndarray of MPS object of shape(D1,D2,d)
+    direction: int, direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
+             the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
+             
+    returns: a vector obtained from the contracting the input vector with the transfer operator
     """
-    
-    [D1,D2,d]= A.shape
+    if isinstance(mps,np.ndarray):
+        A=mps
+        [D1,D2,d]= A.shape
+    elif isinstance(mps,MPSL.MPS):
+        if len(A)>1:
+            raise ValueError("in TransferOperator: got an MPS object of len(MPS)>1; can only handle single-site objects")
+        A=mps[0]
+        [D1,D2,d]= A.shape
+    else:
+        raise TypeError("TransferOperator: got an unknown type for mps")
     if direction>0:
         x=np.reshape(vector,(D1,D1))
         return np.reshape(np.tensordot(np.tensordot(x,A,([0],[0])),np.conj(A),([0,2],[0,2])),(D2*D2))
@@ -1368,15 +1376,51 @@ def TransferOperator(direction,A,vector):
         x=np.reshape(vector,(D2,D2))
         return np.reshape(np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(A),([0,2],[1,2])),(D1*D1))
     
-def MixedTransferOperator(direction,Upper,Lower,vector):
+def MixedTransferOperator(direction,mpsA,mpsB,vector):
+
     """
-    computes the mixed transer matrix vector product vector*E_A^B or E_A^B*vector
-    A and B are mps tensors of dimension (chi1 x chi2 x d), from which the transfer matrix can computed if A=B; 
-    B is always the upper matrix, A is always the lower one
-    direction > 0 does a left-side product; direction < 0 does a right side product;
-    vector is a chi1 x chi1 (direction > 0) or chi2 x chi2 (direction < 0) matrix, given in VECTOR format!
-    returns a vector 
+    computes the mixed transfer-matrix vector product 
+    mpsA/mpsA: ndarrays or MPS objects of shape(D1,D2,d); mpsA is the unconjugated tensor and mpsB is the conjugated tensor of the transfer operator
+    direction: int, direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
+             the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
+             
+    returns: a vector obtained from the contracting the input vector with the transfer operator
     """
+    
+    if isinstance(mpsA,np.ndarray) and isinstance(mpsB,np.ndarray):
+        Upper=mpsA
+        Lower=mpsB
+        [D1A,D2A,dA]= Lower.shape
+        [D1B,D2B,dB]= Upper.shape
+        
+    elif isinstance(mpsA,MPSL.MPS) and isinstance(mpsB,MPSL.MPS):
+        if len(A)>1:
+            raise ValueError("in TransferOperator: got an MPS object mpsA of len(mpsA)>1; can only handle single-site objects")
+        if len(B)>1:
+            raise ValueError("in TransferOperator: got an MPS object mpsB of len(mpsB)>1; can only handle single-site objects")
+        Upper=mpsA[0]
+        Lower=mpsB[0]
+        [D1A,D2A,dA]= Lower.shape
+        [D1B,D2B,dB]= Upper.shape
+        
+    elif isinstance(mpsA,MPSL.MPS) and isinstance(mpsB,np.ndarray):
+        if len(A)>1:
+            raise ValueError("in TransferOperator: got an MPS object mpsA of len(mpsA)>1; can only handle single-site objects")
+        Upper=mpsA[0]
+        Lower=mpsB
+        [D1A,D2A,dA]= Lower.shape
+        [D1B,D2B,dB]= Upper.shape
+    elif isinstance(mpsB,MPSL.MPS) and isinstance(mpsA,np.ndarray):
+        if len(B)>1:
+            raise ValueError("in TransferOperator: got an MPS object mpsA of len(mpsA)>1; can only handle single-site objects")
+        Upper=mpsA
+        Lower=mpsB[0]
+        [D1A,D2A,dA]= Lower.shape
+        [D1B,D2B,dB]= Upper.shape
+        
+    else:
+        raise TypeError("TransferOperator: got an unknown type for mps")
     
     [D1A,D2A,dA]= Lower.shape
     [D1B,D2B,dB]= Upper.shape
@@ -1388,7 +1432,6 @@ def MixedTransferOperator(direction,Upper,Lower,vector):
         return np.reshape(np.tensordot(np.tensordot(x,Upper,([0],[1])),np.conj(Lower),([0,2],[1,2])),(D1A*D1B))
 
 def GeneralizedMatrixVectorProduct(direction,A,B,vector):
-    
     """    
     defines the matrix vector product to find the largest eigenvalue of the transfermatrix;
     this function will later on be turned into a functools.partial object mv(v) using partial(GeneralizedMatrixVectorProduct,[tensor,direction])
@@ -1400,15 +1443,21 @@ def GeneralizedMatrixVectorProduct(direction,A,B,vector):
 
 def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
     """
-    sparse computation of the left or right eigenvector of the transfer matrix, using the TransferOperator function to
+    TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
+    sparse computation of the dominant left or right eigenvector of the transfer matrix, using the TransferOperator function to
     to do the matrix-vector multiplication
+    tensor: an ndarray or MPS object of length 1;
+    direction: int, direction>0 gives the left eigenvector, direction<0 gives the right eigenvector
+    numeig: hyperparameter, number of eigenvectors to be calculated by argpack; note that numeig is not the 
+            number of returned eigenvectors, this number will always be one; numeig influences the arpack solver
+            due to a bug in lapack/arpack, and should usually be chosen >4 for stability reasonsl
     """
 
-    datatype=tensor.dtype
+    dtype=tensor.dtype
     #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
     [chi1,chi2,d]=np.shape(tensor)
     mv=fct.partial(TransferOperator,*[direction,tensor])
-    LOP=LinearOperator((chi1*chi1,chi2*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=datatype)
+    LOP=LinearOperator((chi1*chi1,chi2*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
 
     try:
         eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
@@ -1417,6 +1466,18 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
             print ('found TM eigenvalue eta ={0} with large imaginary part (ARPACK BUG); recalculating with a new initial state'.format(eta))
             eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which='LR',v0=np.random.rand(chi2*chi2),maxiter=nmax,tol=tolerance,ncv=ncv)
             m=np.argmax(np.real(eta))
+
+        if (dtype==float) or (dtype==np.float64) or (dtype==np.float32):
+            out=np.reshape(vec[:,m],D1l*D1l)
+            if np.linalg.norm(np.imag(out))>1E-10:
+                raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
+            return np.real(eta[m]),np.real(out),numeig
+        
+        if (dtype==complex) or (dtype==np.complex64) or (dtype==np.complex128):        
+            return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
+
+
+            
         return eta[m],np.reshape(vec[:,m],chi2*chi2),numeig
 
     except ArpackError:

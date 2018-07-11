@@ -22,20 +22,19 @@ herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
     
     plt.ion()
-    parser = argparse.ArgumentParser('HeisIMPS.py')
-    parser.add_argument('--type', help='matrix type (complex128)',type=str,default='complex128')
-    parser.add_argument('--dev', help='run __simulatetest__()',action='store_true')
-    parser.add_argument('--D', help='cMPS bond dimension (8)',type=int,default=8)
+    parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
+    parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
+    parser.add_argument('--D', help='MPS bond dimension (8)',type=int,default=32)
     parser.add_argument('--Jz', help='Sz-Sz intercation (1.0)',type=float,default=1.0)
     parser.add_argument('--B', help='magnetic field (0.0)',type=float,default=0.0)
-    parser.add_argument('--rescalingfactor',help='rescaling factor by which time step is rescaled if norm increase is detected (2.0)',type=float,default=2.0)
-    parser.add_argument('--normtolerance',help='tolerance of relative normincrease (0.1)',type=float,default=0.1)
-    parser.add_argument('--alpha',help='time step for imaginary time evolution (0.05)',type=float,default=0.1)
+    parser.add_argument('--rescalingfactor',help='hyperparamter: rescaling factor by which time step is rescaled if norm increase is detected (2.0)',type=float,default=2.0)
+    parser.add_argument('--normtolerance',help='hyperparamter: tolerance of relative normincrease (0.1)',type=float,default=0.1)
+    parser.add_argument('--alpha',help='gradient stepsize (0.05)',type=float,default=0.1)
     parser.add_argument('--alphas', nargs='+',help='list of time steps for imaginary time evolution',type=float)
     parser.add_argument('--normgrads', nargs='+',help='list of length N=len(dts) (see above); if norm(xdot)<nxdots[i], use dts[i] for imaginary time evolution',type=float)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-6)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-6)
-    parser.add_argument('--epsilon', help='desired convergence of the state (1E-5)',type=float,default=1E-6)
+    parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-5)',type=float,default=1E-6)
     parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
     parser.add_argument('--nreset', help='number of steps at each level of the adaptive dt refinement (10)',type=int,default=10)
@@ -72,14 +71,14 @@ if __name__ == "__main__":
     print (mpo.shape)
 
     #mps=(np.random.rand(args.D,args.D,2)-0.5+1j*(np.random.rand(args.D,args.D,2)-0.5))*0.5
-    if args.type=='complex128':
+    if args.dtype=='complex':
         tensor=(np.random.rand(args.D,args.D,d)-0.5)*0.9+1j*(np.random.rand(args.D,args.D,d)-0.5)*0.9
         dtype=complex
-    elif args.type=='float64':
+    elif args.dtype=='float':
         tensor=(np.random.rand(args.D,args.D,d)-0.5)*0.9
         dtype=float        
     else:
-        sys.exit('unknown type args.type={0}'.format(args.type))
+        sys.exit('unknown type args.dtype={0}'.format(args.dtype))
     
         
     filename=args.filename+'D{0}_Jz{1}_B{2}'.format(args.D,args.Jz,args.B)
@@ -88,9 +87,6 @@ if __name__ == "__main__":
                                   args.nreset,args.normtolerance,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,\
                                   args.Nmaxlgmres)
 
-    if not args.dev:
-        iMPS.__simulate__()
-    elif args.dev:
-        iMPS.__simulatetest__(Nmax=args.imax,Econv=1E-10,arnolditol=1E-10,arnoldinumvecs=1,arnoldincv=100)
+    iMPS.__simulate__()
     np.save(args.filename,iMPS._mps)
     print()

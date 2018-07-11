@@ -9,7 +9,6 @@ import os,copy
 import time
 import operator as opr
 import scipy as sp
-import matplotlib.pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
 import functools as fct

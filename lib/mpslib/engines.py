@@ -7,7 +7,6 @@ import numpy as np
 import os,copy
 import time
 import scipy as sp
-import matplotlib.pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
 import functools as fct
@@ -486,7 +485,7 @@ class HomogeneousIMPSengine:
     Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
     """
 
-    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
+    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
         self._Nmax=Nmax
         self._mps=np.copy(mps)
         self._D=np.shape(mps)[0]
