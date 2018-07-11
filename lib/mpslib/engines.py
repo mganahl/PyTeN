@@ -109,7 +109,6 @@ class DMRGengine:
                 self._mps[n]=tensor
                 self._mps._mat=r
                 self._mps._position=n+1
-
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
                 
             for n in range(self._mps._N-1,0,-1):

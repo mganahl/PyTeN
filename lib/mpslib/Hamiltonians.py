@@ -90,8 +90,8 @@ class TFI(MPO):
             self._mpo=[]
             temp=np.zeros((1,3,2,2),self.dtype)
             #BSz
-            temp[0,0,0,0]=-0.5*self._Bz[0]
-            temp[0,0,1,1]= 0.5*self._Bz[0]
+            temp[0,0,0,0]=-self._Bz[0]
+            temp[0,0,1,1]= self._Bz[0]
 
             
             #Sx
@@ -107,11 +107,11 @@ class TFI(MPO):
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
                 #Sx
-                temp[1,0,1,0]=0.5
-                temp[1,0,0,1]=0.5                
+                temp[1,0,1,0]=1.0
+                temp[1,0,0,1]=1.0
                 #BSz
-                temp[2,0,0,0]=-0.5*self._Bz[n]
-                temp[2,0,1,1]= 0.5*self._Bz[n]
+                temp[2,0,0,0]=-self._Bz[n]
+                temp[2,0,1,1]= self._Bz[n]
                 #Sx
                 temp[2,1,0,1]=self._Jx[n]
                 temp[2,1,1,0]=self._Jx[n]
@@ -126,15 +126,14 @@ class TFI(MPO):
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
             #Sx
-            temp[1,0,1,0]=0.5
-            temp[1,0,0,1]=0.5           
+            temp[1,0,1,0]=1.0
+            temp[1,0,0,1]=1.0
             #BSz
-            temp[2,0,0,0]=-0.5*Bz[-1]
-            temp[2,0,1,1]= 0.5*Bz[-1]
+            temp[2,0,0,0]=-Bz[-1]
+            temp[2,0,1,1]= Bz[-1]
             
             self._mpo.append(np.copy(temp))
-            #return mpo
-            
+                    
         if obc==False:
             assert(len(Bz)==len(Jx))
             self._mpo=[]
@@ -144,11 +143,11 @@ class TFI(MPO):
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
                 #Sx
-                temp[1,0,1,0]=0.5
-                temp[1,0,0,1]=0.5                
+                temp[1,0,1,0]=1
+                temp[1,0,0,1]=1
                 #BSz
-                temp[2,0,0,0]=-0.5*self._Bz[n]
-                temp[2,0,1,1]= 0.5*self._Bz[n]
+                temp[2,0,0,0]=-self._Bz[n]
+                temp[2,0,1,1]= self._Bz[n]
                 #Sx
                 temp[2,1,0,1]=self._Jx[n]
                 temp[2,1,1,0]=self._Jx[n]

@@ -33,12 +33,11 @@ if __name__ == "__main__":
     args=parser.parse_args()
     #run in left mps gauge and left mps-tangent gauge
     
-    N=1
+    N=2
     d=2
     Jx=args.Jx*np.ones(N)
     B=args.B*np.ones(N)
     mpo=Hams.TFI(Jx,B,obc=True)
-
     
     if args.dtype=='complex':
         tensor=(np.random.rand(args.D,args.D,d)-0.5)*0.9+1j*(np.random.rand(args.D,args.D,d)-0.5)*0.9
