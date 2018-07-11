@@ -1439,7 +1439,7 @@ def GeneralizedMatrixVectorProduct(direction,A,B,vector):
     """
 
     warnings.warn('GeneralizedMatrixVectorProduct(direction,A,B,vector) is deprecated; used MixedTransferOperator instead')
-    return MixedTransferOperator(direction=direction,Upper=B,Lower=A,vector=vector)
+    return MixedTransferOperator(direction=direction,mpsA=B,mpsB=A,vector=vector)
 
 def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
     """
