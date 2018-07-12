@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument('--Bz', help='magnetic field (0.5)',type=float,default=0.5)
     parser.add_argument('--rescalingfactor',help='hyperparamter: rescaling factor by which time step is rescaled if norm increase is detected (2.0)',type=float,default=2.0)
     parser.add_argument('--normtolerance',help='hyperparamter: tolerance of relative normincrease (0.1)',type=float,default=0.1)
-    parser.add_argument('--alpha',help='gradient stepsize (0.05)',type=float,default=0.0.005)
+    parser.add_argument('--alpha',help='gradient stepsize (0.05)',type=float,default=0.005)
     parser.add_argument('--alphas', nargs='+',help='list of time steps for imaginary time evolution',type=float)
     parser.add_argument('--normgrads', nargs='+',help='list of length N=len(dts) (see above); if norm(xdot)<nxdots[i], use dts[i] for imaginary time evolution',type=float)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-6)

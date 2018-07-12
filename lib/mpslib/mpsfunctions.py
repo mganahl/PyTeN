@@ -1490,6 +1490,9 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
 
 #takes a vector, returns a vector
 def UnitcellTransferOperator(direction,mps,vector):
+    """
+    
+    """
     [D1l,D2l,dl]= np.shape(mps[0])
     [D1r,D2r,dr]= np.shape(mps[-1])
     x=np.copy(vector)
@@ -2183,12 +2186,28 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
     else:
         sys.exit('CanonizeMPS: mps has non-consistent boundary-bond-dimensions')
 
-#takes an mps tensor 'tensor' and fixes its gauge; 'gauge' can be 'left','right' or 'symetric';
-#returns a mps matrix and a matrix: [out,lam]; for gauge = 'left' or 'right', out is either left or right orthonormal and lam is the identity; 
-#for gauge='symetric', out is the "gamma" matrix and lam contains the schmidt values
-#this routine works solely for infinite MPS
 
 def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-14,thresh=1E-8,trunc=1E-16,Dmax=100):
+    """
+    regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-14,thresh=1E-8,trunc=1E-16,Dmax=100):
+    bring an mps tensor "tensor" (ndarray of shape (D,D,d) into gauge "gauge" (string)
+    this routine works solely for infinite MPS
+    
+    tensor: ndarray of shape (D,D,d), the mps tensor
+    gauge: python str: can be {'left', 'right', 'symmetric'}; the desired gauge
+    initial: initial guess for dominant eigenvector of the mps transfer operators
+    nmaxit, tol, ncv: max number of iterations, precision, number of krylov vectors; parameters for the sparse arnoldi eigensolver (see scipy.eig routine):
+    numeig: the nuymber of eigenvectors to be calculated by arpack; hyperparameter, use numeig>4 if you want a stable algorithm
+    pinv: pseudo-inverse threshold
+    thresh: output threshold parameter (has no effect on the return values and can be ignored)
+    trunc: truncation threshold, if trunc<1E-15, no truncation is done
+    Dmax:  the maximum bond dimension to be retained if trunc > 1E-15
+
+    returns:  for gauge='left' or 'right': [out,lam]; out is either left or right orthonormal and lam is the left or right dominant eigenvector of the transfer operators; 
+              for gauge='symetric': Gamma,lam,rest: Gamma, lam: the canonical form of the mps, rest: the truncated weight 
+
+    """
+    
     dtype=tensor.dtype
 
     if gauge=='left':
@@ -2216,7 +2235,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         eigvals=eigvals/np.sum(eigvals)
         eigvals[np.nonzero(eigvals<pinv)]=0.0
         eigvals=eigvals/np.sum(eigvals)
-
         l=u.dot(np.diag(eigvals)).dot(herm(u))
 
         inveigvals=np.zeros(len(eigvals))
@@ -2400,6 +2418,17 @@ def OneMinusPseudoTransferOperator(Upper,Lower,r,l,direction,momentum,vector):
 
 #takes a vector
 def pseudoTransferOperator(A,r,l,direction,vector):
+    """
+    pseudoTransferOperator(A,r,l,direction,vector):
+    evolves "vector" with the pseudo transfer operator E-|r)(l|, where  E is the MPS transfer operator
+    A: ndarray of shape (D,D,d), mps tensor
+    r,l: left and right dominant eigenvectors of the mps transfer operator E
+    direction: int; if > 0, calculate (v|E -(v|r)(l|
+                    if < 0, calculate E|v) -|r)(l|v)
+    vector ndarray of shape (D**2): matrix reshape into vector form, the vector to be acted upon
+
+    returns: ndarray of shape (D**2)
+    """
     D=np.shape(A)[0]
     if direction>0:
         x=np.reshape(vector,(D,D))
@@ -2411,11 +2440,46 @@ def pseudoTransferOperator(A,r,l,direction,vector):
 
 #this routine is deprecated; use RENORMBLOCKHAMGMRES instead
 def TDVPGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance=1e-10,maxiteration=2000,direction=1,momentum=0.0):
+    """
+    deprecated, see RENORMBLOCKHAMGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance=1e-10,maxiteration=200,direction=1,momentum=0.0):
+
+    TDVPGMRES calculates the renormalized left and right Hamiltonian environment for a translational invariant infinite system with a nearest neighbor 
+    hamiltonian
+
+    tensorU/tensorL: upper and lower mps tensors; upper refers to the non-conjugated leg, lower to the conjugated one;
+                     the tensors do not have be conjugated, this is done inside the routine
+    r,l            : right and left reduced steady state density matrices of the mps
+    inhom          : the unit-cell energy-operators (l|H_{AAAA} (direcion>0) or H_{BBBB}|r) (doirection<0), where A and B 
+                     are left and right orthogonal (see paper by Jutho Haegeman)
+    x0=None        : initial guess for the inversion
+    tolerance=1E-10: accuracy of the lgmres solver
+    maxiteration=200: maximum number oif iterations of lgmres
+    direction=1     : int, if > 0, get the left environment, if <0 get the right environment
+    momentum=0      : float, momentum quantum number; used for calculating excitations
+    """
+    
     warnings.warn('mpsfunctions.TDVPGMRES is deprecated; use mpsfunctions.RENORMBLOCKHAMGMRES instead')
     return RENORMBLOCKHAMGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance,maxiteration,direction)
 
 #calculates the reduced block hamiltonian for left or right side (depending on dir)
 def RENORMBLOCKHAMGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance=1e-10,maxiteration=200,direction=1,momentum=0.0):
+    """
+    RENORMBLOCKHAMGMRES(tensorU,tensorL,r,l,inhom,x0,tolerance=1e-10,maxiteration=200,direction=1,momentum=0.0)
+    calculates the renormalized left and right Hamiltonian environment for a translational invariant infinite system with a nearest neighbor 
+    hamiltonian
+
+    tensorU/tensorL: upper and lower mps tensors; upper refers to the non-conjugated leg, lower to the conjugated one;
+                     the tensors do not have be conjugated, this is done inside the routine
+    r,l            : right and left reduced steady state density matrices of the mps
+    inhom          : the unit-cell energy-operators (l|H_{AAAA} (direcion>0) or H_{BBBB}|r) (doirection<0), where A and B 
+                     are left and right orthogonal (see paper by Jutho Haegeman)
+    x0=None        : initial guess for the inversion
+    tolerance=1E-10: accuracy of the lgmres solver
+    maxiteration=200: maximum number oif iterations of lgmres
+    direction=1     : int, if > 0, get the left environment, if <0 get the right environment
+    momentum=0      : float, momentum quantum number; used for calculating excitations
+    """
+    
     x0=None
     dtype=tensorU.dtype
     if np.any(x0==None):
@@ -2541,10 +2605,14 @@ def ExHAproductSingle(l,L,LAA,LAAAA,LAAAA_OneMinusEAAinv,mpsA,mpsAtilde,VL,invsq
 #tdvp upate, works only for nearest neighbors
 def TDVPupdate(r,tensor,mpo,kold=None,tol=1E-10):
     """
-    l,r (np.ndarray): left and right reduced density matrices a translational invariant mps given by "tensor"
-    tensor (np.ndarray): mps tensor, has to be left-orthogonal!
-    mpo (list or array of np.ndarray): an MPO for a nearest neighbor Hamiltonian, e.g. mpo=Hamiltonians.XXZ(Jz,Jxy,B,obc=True) (see Hamiltonians.py)
-    should have obc
+    TDVPupdate(r,tensor,mpo,kold=None,tol=1E-10):
+    calculates the TDVP update for real and imaginary time evolution for a translational invariant infinite system.
+    
+
+    r (np.ndarray): right reduced density matrices a translational invariant mps given by "tensor"
+    tensor (np.ndarray of shape(D,D,d)): mps tensor, has to be left-orthogonal!
+    mpo (list or array of np.ndarray of shape (M,M,d,d)): an MPO for a nearest neighbor Hamiltonian, e.g. mpo=Hamiltonians.XXZ(Jz,Jxy,B,obc=True) (see Hamiltonians.py)
+                                                          should have obc; it can have any length, the routine will only take the mpo-tensor at position 0
     
     """
 
