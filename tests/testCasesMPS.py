@@ -456,6 +456,34 @@ class MPSArithmeticTests(unittest.TestCase):
         random.shuffle(self.d)
         self.eps=1E-10
 
+
+    def testiAdd(self):
+        for it in range(100):
+
+            self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps1[-1]*=self.mps1._mat#mps1._mat could contain a minus sign
+            self.mps2[-1]*=self.mps2._mat#mps2._mat could contain a minus sign
+            self.mps1._mat=np.ones((1,1))
+            self.mps2._mat=np.ones((1,1))            
+            a1=np.random.rand(1)[0]
+            a2=np.random.rand(1)[0]
+            mps=self.mps1*a1
+            mps+=(self.mps2*a2)
+            sz=[np.diag([1,-1]) for n in range(self.N)]
+            ov12=self.mps1.__dot__(self.mps2)
+            ov21=np.conj(ov12)
+            ob11=(np.asarray(self.mps1.__measureList__(sz)))
+            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.__measureList__(sz)))
+            ob33=(np.asarray(mps.__measureList__(sz)))
+            ov33=mps.__dot__(mps)
+            Z=a1**2+a2**2+ov12*a1*a2+ov21*a1*a2
+            M=ob11*a1**2+ob22*a2**2+ob21*a2*a1+ob12*a1*a2
+            self.assertTrue(np.linalg.norm(ob33/mps._Z**2-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)            
+        
     def testAdd(self):
         for it in range(100):
 
@@ -505,7 +533,34 @@ class MPSArithmeticTests(unittest.TestCase):
             Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
             self.assertTrue(np.linalg.norm(ob33/mps._Z**2-M/Z)<1E-10)
+            self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)
+            
+    def testISub(self):
+        for it in range(100):
+            self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps2=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
+            self.mps1[-1]*=self.mps1._mat
+            self.mps2[-1]*=self.mps2._mat            
+            self.mps1._mat=np.ones((1,1))
+            self.mps2._mat=np.ones((1,1))            
+            a1=np.random.rand(1)[0]
+            a2=np.random.rand(1)[0]
+            mps=self.mps1*a1
+            mps-=(self.mps2*a2)
+            sz=[np.diag([1,-1]) for n in range(self.N)]
+            ov12=self.mps1.__dot__(self.mps2)
+            ov21=np.conj(ov12)
+            ob11=(np.asarray(self.mps1.__measureList__(sz)))
+            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.__measureList__(sz)))
+            ob33=(np.asarray(mps.__measureList__(sz)))
+            ov33=mps.__dot__(mps)
+            Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
+            M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
+            self.assertTrue(np.linalg.norm(ob33/mps._Z**2-M/Z)<1E-10)
             self.assertTrue(np.linalg.norm(ob33/ov33-M/Z)<1E-10)            
+            
             
     def testSub2(self):
         self.mps1=mpslib.MPS.random(self.N,self.D,self.d,obc=True,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16,scaling=0.5,shift=0.2)
@@ -754,6 +809,18 @@ class CanonizeTests(unittest.TestCase):
             B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
             self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
             
+    def testCanonizePBCMPSComplexMPS(self):
+        #create a random MPS
+        self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=complex)
+        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        Gamma,Lambda=mf.canonizeMPS(self.mps)
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+            
     def testCanonizePBCMPSFloatList(self):
         #create a random MPS
         self.mps=mf.MPSinit(self.N,self.D,self.d,obc=False,scale=0.4,dtype=float)
@@ -765,6 +832,103 @@ class CanonizeTests(unittest.TestCase):
             B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
             self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
 
+
+    def testCanonizePBCMPSComplexList(self):
+        #create a random MPS
+        self.mps=mf.MPSinit(self.N,self.D,self.d,obc=False,scale=0.4,dtype=complex)
+        Gamma,Lambda=mf.canonizeMPS(self.mps)
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+
+
+
+class CanonizeTestsMPS(unittest.TestCase):
+    def setUp(self):
+        self.D=20
+        self.N=20
+        self.eps=1E-12
+        N1=random.randint(1,(self.N-(self.N%2))/2)
+        self.d=[random.randint(2,4)]*N1+[random.randint(2,4)]*(self.N-N1)
+        random.shuffle(self.d)
+
+    def testCanonizeOBCMPSFloat(self):
+        #create a random MPS
+    
+        self.mps=mpslib.MPS.random(self.N,D=10,d=2,obc=True,scaling=0.1,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
+        self.mps.canonize()
+        Gamma=self.mps._gamma
+        Lambda=self.mps._lambda
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+    
+    def testCanonizeOBCMPSComplex(self):
+        #create a random MPS
+        self.mps=mpslib.MPS.random(self.N,D=10,d=2,obc=True,scaling=0.1,dtype=complex,schmidt_thresh=1E-16,r_thresh=1E-16)
+        self.mps.canonize()
+        Gamma=self.mps._gamma
+        Lambda=self.mps._lambda
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+
+    def testCanonizePBCMPSFloatMPS(self):
+        #create a random MPS
+        self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=float)
+        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.canonize()
+        Gamma=self.mps._gamma
+        Lambda=self.mps._lambda
+        
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+            
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+
+    def testCanonizePBCMPSComplexMPS(self):
+        #create a random MPS
+        self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=complex)
+        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.canonize()
+        Gamma=self.mps._gamma
+        Lambda=self.mps._lambda
+        
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+            
+        for n in range(len(Gamma)):
+            A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
+            self.assertTrue(np.linalg.norm(np.tensordot(A,np.conj(A),([0,2],[0,2]))-np.eye(A.shape[1]))<self.eps)
+        for n in range(len(Gamma)):
+            B=np.transpose(np.tensordot(Gamma[n],np.diag(Lambda[n+1]),([1],[0])),(0,2,1))
+            self.assertTrue(np.linalg.norm(np.tensordot(B,np.conj(B),([1,2],[1,2]))-np.eye(B.shape[0]))<self.eps)
+
+
+
+
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTMeigs)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestRegauge)
@@ -773,12 +937,14 @@ if __name__ == "__main__":
     suite5 = unittest.TestLoader().loadTestsFromTestCase(UCMPSTruncationTests)
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
     suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)
-    suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
-    #unittest.TextTestRunner(verbosity=2).run(suite2)
-    #unittest.TextTestRunner(verbosity=2).run(suite3)
-    #unittest.TextTestRunner(verbosity=2).run(suite4)
-    #unittest.TextTestRunner(verbosity=2).run(suite5)
-    #unittest.TextTestRunner(verbosity=2).run(suite6)
-    #unittest.TextTestRunner(verbosity=2).run(suite7)
-    unittest.TextTestRunner(verbosity=2).run(suite8) 
+    suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)
+    suite9 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTestsMPS)    
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite2)
+    unittest.TextTestRunner(verbosity=2).run(suite3)
+    unittest.TextTestRunner(verbosity=2).run(suite4)
+    unittest.TextTestRunner(verbosity=2).run(suite5)
+    unittest.TextTestRunner(verbosity=2).run(suite6)
+    unittest.TextTestRunner(verbosity=2).run(suite7)
+    unittest.TextTestRunner(verbosity=2).run(suite8)
+    unittest.TextTestRunner(verbosity=2).run(suite9) 

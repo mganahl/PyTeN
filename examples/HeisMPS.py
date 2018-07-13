@@ -54,9 +54,7 @@ if __name__ == "__main__":
     Sz=[np.diag([0.5,-0.5]) for n in range(N)]
     
     #measure the local spin-density
-    for n in range(N):
-        meanSz=dmrg._mps.__measureList__(Sz)
-
+    meanSz=dmrg._mps.__measureList__(Sz)
 
     #measure the Sz-Sz correlations
     meanSzSz=[]        
@@ -71,11 +69,8 @@ if __name__ == "__main__":
     #check if bond dimension has indeed been truncated
     print()
     print (dmrg._mps.__D__())
-
-
     #measure again ,now with truncated state
-    for n in range(N):
-        meanSztrunc=dmrg._mps.__measureList__(Sz)
+    meanSztrunc=dmrg._mps.__measureList__(Sz)
 
     meanSzSztrunc=[]        
     for n in range(N):

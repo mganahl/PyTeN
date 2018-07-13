@@ -36,6 +36,7 @@ def overlap(mps1,mps2):
     overlap(mps1,mps2)
     calculates the overlap between two mps 
     mps1, mps2; list of mps tensors, or two MPS-objects
+    returns complex: the overlap; note that mps1._Z*np.conj(mps2._Z) is included in the result!
     """
     if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):
         pos1=mps1._position
@@ -662,7 +663,7 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
             
-
+        Z=np.linalg.norm(s)            
         if thresh>1E-16:
             s=s[s>thresh]
 
@@ -678,8 +679,7 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
             v=v[0:len(s),:]
             s=s[0:len(s)]
 
-        Z=np.linalg.norm(s)            
-        s/=Z
+        s/=np.linalg.norm(s)            
         [size1,size2]=u.shape
         out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
         return out,s,v,Z
@@ -693,6 +693,7 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
             u_,s,v=np.linalg.svd(r)
             u=q.dot(u_)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir<0')
+        Z=np.linalg.norm(s)                        
         if thresh>1E-16:
             s=s[s>thresh]
 
@@ -708,8 +709,8 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
             v=v[0:len(s),:]
             s=s[0:len(s)]
 
-        Z=np.linalg.norm(s)            
-        s/=Z
+
+        s/=np.linalg.norm(s)            
         [size1,size2]=v.shape
         out=np.reshape(v,(size1,l2,d))
     return u,s,out,Z

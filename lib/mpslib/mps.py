@@ -3,7 +3,7 @@
 """
 from __future__ import absolute_import, division, print_function
 from sys import stdout
-import sys
+import sys,pickle
 import numpy as np
 import os,copy
 import time
@@ -215,10 +215,11 @@ class MPS:
         r_thresh: internal parameter (ignore it)
         """
         tensors=mf.MPSinitializer(np.zeros,len(localstate),D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
-        for n in range(tensors):
+        for n in range(len(tensors)):
             tensors[n][0,0,localstate[n]]=1.0
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
+        mps._Z=1.0
         return mps
     
     def copy(self):
@@ -309,6 +310,7 @@ class MPS:
     __pos__ = generate_unary_deferer(opr.pos)
     __abs__ = generate_unary_deferer(abs)
     __invert__ = generate_unary_deferer(opr.invert)
+    
     def __mul__(self,num):
         """
         left-multiplies "num" with MPS, i.e. returns MPS*num;
@@ -322,6 +324,29 @@ class MPS:
         cpy._dtype=np.result_type(type(num),self._dtype)
         return cpy
 
+    def __imul__(self,num):
+        """
+        left-multiplies "num" with MPS, i.e. returns MPS*num;
+        note that "num" is not really multiplied into the mps matrices, but
+        instead multiplied into the internal field _Z which stores the norm of the state
+        """
+        if not np.isscalar(num):
+            raise TypeError("in MPS.__mul__(self,num): num is not a number")
+        self._Z*=num
+        return self
+    
+
+    def __idiv__(self,num):
+        """
+        left-multiplies "num" with MPS, i.e. returns MPS*num;
+        note that "num" is not really multiplied into the mps matrices, but
+        instead multiplied into the internal field _Z which stores the norm of the state
+        """
+        if not np.isscalar(num):
+            raise TypeError("in MPS.__mul__(self,num): num is not a number")
+        self._Z/=num
+        return self
+    
     def __truediv__(self,num):
         """
         left-divides "num" with MPS, i.e. returns MPS/num;
@@ -363,6 +388,15 @@ class MPS:
         out=MPS(tensors=tens,schmidt_thresh=1E-16,r_thresh=1E-16) #out is an unnormalized MPS
         out._Z=1.0 #MPS.__init__ sets self._Z to -1e10, so we have to reset it here to 1
         return out
+
+    def __iadd__(self,other):
+        """
+        adds self with other;
+        leaves self unnormalized
+        """
+        self._tensors=mf.addMPS(self.tolist(),self._Z,other.tolist(),other._Z)
+        self._Z=1.0 
+        return self
     
     def __sub__(self,other):
         """
@@ -446,7 +480,7 @@ class MPS:
         return S
 
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
-        self.__position__(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14)
+        self.__position__(bond,schmidt_thresh=schmidt_thresh,D=D,r_thresh=r_thresh)        
         
     def __position__(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
@@ -675,7 +709,7 @@ class MPS:
 
 
     def truncate(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
-        self.__truncate__(schmidt_thresh,D,returned_gauge,nmaxit,tol,ncv,pinv,mr_thresh)
+        self.__truncate__(schmidt_thresh,D,returned_gauge,nmaxit,tol,ncv,pinv,r_thresh)
         
     def __truncate__(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
         """ 
@@ -746,8 +780,9 @@ class MPS:
         len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just [1.0]
         funtions has no return argument
         """
-        self.mps.__regauge__(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv)
-        self._gamma,self._lambda=mf.canonizeMPS(self.mps)
+        if self._obc==False:
+            self.__regauge__(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv)
+        self._gamma,self._lambda=mf.canonizeMPS(self)
         
 
     def regauge(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
@@ -940,3 +975,40 @@ class MPS:
         through the system
         """
         self._Z=1.0
+    def save(self,filename):
+
+        """
+        MPS.save(filename):
+        pickles the MPS object to a file "filename".pickle
+        
+        
+        """
+        with open(filename+'.pickle', 'wb') as f:
+            pickle.dump(self,f)
+
+    def load(self,filename):
+        """
+        MPS.load(filename):
+        unpickles an MPS object from a file "filename".pickle
+        and stores the result in self
+        """
+        
+        with open(filename+'.pickle', 'rb') as f:
+            mps=pickle.load(f)
+        self._N=mps._N
+        self._D=mps._N
+        self._obc=mps._obc
+        self._dtype=mps._dtype
+        self._schmidt_thresh=mps._schmidt_thresh
+        self._r_thresh=mps._r_thresh
+        self._tensors=mps._tensors
+        self._d=mps._d
+        self._mat=mps._mat
+        self._connector=mps._connector
+        self._position=mps._position
+        self._Z=mps._Z
+        self._gamma=mps._gamma
+        self._lambda=mps._lambda
+        
+        
+
