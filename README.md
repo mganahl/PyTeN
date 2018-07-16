@@ -15,8 +15,10 @@ ground-states and do real time evolution of 1d quantum systems.
 
 ## infinite systems
 
-* ground states for translationally invariant systems using gradient optimization
+* ground states for translational invariant systems using gradient optimization (https://arxiv.org/abs/1801.02219)
+* ground states for translational invariant systems using VUMPS (https://arxiv.org/pdf/1701.07035.pdf)
 * ground states for systems with finite unit-cells using IDMRG
+
 
 the examples folder contains examples of how to use it
 
