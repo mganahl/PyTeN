@@ -26,20 +26,23 @@ if __name__ == "__main__":
     parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=1.0)
     parser.add_argument('--Bz', help='magnetic field (0.5)',type=float,default=0.5)
     parser.add_argument('--rescalingfactor',help='hyperparamter: rescaling factor by which time step is rescaled if norm increase is detected (2.0)',type=float,default=2.0)
-    parser.add_argument('--normtolerance',help='hyperparamter: tolerance of relative normincrease (0.1)',type=float,default=0.1)
-    parser.add_argument('--alpha',help='gradient stepsize (0.05)',type=float,default=0.005)
+    parser.add_argument('--scaling',help='scaling of the initial MPS entries (0.5)',type=float,default=0.5)    
+    parser.add_argument('--normtolerance',help='hyperparamter: tolerance of relative normincrease (0.5)',type=float,default=0.5)
+    parser.add_argument('--alpha',help='gradient stepsize (0.001)',type=float,default=0.001)
     parser.add_argument('--alphas', nargs='+',help='list of time steps for imaginary time evolution',type=float)
     parser.add_argument('--normgrads', nargs='+',help='list of length N=len(dts) (see above); if norm(xdot)<nxdots[i], use dts[i] for imaginary time evolution',type=float)
-    parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-6)
-    parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-6)
-    parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-5)',type=float,default=1E-6)
+    parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-10)
+    parser.add_argument('--pinv', help='pseudo-inverse cutoof; use default value if no pseudo-inverse should be done (1E-100)',type=float,default=1E-100)
+    parser.add_argument('--truncation', help='truncation threshold; if schmidt-values < truncation are found, they are truncated; this changeds the bond dimension',type=float,default=1E-100)                
+    parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-10)
+    parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-6)',type=float,default=1E-6)
     parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
     parser.add_argument('--nreset', help='number of steps at each level of the adaptive dt refinement (10)',type=int,default=10)
-    parser.add_argument('--filename', help='filename for output (_cMPSoptnew)',type=str,default='_HeisIMPS')
+    parser.add_argument('--filename', help='filename for output (_cMPSoptnew)',type=str,default='_TFI')
     parser.add_argument('--seed', help='seed for initialization of Q and R matrices',type=int)
-    parser.add_argument('--numeig', help='number of eigenvector in TMeigs',type=int,default=5)
-    parser.add_argument('--ncv', help='number of krylov vectors in TMeigs',type=int,default=20)
+    parser.add_argument('--numeig', help='number of eigenvector in TMeigs (5)',type=int,default=5)
+    parser.add_argument('--ncv', help='number of krylov vectors in TMeigs (20)',type=int,default=20)
     parser.add_argument('--Nmaxlgmres', help='Maximum number of lgmres steps (see scipy.sparse.linalg.lgmres help); total number is (Nmaxlgmres+1)*innermlgmres',type=int,default=50)
     parser.add_argument('--outerklgmres', help='Number of vectors to carry between inner GMRES iterations. According to [R271], good values are in the range of 1...3. However, note that if you want to use the additional vectors to accelerate solving multiple similar problems, larger values may be beneficial (from scipy.sparse.linalg.lgmres manual)',type=int,default=10)
     parser.add_argument('--innermlgmres', help='Number of inner GMRES iterations per each outer iteration (from scipy.sparse.linalg.lgmres manual)',type=int,default=30)
@@ -57,9 +60,6 @@ if __name__ == "__main__":
             print ('please enter same number of values for --alphas and --normgrads')
             sys.exit()
 
-
-
-    args=parser.parse_args()
     d=2
     N=1
     Jx=args.Jx*np.ones(N)
@@ -68,10 +68,10 @@ if __name__ == "__main__":
 
     #mps=(np.random.rand(args.D,args.D,2)-0.5+1j*(np.random.rand(args.D,args.D,2)-0.5))*0.5
     if args.dtype=='complex':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*0.9+1j*(np.random.rand(args.D,args.D,d)-0.5)*0.9
+        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling+1j*(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=complex
     elif args.dtype=='float':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*0.9
+        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=float        
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
@@ -79,9 +79,10 @@ if __name__ == "__main__":
         
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
     [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
+    
     iMPS=en.HomogeneousIMPSengine(args.imax,mps,mpo,args.filename,args.alpha,args.alphas,args.normgrads,dtype,args.rescalingfactor,\
                                   args.nreset,args.normtolerance,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,\
-                                  args.Nmaxlgmres)
+                                  args.Nmaxlgmres,pinv=args.pinv,trunc=args.truncation)
 
     iMPS.__simulate__()
 

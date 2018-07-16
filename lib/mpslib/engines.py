@@ -484,7 +484,7 @@ class HomogeneousIMPSengine:
     Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
     """
 
-    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
+    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,pinv=1E-100,trunc=1E-16):
         self._Nmax=Nmax
         self._mps=np.copy(mps)
         self._D=np.shape(mps)[0]
@@ -502,7 +502,8 @@ class HomogeneousIMPSengine:
         self._alphas=alphas
         self._alpha=alpha
         self._alpha_=alpha
-
+        self._pinv=pinv
+        self._trunc=trunc
         self._normgrads=normgrads
         self._normtol=normtol
         self._factor=factor
@@ -537,8 +538,7 @@ class HomogeneousIMPSengine:
     def __doGradStep__(self):
         converged=False
         self._gamma,self._lam,trunc=mf.regauge(self._mps,gauge='symmetric',initial=np.reshape(np.diag(self._lam**2),self._D*self._D),\
-                                               nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig,trunc=1E-12,Dmax=self._D)
-        
+                                               nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig,trunc=self._trunc,Dmax=self._D,pinv=self._pinv)
         if len(self._lam)!=self._D:
             Dchanged=True
             self._D=len(self._lam)
@@ -629,7 +629,7 @@ class HomogeneousIMPSengine:
             if self._it%checkpoint==0:
                 np.save('CPTensor'+self._filename,self._mps)
             self._it+=1
-            stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, grad=%.16f, alpha=%.4f" %(self._it,np.real(Elocleft),leftn,rightn,self._normgrad,self._alpha_))
+            stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, grad=%.16f, alpha=%.4f, D=%i" %(self._it,np.real(Elocleft),leftn,rightn,self._normgrad,self._alpha_,self._D))
             stdout.flush()
         print
         if self._it>=self._Nmax and (converged==False):
@@ -668,6 +668,160 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
         print
         
 
+
+class VUMPSengine:
+    """
+
+    VUMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
+    initialize a homogeneous VUMPS optimization
+    
+    MPS optimization methods for homogeneous systems
+    uses gradient optimization to find the ground state of a Homogeneous system
+    mps (np.ndarray): an initial mps tensor 
+    mpo (np.ndarray): the mpo tensor
+    filename (str): filename of the simulation
+    alpha (float): initial steps size
+    alphas (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
+    normgrads (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
+    dtype: type of the mps (float or complex)
+    factor (float): factor by which internal stepsize is reduced in case divergence is detected
+    normtol (float): absolute value by which gradient may increase without raising a "divergence" flag
+    epsilon (float): desired convergence of the gradient
+    tol (float): eigensolver tolerance used in regauging
+    lgmrestol (float): eigensolver tolerance used for calculating the infinite environements
+    ncv (int): number of krylov vectors used in sparse eigensolvers
+    numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
+    Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
+    """
+
+    def __init__(self,Nmax,mps,mpo,filename,dtype,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,\
+                 artol=1E-6,arnumvecs=1,arncv=20,svd=False):
+
+        self._svd=svd
+        self._artol=artol
+        self._arnumvecs=arnumvecs
+        self._arncv=arncv
+        self._Nmax=Nmax
+        self._mps=np.copy(mps)
+        self._D=np.shape(mps)[0]
+        self._filename=filename
+        self._dtype=dtype
+        self._tol=tol
+        self._lgmrestol=lgmrestol
+        self._numeig=numeig
+        self._ncv=ncv
+        self._kleft=np.random.rand(self._D,self._D)
+        self._kright=np.random.rand(self._D,self._D)
+        self._epsilon=epsilon
+        self._Nmaxlgmres=Nmaxlgmres
+        self._it=1
+        [B1,B2,d1,d2]=np.shape(mpo)
+
+        mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
+        mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
+
+        mpol[0,:,:,:]=mpo[-1,:,:,:]
+        mpol[0,0,:,:]/=2.0
+        mpor[:,0,:,:]=mpo[:,0,:,:]
+        mpor[-1,0,:,:]/=2.0
+
+        self._mpo=[]
+        self._mpo.append(np.copy(mpol))
+        self._mpo.append(np.copy(mpo))
+        self._mpo.append(np.copy(mpor))
+
+
+
+    def __doStep__(self):
+        [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=self._numeig,init=self._r,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
+        [etal,vl,numeig]=mf.TMeigs(self._B,direction=1,numeig=self._numeig,init=self._r,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
+        l=np.reshape(vl,(self._D,self._D))
+        r=np.reshape(vr,(self._D,self._D))
+        l=l/np.trace(l)
+        r=r/np.trace(r)
+        
+        self._l=(l+herm(l))/2.0
+        self._r=(r+herm(r))/2.0            
+
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self._D))
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self._D))
+
+        self._lb=mf.initializeLayer(self._A,np.eye(self._D),self._A,self._mpo[0],1) 
+        ihl=mf.addLayer(self._lb,self._A,self._mpo[2],self._A,1)[:,:,0]
+        Elocleft=np.tensordot(ihl,self._r,([0,1],[0,1]))
+        self._rb=mf.initializeLayer(self._B,np.eye(self._D),self._B,self._mpo[2],-1)
+        ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
+        Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
+
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self._D))
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self._D))
+        
+        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self._D),ihlprojected,x0=np.reshape(self._kleft,self._D*self._D),tolerance=self._lgmrestol,\
+                                           maxiteration=self._Nmaxlgmres,direction=1)
+        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self._D),self._r,ihrprojected,x0=np.reshape(self._kright,self._D*self._D),tolerance=self._lgmrestol,\
+                                            maxiteration=self._Nmaxlgmres,direction=-1)
+        
+        self._lb[:,:,0]+=np.copy(self._kleft)
+        self._rb[:,:,-1]+=np.copy(self._kright)
+
+        e1,opt=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol,self._arnumvecs,self._arncv)#mps._mat set to 11 during call of __tensor__()
+        e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol,numvecs=self._arnumvecs,numcv=self._arncv)
+        self._mat/=np.linalg.norm(self._mat)
+
+        D1,D2,d=opt.shape
+        
+        if self._svd:
+            ACC_l=np.reshape(ncon.ncon([opt,herm(self._mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
+            CAC_r=np.reshape(ncon.ncon([herm(self._mat),opt],[[-1,1],[1,-2,-3]]),(D1,d*D2))
+            Ul,Sl,Vl=mf.svd(ACC_l)
+            Ur,Sr,Vr=mf.svd(CAC_r)
+            self._A=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
+            self._B=np.reshape(Ur.dot(Vr),(D1,D2,d))
+        else:
+            AC_l=np.reshape(np.transpose(opt,(0,2,1)),(D1*d,D2))
+            AC_r=np.reshape(opt,(D1,d*D2))
+            
+            UAC_l,PAC_l=sp.linalg.polar(AC_l,side='right')
+            UAC_r,PAC_r=sp.linalg.polar(AC_r,side='left')
+            
+            UC_l,PC_l=sp.linalg.polar(self._mat,side='right')
+            UC_r,PC_r=sp.linalg.polar(self._mat,side='left')
+            
+            self._A=np.transpose(np.reshape(UAC_l.dot(herm(UC_l)),(D1,d,D2)),(0,2,1))
+            self._B=np.reshape(herm(UC_r).dot(UAC_r),(D1,D2,d))
+
+        return Elocleft,leftn,rightn,
+
+    #important note: at the moment, the user has to provide an mpo which covers TWO unitcells!
+    def __simulate__(self,checkpoint=100):
+        converged=False
+        Dchanged=False
+
+        self._A,self._l=mf.regauge(self._mps,gauge='left',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
+        self._B,self._r=mf.regauge(self._mps,gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
+        self._mat=np.eye(self._A.shape[1])
+        Edensold=1E10
+        while converged==False:
+            Edens,leftn,rightn=self.__doStep__()
+            if self._it>=self._Nmax:
+                break
+            if self._it%checkpoint==0:
+                np.save('CPTensor'+self._filename,self._mps)
+            self._it+=1
+            stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),leftn,rightn,self._D,np.abs(Edensold-Edens)))
+            stdout.flush()
+            if np.abs(Edensold-Edens)<self._epsilon:
+                converged=True
+            Edensold=Edens
+        print
+        print()
+        if self._it>=self._Nmax and (converged==False):
+            print ('simulation reached maximum number of steps ({1}) and stopped at precision of {0}'.format(np.abs(Edensold-Edens),self._Nmax))
+        if converged==True:
+            print ('simulation converged to {0} in {1} steps'.format(self._epsilon,self._Nmax))
+        print
+ 
+        
 
 class TEBDEngine:
     """

@@ -32,6 +32,8 @@ if __name__ == "__main__":
     parser.add_argument('--normgrads', nargs='+',help='list of length N=len(dts) (see above); if norm(xdot)<nxdots[i], use dts[i] for imaginary time evolution',type=float)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-6)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-6)
+    parser.add_argument('--pinv', help='pseudo-inverse cutoof; use default value if no pseudo-inverse should be done (1E-100)',type=float,default=1E-100)
+    parser.add_argument('--truncation', help='truncation threshold; if schmidt-values < truncation are found, they are truncated; this changeds the bond dimension',type=float,default=1E-100)            
     parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-5)',type=float,default=1E-6)
     parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
@@ -66,7 +68,6 @@ if __name__ == "__main__":
     Jxy=np.ones(N)
     B=args.B*np.ones(N)
     mpo=H.XXZ(Jz,Jxy,B,False)[0]
-    print (mpo.shape)
 
     #mps=(np.random.rand(args.D,args.D,2)-0.5+1j*(np.random.rand(args.D,args.D,2)-0.5))*0.5
     if args.dtype=='complex':
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
     iMPS=en.HomogeneousIMPSengine(args.imax,mps,mpo,args.filename,args.alpha,args.alphas,args.normgrads,dtype,args.rescalingfactor,\
                                   args.nreset,args.normtolerance,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,\
-                                  args.Nmaxlgmres)
+                                  args.Nmaxlgmres,pinv=args.pinv,trunc=args.truncation)
 
     iMPS.__simulate__()
     np.save(args.filename,iMPS._mps)

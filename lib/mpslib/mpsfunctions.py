@@ -2224,11 +2224,11 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         l=np.reshape(v,(chi,chi))
         #fix phase of l and restore the proper normalization of l
         l=l/np.trace(l)
-        if dtype==float:
-            l=np.real(l+herm(l))/2.0
-            
-        if dtype==complex:
-            l=(l+herm(l))/2.0
+        l=(l+herm(l))/2.0        
+        #if dtype==float:
+        #    l=np.real(l+herm(l))/2.0
+        #if dtype==complex:
+        #    l=(l+herm(l))/2.0
 
 
         eigvals,u=np.linalg.eigh(l)
@@ -2263,10 +2263,11 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         tensor=tensor/np.sqrt(np.real(eta))
         r=np.reshape(v,(chi,chi))
         r=r/np.trace(r)
-        if dtype==float:
-            r=np.real((r+herm(r))/2.0)
-        if dtype==complex:
-            r=(r+herm(r))/2.0
+        r=(r+herm(r))/2.0
+        #if dtype==float:
+        #    r=np.real((r+herm(r))/2.0)
+        #if dtype==complex:
+        #    r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)
@@ -2290,7 +2291,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
 
     if gauge=="symmetric":
         [chi1 ,chi2,d]=np.shape(tensor)
-
         [eta,v,numeig]=TMeigs(tensor,direction=1,numeig=numeig,init=initial,nmax=nmaxit,tolerance=tol,ncv=ncv)
 
         if np.abs(np.imag(eta))/np.abs(np.real(eta))>thresh:
@@ -2300,17 +2300,17 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         l=np.reshape(v,(chi1,chi1))
 
         l=l/np.trace(l)
-        if dtype==float:
-            l=np.real(l+herm(l))/2.0
-            
-        if dtype==complex:
-            l=(l+herm(l))/2.0
-
+        l=(l+herm(l))/2.0
+        #if dtype==float:
+        #    l=np.real(l+herm(l))/2.0
+        #    
+        #if dtype==complex:
+        #    l=(l+herm(l))/2.0
 
         eigvals,u=np.linalg.eigh(l)
         eigvals=np.abs(eigvals)
         eigvals/=np.sum(eigvals)
-        eigvals[np.nonzero(eigvals<pinv)]=0.0
+        eigvals[np.nonzero(eigvals<=pinv)]=0.0
         eigvals/=np.sum(eigvals)
         l=u.dot(np.diag(eigvals)).dot(herm(u))
 
@@ -2328,10 +2328,11 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
             print ('in regauge: warning: found eigenvalue eta with large imaginary part: {0}'.format(eta))
         r=np.reshape(v,(chi2,chi2))
         r=r/np.trace(r)
-        if dtype==float:
-            r=np.real((r+herm(r))/2.0)
-        if dtype==complex:
-            r=(r+herm(r))/2.0
+        r=(r+herm(r))/2.0        
+        #if dtype==float:
+        #    r=np.real((r+herm(r))/2.0)
+        #if dtype==complex:
+        #    r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)
@@ -2345,11 +2346,9 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         inveigvals[np.nonzero(eigvals>pinv)]=1.0/eigvals[np.nonzero(eigvals>pinv)]
         inveigvals[np.nonzero(eigvals<=pinv)]=0.0
 
-
         r=u.dot(np.diag(eigvals)).dot(herm(u))
         x=u.dot(np.diag(np.sqrt(eigvals))).dot(herm(u))
         invx=u.dot(np.diag(np.sqrt(inveigvals))).dot(herm(u))
-            
         
         [U,lam,Vdag]=svd(y.dot(x))
         D=len(lam)
@@ -2369,7 +2368,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
             Vdag=Vdag[0:len(lam),:]
             Z=np.linalg.norm(lam)
             lam=lam/Z
-
+            
         gamma=np.tensordot(Vdag.dot(invx),tensor,([1],[0]))
         gamma=np.transpose(np.tensordot(gamma,invy.dot(U),([1],[0])),(0,2,1))
         A=np.tensordot(np.diag(lam),gamma,([1],[0]))
