@@ -90,4 +90,7 @@ if __name__ == "__main__":
     [Gamma,lam,r]=mf.regauge(iMPS._mps,gauge='symmetric',tol=args.regaugetol)
     print()
     print(lam)
+    loglam=np.log(lam)
+    print((loglam-loglam[0])/(loglam[1]-loglam[0]))
+    
     print()

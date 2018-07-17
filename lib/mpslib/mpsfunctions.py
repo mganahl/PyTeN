@@ -1302,7 +1302,7 @@ def eigshbondsimple(L,R,mat0,tolerance=1e-6,numvecs=1,numcv=10):
     return [e,np.reshape(v,(chi1p,chi2p))]
 
 #calls a sparse eigensolver to find the lowest eigenvalue 
-def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10):
+def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
     dtype=mat0.dtype
     if position=='right':
         [chi1,chi2]=np.shape(mat0)
@@ -1312,7 +1312,25 @@ def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10):
         mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
         LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
         e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
-        return [e,np.reshape(v,(chi1p,chi2p))]
+
+        if numvecs_returned==1:
+            ind=np.nonzero(e==min(e))
+            #return [e,np.reshape(v,(chi1p,chi2p,dp))]
+            return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
+        elif numvecs_returned>1:
+            if (numvecs_returned>numvecs):
+                sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+                numvecs_returned=numvecs
+                es=[]
+                vs=[]
+                esorted=np.sort(e)
+                for n in range(numvecs_returned):
+                    es.append(esorted[n])
+                    ind=np.nonzero(e==esorted[n])
+                    vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
+            return es,vs
+
+
 
     if position=='left':
         [chi1,chi2]=np.shape(mat0)
@@ -1322,7 +1340,26 @@ def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10):
         mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
         LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
         e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
-        return [e,np.reshape(v,(chi1p,chi2p))]
+
+        if numvecs_returned==1:
+            ind=np.nonzero(e==min(e))
+            #return [e,np.reshape(v,(chi1p,chi2p,dp))]
+            return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
+        elif numvecs_returned>1:
+            if (numvecs_returned>numvecs):
+                sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+                numvecs_returned=numvecs
+                es=[]
+                vs=[]
+                esorted=np.sort(e)
+                for n in range(numvecs_returned):
+                    es.append(esorted[n])
+                    ind=np.nonzero(e==esorted[n])
+                    vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
+            return es,vs
+
+
+        #return [e,np.reshape(v,(chi1p,chi2p))]
 
 #this function assumes that mps0has the usual cMPS form, with only two entries
 #the incoming mpo HAS TO BE OF A PROJECTED FORM

@@ -764,9 +764,15 @@ class VUMPSengine:
         self._lb[:,:,0]+=np.copy(self._kleft)
         self._rb[:,:,-1]+=np.copy(self._kright)
 
-        e1,opt=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol,self._arnumvecs,self._arncv)#mps._mat set to 11 during call of __tensor__()
-        e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol,numvecs=self._arnumvecs,numcv=self._arncv)
-        self._mat/=np.linalg.norm(self._mat)
+
+
+        e1,opt=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,self._arnumvecs,self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
+        e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
+
+        if self._arnumvecs>1:        
+            self._mat/=np.linalg.norm(self._mat[0])
+            self._gap=e1[1]-e1[0]
+            opt=opt[0]
 
         D1,D2,d=opt.shape
         
@@ -801,15 +807,24 @@ class VUMPSengine:
         self._B,self._r=mf.regauge(self._mps,gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._mat=np.eye(self._A.shape[1])
         Edensold=1E10
+
         while converged==False:
+            if self._it<10:
+                self._artol_=1E-6
+            else:
+                self._artol_=self._artol
             Edens,leftn,rightn=self.__doStep__()
             if self._it>=self._Nmax:
                 break
             if self._it%checkpoint==0:
                 np.save('CPTensor'+self._filename,self._mps)
             self._it+=1
-            stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),leftn,rightn,self._D,np.abs(Edensold-Edens)))
-            stdout.flush()
+            if self._arnumvecs==1:
+                stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),leftn,rightn,self._D,np.abs(Edensold-Edens)))
+                stdout.flush()
+            if self._arnumvecs>1:
+                stdout.write("\rit %i: local E=%.16f, gap=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),np.real(self._gap),leftn,rightn,self._D,np.abs(Edensold-Edens)))
+                stdout.flush()
             if np.abs(Edensold-Edens)<self._epsilon:
                 converged=True
             Edensold=Edens
