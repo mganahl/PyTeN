@@ -74,7 +74,8 @@ class MPS:
     is the bond index at which orthonormalization of self._tensor matrices switches from
     left- to right-orthonormal. self._mat contains the bond matrix (if diagonalized, the schmdit values) 
     of the cut at self._position. 
-    
+
+    members:
     self.__absorbCenterMatrix__(direction) merges self._mat with self._tensors[self._position] (direction>0) or self._tensors[self._position-1] (direction<0).
     and puts the resulting tensor at the corresponding position.
     
@@ -86,16 +87,19 @@ class MPS:
 
     The maximum bond dimension of the MPS is self._D. Methods will try to truncate the state such that this limit is respected
     
-    for generating an mps, use the decorators random, zeros, ones or productState (see below)
+    for generating an mps, use the decorators random, zeros, ones, fromList or productState (see below)
     """
     def __init__(self,tensors,schmidt_thresh=1E-16,r_thresh=1E-14):
         """
-        initialize an UNNORMALIZED MPS from a list of tensors
-        tensors: a list of mps tensors, ndarrays of dimension (D,D,d)
-        schmidt_thresh: truncation limit of the mps
-        r_thresh: internal parameter (ignore it)
-        self._D, the maximally allowed bond dimension of the MPS, will be set to 
-        the maximum bond dimension of "tensors"
+        initialize an unnormalized MPS from a list of tensors
+        Parameters
+        ----------------------------------------------------
+        tensors: list of np.ndarrays of shape (D1,D2,d)
+                 a list of mps tensors
+        schmidt_thresh: float
+                        truncation limit of the mps
+        r_thresh: float 
+                  internal parameter (ignore it)
 
         """
         self._N=len(tensors)
@@ -104,7 +108,7 @@ class MPS:
             self._obc=True
         else:
             self._obc=False
-        self._dtype=float
+        self._dtype=np.dtype(float)
         for n in range(self._N):
             self._dtype=np.result_type(self._dtype,tensors[n].dtype)
 
@@ -122,29 +126,46 @@ class MPS:
 
     @property
     def dtype(self):
+        """
+        the dtype of the mps tensors
+        """
         return self._dtype
     
     @property
     def pos(self):
+        """
+        the current position of the center bond
+        """
         return self._position
     
     
 
     @classmethod
-    def random(cls,N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
+    def random(cls,N,D,d,obc,scaling=0.5,dtype=np.dtype(float),shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         """
         MPS.random(N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate a random MPS
+        Parameters:
+        ----------------------------------------------
+        N: int
+           length of the mps
+        D: int
+           initial maximal bond dimension
+        d: int or array of int 
+           local Hilbert space dimension(s)
+        obc: bool
+             boundary condition; if True, open boundary conditions are used
+        scaling: float
+                 initial scaling of mps matrices
+        dtype: float or complex
+               dtype of the mps tensors
+        shift: float
+               shift of interval of random number generation for initial mps
+        schmidt_thresh: float 
+                        truncation limit of the mps
+        r_thresh: float
+                  internal parameter (ignore it)
 
-        N (int): length of the mps
-        D (int): initial bond dimensions
-        d (int or array of int): local Hilbert space dimension
-        obc (bool): boundary condition
-        scaling (float): initial scaling of mps matrices
-        dtype (python "float" type or "complex" type: data type
-        shift: shift of interval of random number generation for initial mps
-        schmidt_thresh: truncation limit of the mps
-        r_thresh: internal parameter (ignore it)
         """
         tensors=mf.MPSinitializer(np.random.random_sample,N,D,d,obc,dtype,scaling,shift)        
         mps=cls(tensors,schmidt_thresh,r_thresh)
@@ -156,18 +177,28 @@ class MPS:
 
 
     @classmethod
-    def zeros(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def zeros(cls,N,D,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
+
         """
         MPS.zeros(N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS filled with zeros
+        Parameters:
+        ----------------------------------------------
+        N: int
+           length of the mps
+        D: int
+           initial maximal bond dimension
+        d: int or array of int 
+           local Hilbert space dimension(s)
+        obc: bool
+             boundary condition; if True, open boundary conditions are used
+        dtype: float or complex
+               dtype of the mps tensors
+        schmidt_thresh: float 
+                        truncation limit of the mps
+        r_thresh: float
+                  internal parameter (ignore it)
 
-        N (int): length of the mps
-        D (int): initial bond dimensions
-        d (int or array of int): local Hilbert space dimension
-        obc (bool): boundary condition
-        dtype (python "float" type or "complex" type: data type
-        schmidt_thresh: truncation limit of the mps
-        r_thresh: internal parameter (ignore it)
         """
         
         
@@ -180,18 +211,29 @@ class MPS:
         return mps
 
     @classmethod
-    def ones(cls,N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def ones(cls,N,D,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
         """
         MPS.ones(N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS filled with ones
-        N (int): length of the mps
-        D (int): initial bond dimensions
-        d (int or array of int): local Hilbert space dimension
-        obc (bool): boundary condition
-        dtype (python "float" type or "complex" type: data type
-        schmidt_thresh: truncation limit of the mps
-        r_thresh: internal parameter (ignore it)
+        Parameters:
+        ----------------------------------------------
+        N: int
+           length of the mps
+        D: int
+           initial maximal bond dimension
+        d: int or array of int 
+           local Hilbert space dimension(s)
+        obc: bool
+             boundary condition; if True, open boundary conditions are used
+        dtype: float or complex
+               dtype of the mps tensors
+        schmidt_thresh: float 
+                        truncation limit of the mps
+        r_thresh: float
+                  internal parameter (ignore it)
+
         """
+        
         tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scale=1.0,shift=0.0)
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
@@ -199,20 +241,53 @@ class MPS:
         mps.__position__(mps._N)
         mps._Z=1.0                
         return mps
-        
+
+
     @classmethod
-    def productState(cls,localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+    def fromList(cls,tensors,mat=None,schmidt_thresh=1E-16,r_thresh=1E-16):
+        """
+        MPS.fromList(tensors,mat=None,schmidt_thresh=1E-16,r_thresh=1E-14):
+        generate an MPS from a list of np.ndarrays
+
+        
+        tensors: list of np.ndarrays: 
+                 mps tensors
+        mat: np.ndarray of shape (D1,D2) 
+             the center matrix of the mps; if None, it is assumed to be 11
+        schmidt_thresh: float
+                        truncation limit of the mps
+        r_thresh: float 
+                  internal parameter (ignore it)
+        """
+
+        mps=cls(tensors,schmidt_thresh,r_thresh)
+        if all(mat)!=None:
+            mps._mat=np.copy(mat)
+        mps.__position__(0)        
+        mps.__position__(mps._N)
+        mps._Z=1.0                
+        return mps
+        
+    
+    @classmethod
+    def productState(cls,localstate,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
         """
         MPS.productState(localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         initialize a product state MPS:
 
-        localstate: an array of int specifying the local positions; i.e. localstate[n]=i 
+        localstate: np.ndarray of dtyp=int
+                    an array of int specifying the local positions; i.e. localstate[n]=i 
                     sets the state at position n to i, where 0<i<d[n]
-        d:          int or array of int; local hilbert space dimensions
-        obc:        boundary condition of the mps
-        dtype (python "float" type or "complex" type: data type
-        schmidt_thresh: truncation limit of the mps
-        r_thresh: internal parameter (ignore it)
+        d:          int or array of int
+                    local hilbert space dimensions
+        obc:        bool
+                    boundary condition of the mps
+        dtype:      python "float" type or "complex" type: 
+                    dtype of the tensors
+        schmidt_thresh: float 
+                        truncation limit of the mps
+        r_thresh: float 
+                  internal parameter (ignore it)
         """
         tensors=mf.MPSinitializer(np.zeros,len(localstate),D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
         for n in range(len(tensors)):
@@ -223,11 +298,14 @@ class MPS:
         return mps
     
     def copy(self):
+        """
+        returns a copy of the MPS
+        """
         return self.__copy__()
     
     def __copy__(self):
         """
-        return a copy of self
+        return a copy of MPS
         """
         cop=MPS(self._tensors)
         cop._D=self._D
@@ -256,53 +334,118 @@ class MPS:
         self._tensors[n]=np.copy(tensor)
 
 
+    def __in_place_unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements unary operations on mps-tensors in-place 
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+        """
+        for n in range(len(res)):
+            self[n]=operation(self[n],*args,**kwargs)
+
+
     def __unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements unary operations on mps-tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
         
+        returns: a new MPS obtained from acting with operation on each individual MPS tensor
+        """
         res=self.__copy__()
         for n in range(len(res)):
             res[n]=operation(res[n],*args,**kwargs)
         return res
 
     def __conj__(self,*args,**kwargs):
+        """
+        in-place complex conjugation of the MPS
+        """
+        self.__in_place_unary_operations__(np.conj,*args,**kwargs)
+    
+    def __conjugate__(self,*args,**kwargs):
+        """
+        returns the complex conjugated MPS
+        """
         res=self.__unary_operations__(np.conj,*args,**kwargs)
         res._qflow=utils.flipsigns(res._qflow)                
         return res
 
-    def __conjugate__(self,*args,**kwargs):
-        return self.__conj__(self,*args,**kwargs)
 
     def conjugate(self,*args,**kwargs):
-        return self.__conj__(self,*args,**kwargs)
+        """
+        returns the complex conjugated MPS
+        """
+        return self.__conjugate__(self,*args,**kwargs)
 
     def conj(self,*args,**kwargs):
+        """
+        in-place complex conjugation of the MPS
+        """        
         return self.__conj__(self,*args,**kwargs)
 
     def __exp__(self,*args,**kwargs):
+        """
+        element-wise exponential of the mps tensors
+        """
         res=self.__unary_operations__(np.exp,*args,**kwargs)
         return res
     def exp(self,*args,**kwargs):
+        """
+        element-wise exponential of the mps tensors
+        """
+        
         return self.__exp__(*args,**kwargs)
        
     def __sqrt__(self,*args,**kwargs):
+        """
+        element-wise square root of the mps tensors
+        """
+                
         res=self.__unary_operations__(np.sqrt,*args,**kwargs)
         return res
     def sqrt(self,*args,**kwargs):
+        """
+        element-wise square root of the mps tensors
+        """
+        
         return self.__sqrt__(*args,**kwargs)
 
     def __real__(self,*args,**kwargs):
+        """
+        return a new MPS with the real part of self
+        """
+        
         res=self.__unary_operations__(np.real,*args,**kwargs)
-        res._dtype=float        
+        res._dtype=np.dtype(float)
         return res
 
     def real(self,*args,**kwargs):
+        """
+        return a new MPS with the real part of self
+        """
+        
         return self.__real__(*args,**kwargs)
 
     def __imag_(self,*args,**kwargs):
+        """
+        return a new MPS with the imaginary part of self
+        """
+        
         res=self.__unary_operations__(np.imag,*args,**kwargs)
-        res._dtype=float        
+        res._dtype=np.dtype(float)
         return res
     
     def imag(self,*args,**kwargs):
+        """
+        return a new MPS with the imaginary part of self
+        """
         return self.__imag__(*args,**kwargs)
     
 
@@ -338,8 +481,8 @@ class MPS:
 
     def __idiv__(self,num):
         """
-        left-multiplies "num" with MPS, i.e. returns MPS*num;
-        note that "num" is not really multiplied into the mps matrices, but
+        left-divides "num" with MPS, i.e. returns MPS*num;
+        note that "1./num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
         """
         if not np.isscalar(num):
@@ -456,42 +599,117 @@ class MPS:
             self._mat=np.eye(D)
             
     def __len__(self):
+        """
+        return the number of tensors in the MPS
+        """
         return len(self._tensors)
     
     def __iter__(self):
+        """
+        return an iterator over the MPS-tensors
+        """
+        
         return iter(self._tensors)
 
     def __dot__(self,mps):
+        """
+        calculate the overlap of self with mps 
+        mps: MPS
+        returns: float
+                 overlap of self with mps
+        """
+        
         return mf.overlap(self,mps)
     def dot(self,mps):
+        """
+        calculate the overlap of self with mps 
+        mps: MPS
+        returns: float
+                 overlap of self with mps
+        """
         return mf.overlap(self,mps)
 
     def __D__(self):
+        """
+        returns a list containig the bond-dimensions of the MPS
+        """
         return list(map(lambda x: np.shape(x)[0],self._tensors))+[self._tensors[-1].shape[1]]
 
 
     @property
     def D(self):
+        """
+        returns a list containig the bond-dimensions of the MPS
+        """
         return self.__D__()
     
+    @property
+    def Dmax(self):
+        """
+        Dmax is the maximally allowed bond dimension of the MPS
+        """
+        return self._D
+    @Dmax.setter
+    def Dmax(self,D):
+        """
+        set Dmax to D
+        """
+        self._D=D
+    
+    
     def getSchmidt(self,n):
+        """
+        getSchmidt(n):
+
+        return the Schmidt-values on bond n:
+        Parameters:
+        ---------------------------------
+        n: int
+           the bond number
+        """
         self.__position__(n)
         U,S,V=mf.svd(self._mat)
         return S
 
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
+        """
+        position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
+        shifts the center site to "bond"
+        Parameters:
+        ---------------------------------
+        bond: int
+              the bond onto which to put the center site
+        schmidt_thresh: float
+                        truncation threshold at which Schmidt-values are truncated during shifting the position
+                        overrides the self._schmidt_thresh parameter of the MPS temporarily
+                        if schmidt_thresh>1E-15, then routine uses an svd to truncate the mps, otherwise no truncation is done
+        D: int
+           maximum bond dimension after Schmidt-value truncation
+           The function does not modify self._connector
+        r_thresh: float
+                  internal parameter, has no relevance 
+        """
+        
         self.__position__(bond,schmidt_thresh=schmidt_thresh,D=D,r_thresh=r_thresh)        
         
     def __position__(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
+        position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         shifts the center site to "bond"
-        "schmidt_thresh" overrides the self._schmidt_thresh parameter of the MPS temporarily
-        if schmidt_thresh>1E-15, then routine uses an svd to truncate the mps
-        If "D" is specified, the bond dimension after schmidt_thresh is additionally never larger than D.
-        "D" will override self._D as the new maximum bond dimension of the MPS
-        The function does not modify self._connector
+        Parameters:
+        ---------------------------------
+        bond: int
+              the bond onto which to put the center site
+        schmidt_thresh: float
+                        truncation threshold at which Schmidt-values are truncated during shifting the position
+                        overrides the self._schmidt_thresh parameter of the MPS temporarily
+                        if schmidt_thresh>1E-15, then routine uses an svd to truncate the mps, otherwise no truncation is done
+        D: int
+           maximum bond dimension after Schmidt-value truncation
+           The function does not modify self._connector
+        r_thresh: float
+                  internal parameter, has no relevance 
         """
-        
         assert(bond<=self._N)
         assert(bond>=0)
         """
@@ -501,8 +719,6 @@ class MPS:
         which are smaller than r_thresh to 0, then does an svd.
         """
             
-        if D!=None:
-            self._D=D
         if schmidt_thresh>1E-15:
             _schmidt_thresh=schmidt_thresh
         else:
@@ -521,7 +737,7 @@ class MPS:
                     tensor,self._mat,Z=mf.prepareTensor(self._tensors[n],direction=1)
                     
                 else:
-                    tensor,s,v,Z=mf.prepareTruncate(self._tensors[n],direction=1,D=self._D,thresh=_schmidt_thresh,\
+                    tensor,s,v,Z=mf.prepareTruncate(self._tensors[n],direction=1,D=D,thresh=_schmidt_thresh,\
                                                     r_thresh=_r_thresh)
                     self._mat=np.diag(s).dot(v)
                 self._Z*=Z                    
@@ -536,7 +752,7 @@ class MPS:
                     tensor,self._mat,Z=mf.prepareTensor(self._tensors[n],direction=-1)
 
                 else:
-                    u,s,tensor,Z=mf.prepareTruncate(self._tensors[n],direction=-1,D=self._D,thresh=_schmidt_thresh,\
+                    u,s,tensor,Z=mf.prepareTruncate(self._tensors[n],direction=-1,D=D,thresh=_schmidt_thresh,\
                                                     r_thresh=_r_thresh)
                     self._mat=u.dot(np.diag(s))
                 self._Z*=Z                                        
@@ -580,6 +796,14 @@ class MPS:
 
 
     def measureMatrixElementList(self,mps,ops,lb=None,rb=None):
+        """
+        measure a list of N local operators "ops", where N=len(ops)=len(mps)
+        "lb" and "rb" are left and right boundary conditions to be applied 
+        if the state is pbc; for obc they can be left None
+        the routine moves the centersite to the left boundary, measures and moves
+        it back to its original position; this might cause some overhead
+        """
+        
         self.__measureMatrixElementList__(mps,ops,lb,rb)
         
     def __measureMatrixElementList__(self,mps,ops,lb=None,rb=None):
@@ -609,6 +833,15 @@ class MPS:
 
 
     def measureLocal(self,op,site,lb=None,rb=None):
+
+        """
+        measure a local operator "op" at site "site"
+        "lb" and "rb" are left and right boundary conditions to be applied 
+        if the state is pbc (currently not implemented); for obc they can be left None
+        the routine moves the centersite to "site", measures and moves
+        it back to its original position; this might cause some overhead
+        """
+        
         return self.__measureLocal__(op,site,lb,rb)
     def __measureLocal__(self,op,site,lb=None,rb=None):
 
@@ -634,6 +867,16 @@ class MPS:
 
 
     def measure(self,ops,sites,P=None):
+        """ 
+        This is a quite slow function to calculate correlation functions; 
+        it takes a list of operators "ops" and a list of sites "sites" of where the operators live, and calculates <ops[site[0]]ops[sites[1]],...,ops[sites[n-1]]>
+        "sites" has to be a list of (weakly) monotonically increasing numbers 
+        the function can also measure fermionic correlation functions, if the jordan wigner strings are given in P; P is a list 
+        containing the jordan-woigner operators for each site of the MPS (len(P)==len(mps)); for example, P=np.diag(1,-1) for spinless fermions
+        
+        BE WEARY: ROUTINE COULD BE WRONG 
+        """
+        
         return self.__measure__(ops,sites,P)
     def __measure__(self,ops,sites,P=None):
         
@@ -709,6 +952,15 @@ class MPS:
 
 
     def truncate(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
+        """ 
+        a dedicated routine for truncating an mps (for obc, this can also be done using self.__position__(self,pos))
+        For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
+        schmidt_thresh: truncation threshold
+        D: maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
+        r_thresh: internal parameter, has no effect on the outcome and can be ignored
+        returned_gauge: 'left','right' or 'symmetric': the desired gauge after truncation
+        """
+        
         self.__truncate__(schmidt_thresh,D,returned_gauge,nmaxit,tol,ncv,pinv,r_thresh)
         
     def __truncate__(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
@@ -747,6 +999,11 @@ class MPS:
 
 
     def tensor(self,site,clear=False):
+        """
+        returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
+        if clear=True, self._mat is replaced with a normalized identity matrix
+        """
+        
         return self.__tensor__(site,clear)
         
     def __tensor__(self,site,clear=False):
@@ -771,6 +1028,12 @@ class MPS:
             return out
         
     def canonize(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        """
+        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in the mps._gamma and mps._lambda member lists;
+        len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just [1.0]
+        funtions has no return argument
+        """
+        
         self.__canonize__(nmaxit,tol,ncv,pinv)
         
     def __canonize__(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
@@ -786,6 +1049,18 @@ class MPS:
         
 
     def regauge(self,gauge,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
+        """
+        regauge brings state in either left, right or symmetric orthonormal form
+        the state should be a finite unitcell state on an infinite lattice
+        gauge = 'left' or 'right' bring the state into left or right orthonormal form such that it can be connected back 
+        to itself. For gauge='left' or 'right', self._mat=11 and self._connector=11 are set to be the identity. To calculate 
+        any observables, one needs to additionally calculate the right (for gauge = 'left') or the left (for gauge = 'right') reduced
+        density matrices
+        if gauge='symmetric' the state is brought into symmetric gauge, such that it is totally left normalized, 
+        and self._mat=lambda, self._connector=1/lambda contain the schmidt-values. note that __regauge__ uses self._schmidt_thresh
+        as effective truncation, so the bond dimensions might change
+        """
+        
         self.__regauge__(gauge,nmaxit,tol,ncv,pinv)
         
     def __regauge__(self,gauge,nmaxit=100000,tol=1E-12,ncv=40,pinv=1E-12):
@@ -825,6 +1100,11 @@ class MPS:
 
 
     def ortho(self,site,direction):
+        """
+        checks if the orthonormalization of the mps is OK
+        prints out some stuff
+        """
+        
         return self.__orthonormalization__(site,direction)
     def __orthonormalization__(self,site,direction):
         """
@@ -953,6 +1233,10 @@ class MPS:
 
 
     def applyMPO(self,mpo):
+        """
+        applies an mpo to an mps; no truncation is done
+        """
+        
         self.__applyMPO__(mpo)
         
     def __applyMPO__(self,mpo):

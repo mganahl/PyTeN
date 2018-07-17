@@ -25,8 +25,8 @@ if __name__ == "__main__":
     mps=mpslib.MPS.random(N=N,D=10,d=d,obc=True,dtype=float)  #initialize a random MPS with bond dimension D'=10
     mps._D=D     #set the mps final bond-dimension parameter to D; mps._D is the maximally allowed dimension of the mps
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-    mps.__position__(N)
-    mps.__position__(0)
+    mps.position(N)
+    mps.position(0)
 
     #initialize an MPO (MPOs are defined in lib.mpslib.Hamiltonians)
     #the MPO class in Hamiltonians implements a routine MPO.twoSiteGate(m,n,dt), which 
@@ -38,18 +38,18 @@ if __name__ == "__main__":
     dmrg=en.DMRGengine(mps,mpo,'blabla')
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
-    dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1,solver='LAN')
+    dmrg.simulateTwoSite(2,1e-10,1e-6,40,verbose=1,solver='LAN')
     #now switch to a single site DMRG (faster) to further converge state state
-    dmrg.__simulate__(3,1e-10,1e-10,30,verbose=1,solver='LAN')
-    dmrg._mps.__position__(0)
+    dmrg.simulate(3,1e-10,1e-10,30,verbose=1,solver='LAN')
+    dmrg._mps.position(0)
 
     #initialize a TimeEvolutionEngine with an mps and an mpo
     #you don't have to pass an mpo here; the engine mererly assumes that
     #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
     #which should return an twosite gate
-    dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),50)
-    dmrg._mps.__position__(N)
-    dmrg._mps.__position__(0)
+    dmrg._mps.applyOneSiteGate(np.asarray([[0.0,1.],[0.0,0.0]]),50)
+    dmrg._mps.position(N)
+    dmrg._mps.position(0)
 
     #initialize a TEBDEngine with an mps and an mpo
     #you don't have to pass an mpo here; the engine mererly assumes that
@@ -70,10 +70,10 @@ if __name__ == "__main__":
     for n in range(Nmax):
 
         #measure the operators 
-        L=engine._mps.__measureList__(sz)
+        L=engine._mps.measureList(sz)
         #store result for later use
         SZ[n,:]=L
-        tw,it=engine.__doTEBD__(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
+        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
         #plot 
         plt.figure(1)
         plt.clf()

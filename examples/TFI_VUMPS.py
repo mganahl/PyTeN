@@ -23,6 +23,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
     parser.add_argument('--D', help='MPS bond dimension (32)',type=int,default=32)
+    parser.add_argument('--cp', help='do checkpointing at specified steps (0, no checkpointing)',type=int,default=0) 
     parser.add_argument('--Jx', help='Jx intercation (-1.0)',type=float,default=-1.0)
     parser.add_argument('--Bz', help='magnetic field (1.0)',type=float,default=1.0)
     parser.add_argument('--scaling',help='scaling of the initial MPS entries (0.5)',type=float,default=0.5)    
@@ -61,10 +62,11 @@ if __name__ == "__main__":
         
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
     [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
-    iMPS=en.VUMPSengine(args.imax,mps,mpo,args.filename,dtype,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
-                        arncv=args.arncv,svd=args.svd)
+    iMPS=en.VUMPSengine(mps,mpo,args.filename)
+    iMPS.simulate(args.imax,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
+                  arncv=args.arncv,svd=args.svd,checkpoint=args.cp)
 
-    iMPS.__simulate__()
+
     [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
     print()
     print(lam,np.sum(lam**2))

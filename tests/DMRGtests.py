@@ -272,9 +272,9 @@ class TestXXZComplex(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    #suite1 = unittest.TestLoader().loadTestsFromTestCase(TestSIAM)
+    suite1 = unittest.TestLoader().loadTestsFromTestCase(TestSIAM)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestXXZFloat)
     suite3 = unittest.TestLoader().loadTestsFromTestCase(TestXXZComplex)
-    #unittest.TextTestRunner(verbosity=2).run(suite1) 
+    unittest.TextTestRunner(verbosity=2).run(suite1) 
     unittest.TextTestRunner(verbosity=2).run(suite2) 
     unittest.TextTestRunner(verbosity=2).run(suite3) 

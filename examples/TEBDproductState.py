@@ -40,8 +40,8 @@ if __name__ == "__main__":
     mps=mpslib.MPS.productState(state,[d]*N,obc=True) #this mps for now has a maximally allowed bond dimension mps._D=1;
 
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-    mps.__position__(N)
-    mps.__position__(0)
+    mps.position(N)
+    mps.position(0)
 
     #initialize an MPO (MPOs are defined in lib.mpslib.Hamiltonians)
     #the MPO class in Hamiltonians implements a routine MPO.twoSiteGate(m,n,dt), which 
@@ -68,9 +68,9 @@ if __name__ == "__main__":
     tw=0  #accumulates the truncated weight (see below)
     for n in range(Nmax):
         #do numsteps TEBD steps 
-        tw,it=engine.__doTEBD__(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
+        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
         #measure the operators 
-        L=engine._mps.__measureList__(sz)
+        L=engine._mps.measureList(sz)
         #store result for later use
         SZ[n,:]=L
 

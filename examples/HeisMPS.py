@@ -40,14 +40,14 @@ if __name__ == "__main__":
     #initialize a DMRGEngine with an mps and an mpo
     dmrg=en.DMRGengine(mps,mpo,'blabla')
     print(dmrg.__doc__)
-    print(dmrg.__simulate__.__doc__)
-    print(dmrg.__simulateTwoSite__.__doc__)
+    print(dmrg.simulate.__doc__)
+    print(dmrg.simulateTwoSite.__doc__)
     
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
-    dmrg.__simulateTwoSite__(1,1e-10,1e-6,40,verbose=1,solver='LAN')
+    dmrg.simulateTwoSite(1,1e-10,1e-6,40,verbose=1,solver='LAN')
     #now switch to a single site DMRG (faster) to further converge state state
-    dmrg.__simulate__(4,1e-10,1e-10,30,verbose=1,solver='LAN')
+    dmrg.simulate(4,1e-10,1e-10,30,verbose=1,solver='LAN')
 
 
     #a list of measurement operators to measured (here sz)
@@ -64,17 +64,17 @@ if __name__ == "__main__":
 
     #now truncate the state to Dt=20
     Dt=20
-    dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+    dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
 
     #check if bond dimension has indeed been truncated
     print()
-    print (dmrg._mps.__D__())
+    print (dmrg._mps.D())
     #measure again ,now with truncated state
-    meanSztrunc=dmrg._mps.__measureList__(Sz)
+    meanSztrunc=dmrg._mps.measureList(Sz)
 
     meanSzSztrunc=[]        
     for n in range(N):
-        meanSzSztrunc.append(dmrg._mps.__measure__([Sz[0],Sz[0]],sorted([int(N/2),n])))        
+        meanSzSztrunc.append(dmrg._mps.measure([Sz[0],Sz[0]],sorted([int(N/2),n])))        
 
 
     #compare results before and after truncation

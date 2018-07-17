@@ -19,7 +19,7 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 if __name__ == "__main__":
-    D=10
+    D=50
     d=2
     N=2
     Jz=np.ones(N)
@@ -33,5 +33,6 @@ if __name__ == "__main__":
     #idmrg.__simulateTwoSite__(Nmax=1000,NUC=1,Econv=1E-10,tol=1E-4,ncv=10,cp=None,verbose=1,truncation=1E-8,regaugestep=3) #two site idmrg
     print(idmrg.__doc__)
     print(idmrg.__simulate__.__doc__)
-    idmrg.__simulate__(Nmax=1000,NUC=2,solver='LAN',Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,regaugestep=0) #single site idmrg
+    idmrg.simulate(Nmax=100,NUC=2,solver='LAN',Econv=1E-10,tol=1E-6,ncv=20,cp=None,verbose=1,regaugestep=0) #single site idmrg
 
+    

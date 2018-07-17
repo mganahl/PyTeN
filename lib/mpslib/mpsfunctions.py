@@ -530,8 +530,7 @@ def measure(operator,lb,rb,mps,site):
 
 
 
-
-def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
+def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=np.dtype(float),scale=1.0,shift=0.5):
     """
     initializes a list of ndarrays of dimension (D,D,d) with random tensors
     numpyfun: functions to be used for the initialization (note that np.random.rand is not working, use np.random.random_sample instead)
@@ -550,12 +549,12 @@ def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5)
         if length==1:
             raise ValueError("length of an obc MPS should be larger than 1")
         mps=[]
-        if dtype==float:
+        if np.issubdtype(dtype,np.dtype(float)):
             mps.append((numpyfun((1,D,d[0]))-shift)*scale)
             for n in range(1,length-1):
                 mps.append((numpyfun((D,D,d[n]))-shift)*scale)
             mps.append((numpyfun((D,1,d[-1]))-shift)*scale)
-        if dtype==complex:
+        if np.issubdtype(dtype,np.dtype(complex)):            
             mps.append((numpyfun((1,D,d[0]))-shift+1j*(numpyfun((1,D,d[0]))-shift))*scale)
             for n in range(1,length-1):
                 mps.append((numpyfun((D,D,d[n]))-shift+1j*(numpyfun((D,D,d[n]))-shift))*scale)
@@ -564,15 +563,15 @@ def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5)
         return mps
     if obc==False:
         mps=[]
-        if dtype==float:
+        if np.issubdtype(dtype,np.dtype(float)):            
             for n in range(length):
                 mps.append((numpyfun((D,D,d[n]))-shift)*scale)
-        if dtype==complex:
+        if np.issubdtype(dtype,np.dtype(complex)):                            
             for n in range(length):
                 mps.append((numpyfun((D,D,d[n]))-shift+1j*(numpyfun((D,D,d[n]))-shift))*scale)
         return mps
 
-def MPSinit(length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
+def MPSinit(length,D,d,obc=True,dtype=np.dtype(float),scale=1.0,shift=0.5):
     """
     initializes a list of mps tensors (ndarrays of dimension (D,D,d) with random tensors
     length: length of MPS
@@ -583,7 +582,7 @@ def MPSinit(length,D,d,obc=True,dtype=float,scale=1.0,shift=0.5):
     shift: shift of the interval where random numbers are drawn from 
     """
     
-    return MPSinitializer(np.random.random_sample,length,D,d,obc=obc,dtype=float,scale=scale,shift=shift)
+    return MPSinitializer(np.random.random_sample,length,D,d,obc=obc,dtype=np.dtype(float),scale=scale,shift=shift)
 
 
 
@@ -1140,12 +1139,7 @@ def getLprojected(mps,mpo,leftboundary,ldens,rdens):
 
 
 def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,deltaEta=1E-5):
-    dtype=mps0.dtype
-    if dtype==float:
-        assert(L.dtype==dtype)
-        assert(mpo.dtype==dtype)
-        assert(R.dtype==dtype)
-
+    dtype=np.result_type(L,mpo,R,mps0)
     [chi1,chi2,d]=np.shape(mps0)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
@@ -1176,12 +1170,7 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
     see scipy eigsh documentation for details on the other parameters
     """
     
-    dtype=mps0.dtype
-    if dtype==float:
-        assert(L.dtype==dtype)
-        assert(mpo.dtype==dtype)
-        assert(R.dtype==dtype)
-
+    dtype=np.result_type(L,mpo,R,mps0)
     [chi1,chi2,d]=np.shape(mps0)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
@@ -1210,39 +1199,32 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
 
 
 def evolveTensorSexpmv(L,mpo,R,mps,tau):
-    #dtype=mps.dtype
-    #if dtype==float:
-    #    assert(L.dtype==dtype)
-    #    assert(mpo.dtype==dtype)
-    #    assert(R.dtype==dtype)
-
+    dtype=np.result_type(L,mpo,R,mps,tau)
     [chi1,chi2,d]=np.shape(mps)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     dp=np.shape(mpo)[3]
-    if type(tau)==complex:
+    if np.issubdtype(type(tau),complex):
         fac=np.exp(1j*np.angle(tau))
         dt=np.abs(tau)
-    elif type(tau)==float:
+    if np.issubdtype(type(tau),float):        
         dt=tau
         fac=1.0        
     else:
         raise TypeError("evolveTensorSexpmv: unkown type for tau")
 
     mv=fct.partial(HAproductSingleSite,*[L,fac*mpo,R])
-    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=type(tau))
-    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mps,chi1*chi2*d).astype(type(tau)), dt, anorm=1.0)
+    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mps,chi1*chi2*d).astype(dtype), dt, anorm=1.0)
     return np.reshape(v,mps.shape)
 
 def evolveMatrixSexpmv(L,R,mat,tau):
-    #dtype=type(tau)
-    #if dtype==float:
-    #    assert(L.dtype==dtype)
-    #    assert(R.dtype==dtype)
-    if type(tau)==complex:
+
+    dtype=np.result_type(L,R,mat,tau)
+    if np.issubdtype(type(tau),complex):    
         fac=np.exp(1j*np.angle(tau))
         dt=np.abs(tau)
-    elif type(tau)==float:
+    if np.issubdtype(type(tau),float):                
         dt=tau
         fac=1.0        
     else:
@@ -1253,18 +1235,12 @@ def evolveMatrixSexpmv(L,R,mat,tau):
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,fac*R])
-    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=type(tau))    
-    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mat,chi1*chi2).astype(type(tau)), dt, anorm=1.0)
+    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)    
+    v, conv, nstep, ibrkflag,mbrkdwn=sexpmv.gexpmv(LOP, np.reshape(mat,chi1*chi2).astype(dtype), dt, anorm=1.0)
     return np.reshape(v,mat.shape)
 
     
 def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,delta=1E-8):
-    dtype=type(tau)
-    if dtype==float:
-        assert(L.dtype==dtype)
-        assert(mpo.dtype==dtype)
-        assert(R.dtype==dtype)
-        
     [chi1,chi2,d]=np.shape(mps)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
@@ -1276,11 +1252,6 @@ def evolveTensorLan(L,mpo,R,mps,tau,krylov_dimension=20,delta=1E-8):
     return np.reshape(v,mps.shape)
 
 def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
-    dtype=type(tau)
-    if dtype==float:
-        assert(L.dtype==dtype)
-        assert(R.dtype==dtype)
-
     [chi1,chi2]=np.shape(mat)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
@@ -1303,7 +1274,7 @@ def eigshbondsimple(L,R,mat0,tolerance=1e-6,numvecs=1,numcv=10):
 
 #calls a sparse eigensolver to find the lowest eigenvalue 
 def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
-    dtype=mat0.dtype
+    dtype=np.result_type(L,mpo,mps,R,mat0)
     if position=='right':
         [chi1,chi2]=np.shape(mat0)
         chi1p=np.shape(L)[1]
@@ -1329,9 +1300,7 @@ def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10,numvec
                     ind=np.nonzero(e==esorted[n])
                     vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
             return es,vs
-
-
-
+        
     if position=='left':
         [chi1,chi2]=np.shape(mat0)
         chi1p=np.shape(L)[1]
@@ -1507,16 +1476,13 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
             eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which='LR',v0=np.random.rand(chi2*chi2),maxiter=nmax,tol=tolerance,ncv=ncv)
             m=np.argmax(np.real(eta))
 
-        if (dtype==float) or (dtype==np.float64) or (dtype==np.float32):
+        if np.issubdtype(dtype,np.dtype(float)):
             out=np.reshape(vec[:,m],chi1*chi1)
             if np.linalg.norm(np.imag(out))>1E-10:
                 raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
             return np.real(eta[m]),np.real(out),numeig
-        
-        if (dtype==complex) or (dtype==np.complex64) or (dtype==np.complex128):        
+        if np.issubdtype(dtype,np.dtype(complex)):        
             return eta[m],np.reshape(vec[:,m],chi1*chi1),numeig
-
-
             
         return eta[m],np.reshape(vec[:,m],chi2*chi2),numeig
 
@@ -1585,12 +1551,12 @@ def UnitcellTMeigs(mps,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=1
         print (eta)
         eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
         m=np.argmax(np.real(eta))
-    if dtype==float:
+    if np.issubdtype(dtype,np.dtype(float)):
         out=np.reshape(vec[:,m],D1l*D1l)
         if np.linalg.norm(np.imag(out))>1E-10:
             raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
         return np.real(eta[m]),np.real(out),numeig
-    if dtype==complex:
+    if np.issubdtype(dtype,np.dtype(complex)):    
         return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
 
 
@@ -1647,7 +1613,7 @@ def patchmpo(mpo,index):
     for n in range(len(mpo)):
         mpo[n]=np.copy(temp[n])
 
-def computeDensity(dens0,mps,direction,dtype=float):
+def computeDensity(dens0,mps,direction,dtype=np.dtype(float)):
     """
     comuputes a reduced density matrix obtained from 
     evolving dens0 over a mps unitcell;
@@ -1655,7 +1621,6 @@ def computeDensity(dens0,mps,direction,dtype=float):
     mps: list of mps tensors (ndarrays of shape(D_n,D_n,n)) for n=1,...,N, or an MPS object
     direction: direction of contraction: direction>0: do left-to right evolution, direction<0: do a right to left evolution
     returns dens: a list of density matrices on each bond (including the left and right bonds to the left and right of the mps, len(dens)=len(mps)+1)
-    
     """
     if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
         dtype=np.result_type(dens0.dtype,mps.dtype)
@@ -1854,7 +1819,7 @@ def pseudoUnitcellTransferOperator(direction,mps,ldens,rdens,vector):
         return UnitcellTransferOperator(direction,mps,vector)-np.reshape(np.trace(np.transpose(x).dot(ldens[0]))*rdens[0],(D1l*D1l))
 
 
-def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datatype=float,direction=1):
+def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datatype=np.dtype(float),direction=1):
     if direction>0:
         [D1l,D2l,d]=np.shape(mps[0])
         [D1r,D2r,d]=np.shape(mps[-1])
@@ -1918,10 +1883,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
     
         l=np.reshape(vl,(D1l,D1l))
         l=l/np.trace(l)
-        if dtype==complex:
-            l=(l+herm(l))/2.0
-        if dtype==float:
-            l=np.real((l+herm(l))/2.0)
+        l=(l+herm(l))/2.0
 
         eigvals,u=np.linalg.eigh(l)
         eigvals=np.abs(eigvals)
@@ -1961,10 +1923,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         r=np.reshape(vr,(D2r,D2r))
         #fix phase of l and restore the proper normalization of l
         r=r/np.trace(r)
-        if dtype==float:
-            r=np.real((r+herm(r))/2.0)
-        if dtype==complex:
-            r=(r+herm(r))/2.0
+        r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)
@@ -2009,10 +1968,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         r=np.reshape(vr,(D2r,D2r))
         #fix phase of l and restore the proper normalization of l
         r=r/np.trace(r)
-        if dtype==float:
-            r=np.real((r+herm(r))/2.0)
-        if dtype==complex:
-            r=(r+herm(r))/2.0
+        r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)
@@ -2039,10 +1995,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         l=np.reshape(vl,(D1l,D1l))
         #fix phase of l and restore the proper normalization of l
         l=l/np.trace(l)
-        if dtype==complex:
-            l=(l+herm(l))/2.0
-        if dtype==float:
-            l=np.real((l+herm(l))/2.0)
+        l=(l+herm(l))/2.0
             
         eigvals,u=np.linalg.eigh(l)
         eigvals=np.abs(eigvals)
@@ -2262,11 +2215,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         #fix phase of l and restore the proper normalization of l
         l=l/np.trace(l)
         l=(l+herm(l))/2.0        
-        #if dtype==float:
-        #    l=np.real(l+herm(l))/2.0
-        #if dtype==complex:
-        #    l=(l+herm(l))/2.0
-
 
         eigvals,u=np.linalg.eigh(l)
         eigvals=np.abs(eigvals)
@@ -2301,10 +2249,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         r=np.reshape(v,(chi,chi))
         r=r/np.trace(r)
         r=(r+herm(r))/2.0
-        #if dtype==float:
-        #    r=np.real((r+herm(r))/2.0)
-        #if dtype==complex:
-        #    r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)
@@ -2338,11 +2282,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
 
         l=l/np.trace(l)
         l=(l+herm(l))/2.0
-        #if dtype==float:
-        #    l=np.real(l+herm(l))/2.0
-        #    
-        #if dtype==complex:
-        #    l=(l+herm(l))/2.0
 
         eigvals,u=np.linalg.eigh(l)
         eigvals=np.abs(eigvals)
@@ -2366,10 +2305,6 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         r=np.reshape(v,(chi2,chi2))
         r=r/np.trace(r)
         r=(r+herm(r))/2.0        
-        #if dtype==float:
-        #    r=np.real((r+herm(r))/2.0)
-        #if dtype==complex:
-        #    r=(r+herm(r))/2.0
 
         eigvals,u=np.linalg.eigh(r)
         eigvals=np.abs(eigvals)

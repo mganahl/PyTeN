@@ -84,7 +84,7 @@ if __name__ == "__main__":
                                   args.nreset,args.normtolerance,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,\
                                   args.Nmaxlgmres,pinv=args.pinv,trunc=args.truncation)
 
-    iMPS.__simulate__()
+    iMPS.simulate()
 
     np.save(args.filename,iMPS._mps)
     [Gamma,lam,r]=mf.regauge(iMPS._mps,gauge='symmetric',tol=args.regaugetol)
