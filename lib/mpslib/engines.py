@@ -816,16 +816,23 @@ class VUMPSengine(Container):
         AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps)
         C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mat)
         self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))
-        
-        e1,self._mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,numvecs=1,numcv=self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
-        e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
 
-
-        if self._arnumvecs>1:        
-            self._mat/=np.linalg.norm(self._mat[0])
-            self._gap=e1[1]-e1[0]
-            self._mps=self._mps[0]
-
+        if self._solver=='AR':
+            e1,self._mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,numvecs=1,numcv=self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
+            e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
+            if self._arnumvecs>1:        
+                self._mat/=np.linalg.norm(self._mat[0])
+                self._gap=e1[1]-e1[0]
+                self._mps=self._mps[0]
+        elif self._solver=='LAN':
+            e1,self._mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps,self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
+            e2,self._mat=mf.lanczosbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,'right',self._Ndiag,self._nmaxlan,self._arnumvecs,delta=self._landelta,deltaEta=self._artol)
+            if self._arnumvecs>1:        
+                self._gap=e1[1]-e1[0]
+                self._mps=self._mps[0]
+                self._mat=self._mat[0]            
+        else:
+            raise ValueError("in VUMPSengine: unknown solver type; use 'AR' or 'LAN'")
         D1,D2,d=self._mps.shape
 
         if self._svd:
@@ -858,9 +865,13 @@ class VUMPSengine(Container):
         """
         self.__simulate__(*args,**kwargs)
         
+    #def simulate(self,Nmax,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,\
+    #             artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,checkpoint=100):
+    #    self.__simulate__(Nmax,epsilon,tol,lgmrestol,ncv,numeig,Nmaxlgmres,\
+    #             artol,arnumvecs,arncv,svd,Ndiag,nmaxlan,landelta,checkpoint) 
 
     def __simulate__(self,Nmax,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,\
-                     artol=1E-10,arnumvecs=1,arncv=20,svd=False,checkpoint=100):
+                     artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,solver='AR',checkpoint=100):
 
         """
         do a VUMPS simulation:
@@ -901,7 +912,10 @@ class VUMPSengine(Container):
         self._ncv=ncv
         self._epsilon=epsilon
         self._Nmaxlgmres=Nmaxlgmres
-
+        self._Ndiag=Ndiag
+        self._nmaxlan=nmaxlan
+        self._landelta=landelta
+        self._solver=solver
         self._A,self._l=mf.regauge(self._mps,gauge='left',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._B,self._r=mf.regauge(self._mps,gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._mat=np.eye(self._A.shape[1])
@@ -918,10 +932,10 @@ class VUMPSengine(Container):
                 np.save('CP_mps'+self._filename,self._mps)
             self._it+=1
             if self._arnumvecs==1:
-                stdout.write("\rit %i: local E=%.16f, D=%i, gradient norm=%.16f" %(self._it,np.real(Edens),self._D,self._gradnorm))
+                stdout.write("\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f" %(self._solver,self._it,np.real(Edens),self._D,self._gradnorm))
                 stdout.flush()
             if self._arnumvecs>1:
-                stdout.write("\rit %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f" %(self._it,np.real(Edens),np.real(self._gap),self._D,self._gradnorm))
+                stdout.write("\rusing %s solver: it %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f" %(self._solver,self._it,np.real(Edens),np.real(self._gap),self._D,self._gradnorm))
                 stdout.flush()
             if self._gradnorm<self._epsilon:
                 converged=True

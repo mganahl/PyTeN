@@ -1147,18 +1147,42 @@ def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,de
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
     LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
-    e,v,con=lan.__simulate__(initialstate=np.reshape(mps0,chi1*chi2*d),verbose=False)
+    e,v,con=lan.__simulate__(initialstate=np.reshape(mps0,chi1*chi2*d).astype(dtype),verbose=False)
     if numeig==1:
         return e[0],np.reshape(v[0],(chi1p,chi2p,dp))
     else:
         es=[]
         vs=[]
-        for n in range(min(numeig,len(e))):
+        for n in range(numeig):
             es.append(e[n])
             vs.append(np.reshape(v[n],(chi1p,chi2p,dp)))
         return es,vs
 
-def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=8,numcv=10,numvecs_returned=1):
+
+def lanczosbond(L,mpo,mps,R,mat0,position,Ndiag=10,nmax=500,numeig=1,delta=1E-10,deltaEta=1E-8):
+    dtype=np.result_type(L,mpo,mps,R,mat0)
+    [chi1,chi2]=np.shape(mat0)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
+    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
+    e,v,con=lan.__simulate__(initialstate=np.reshape(mat0,chi1*chi2).astype(dtype),verbose=False)
+
+    if numeig==1:
+        return e[0],np.reshape(v[0],(chi1p,chi2p))
+    else:
+        es=[]
+        vs=[]
+        
+        for n in range(numeig):
+            es.append(e[n])
+            vs.append(np.reshape(v[n],(chi1p,chi2p)))
+        return es,vs
+
+
+def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
     
     """
     calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
@@ -1178,7 +1202,6 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=8,numcv=10,numvecs_returned=1):
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
     LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=1000000,tol=tolerance,v0=np.reshape(mps0,chi1*chi2*d),ncv=numcv)
-    print(e)
     #return [e,np.reshape(v,(chi1p,chi2p,dp))]    
     if numvecs_returned==1:
         ind=np.nonzero(e==min(e))
@@ -1276,57 +1299,57 @@ def eigshbondsimple(L,R,mat0,tolerance=1e-6,numvecs=1,numcv=10):
 #calls a sparse eigensolver to find the lowest eigenvalue 
 def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
     dtype=np.result_type(L,mpo,mps,R,mat0)
-    if position=='right':
-        [chi1,chi2]=np.shape(mat0)
-        chi1p=np.shape(L)[1]
-        chi2p=np.shape(R)[1]
-        dp=np.shape(mpo)[3]
-        mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
-        LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
-        e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
+    #if position=='right':
+    [chi1,chi2]=np.shape(mat0)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
+    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
 
-        if numvecs_returned==1:
-            ind=np.nonzero(e==min(e))
-            #return [e,np.reshape(v,(chi1p,chi2p,dp))]
-            return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
-        elif numvecs_returned>1:
-            if (numvecs_returned>numvecs):
-                sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
-                numvecs_returned=numvecs
-                es=[]
-                vs=[]
-                esorted=np.sort(e)
-                for n in range(numvecs_returned):
-                    es.append(esorted[n])
-                    ind=np.nonzero(e==esorted[n])
-                    vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
-            return es,vs
+    if numvecs_returned==1:
+        ind=np.nonzero(e==min(e))
+        #return [e,np.reshape(v,(chi1p,chi2p,dp))]
+        return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
+    elif numvecs_returned>1:
+        if (numvecs_returned>numvecs):
+            sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            numvecs_returned=numvecs
+            es=[]
+            vs=[]
+            esorted=np.sort(e)
+            for n in range(numvecs_returned):
+                es.append(esorted[n])
+                ind=np.nonzero(e==esorted[n])
+                vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
+        return es,vs
         
-    if position=='left':
-        [chi1,chi2]=np.shape(mat0)
-        chi1p=np.shape(L)[1]
-        chi2p=np.shape(R)[1]
-        dp=np.shape(mpo)[3]
-        mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
-        LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
-        e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
-
-        if numvecs_returned==1:
-            ind=np.nonzero(e==min(e))
-            #return [e,np.reshape(v,(chi1p,chi2p,dp))]
-            return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
-        elif numvecs_returned>1:
-            if (numvecs_returned>numvecs):
-                sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
-                numvecs_returned=numvecs
-                es=[]
-                vs=[]
-                esorted=np.sort(e)
-                for n in range(numvecs_returned):
-                    es.append(esorted[n])
-                    ind=np.nonzero(e==esorted[n])
-                    vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
-            return es,vs
+    #if position=='left':
+    #    [chi1,chi2]=np.shape(mat0)
+    #    chi1p=np.shape(L)[1]
+    #    chi2p=np.shape(R)[1]
+    #    dp=np.shape(mpo)[3]
+    #    mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
+    #    LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    #    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=100000,tol=tolerance,v0=np.reshape(mat0,chi1*chi2),ncv=numcv)
+    #
+    #    if numvecs_returned==1:
+    #        ind=np.nonzero(e==min(e))
+    #        #return [e,np.reshape(v,(chi1p,chi2p,dp))]
+    #        return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
+    #    elif numvecs_returned>1:
+    #        if (numvecs_returned>numvecs):
+    #            sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+    #            numvecs_returned=numvecs
+    #            es=[]
+    #            vs=[]
+    #            esorted=np.sort(e)
+    #            for n in range(numvecs_returned):
+    #                es.append(esorted[n])
+    #                ind=np.nonzero(e==esorted[n])
+    #                vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p)))
+    #        return es,vs
 
 
         #return [e,np.reshape(v,(chi1p,chi2p))]
