@@ -1158,7 +1158,7 @@ def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,de
             vs.append(np.reshape(v[n],(chi1p,chi2p,dp)))
         return es,vs
 
-def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
+def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=8,numcv=10,numvecs_returned=1):
     
     """
     calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
@@ -1178,6 +1178,7 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=4,numcv=10,numvecs_returned=1):
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
     LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=1000000,tol=tolerance,v0=np.reshape(mps0,chi1*chi2*d),ncv=numcv)
+    print(e)
     #return [e,np.reshape(v,(chi1p,chi2p,dp))]    
     if numvecs_returned==1:
         ind=np.nonzero(e==min(e))

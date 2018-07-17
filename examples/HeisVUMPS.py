@@ -27,8 +27,8 @@ if __name__ == "__main__":
     parser.add_argument('--Jz', help='Sz-Sz intercation (1.0)',type=float,default=1.0)    
     parser.add_argument('--Bz', help='magnetic field (0.5)',type=float,default=0.0)
     parser.add_argument('--scaling',help='scaling of the initial MPS entries (0.5)',type=float,default=0.5)    
-    parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-6)
-    parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-6)
+    parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-12)',type=float,default=1E-12)
+    parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-12)',type=float,default=1E-12)
     parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-5)',type=float,default=1E-6)
     parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jz,args.Bz)
     [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
 
-    iMPS=en.VUMPSengine(mps,mpo,args.filename,dtype)
+    iMPS=en.VUMPSengine(mps,mpo,args.filename)
     iMPS.simulate(args.imax,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,args.Nmaxlgmres,artol=args.artol,arnumvecs=1,\
                   arncv=args.arncv,svd=args.svd,checkpoint=args.cp)
 

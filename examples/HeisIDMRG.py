@@ -25,7 +25,7 @@ if __name__ == "__main__":
     Jz=np.ones(N)
     Jxy=np.ones(N)
     #initialize MPS with bond dimension D
-    dtype=float
+    dtype=complex
     mps=mpslib.MPS.random(N=N,D=D,d=d,obc=False,dtype=dtype)
     mpo=H.XXZ(Jz,Jxy,np.zeros(N),False,dtype=dtype)
     idmrg=en.IDMRGengine(mps,mpo,'blabla')

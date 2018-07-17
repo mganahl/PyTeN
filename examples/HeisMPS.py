@@ -40,8 +40,9 @@ if __name__ == "__main__":
     #initialize a DMRGEngine with an mps and an mpo
     dmrg=en.DMRGengine(mps,mpo,'blabla')
     print(dmrg.__doc__)
-    print(dmrg.simulate.__doc__)
-    print(dmrg.simulateTwoSite.__doc__)
+    print(dmrg.__simulate__.__doc__)
+    
+    print(dmrg.__simulateTwoSite__.__doc__)
     
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
@@ -68,7 +69,7 @@ if __name__ == "__main__":
 
     #check if bond dimension has indeed been truncated
     print()
-    print (dmrg._mps.D())
+    print (dmrg._mps.D)
     #measure again ,now with truncated state
     meanSztrunc=dmrg._mps.measureList(Sz)
 

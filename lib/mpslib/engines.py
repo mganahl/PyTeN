@@ -49,27 +49,25 @@ class Container:
             
 class DMRGengine(Container):
     """
-    DMRGengine.__init__(mps,mpo,filename,lb=None,rb=None)
-    initialize a DRMGengine
+    DMRGengine
+    simulation container for density matrix renormalization group optimization
 
-    mps: initial mps, can be obc or infinite
-    mpo: the Hamiltonian in mpo form
-    filename: filename of the simulation; will be appended to output (if there is any)
-    lb,rb: left and right Hamiltonian environment; for obc use None for either; 
-           user can provide lb and rb to fix the boundary condition of the mps
-           shapes of lb, rb, mps[0] and mps[-1] have to be consitent!
     """
     #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1,1,1)) for obc simulation
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         """
         initialize an MPS object
-        mps: a list of np.ndarrays
-        mpo: an MPO object
+        mps:      MPS object
+                  the initial mps
+        mpo:      MPO object
+                  Hamiltonian in MPO format
         filename: str
                   the name of the simulation
-        lb,rb:   None or np.ndarray
-                 left and right environment boundary conditions
-                 if None, obc are assumed
+        lb,rb:    None or np.ndarray
+                  left and right environment boundary conditions
+                  if None, obc are assumed
+                  user can provide lb and rb to fix the boundary condition of the mps
+                  shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
         if (np.all(lb)!=None) and (np.all(rb)!=None):
             assert(mps[0].shape[0]==lb.shape[0])
@@ -308,19 +306,17 @@ class DMRGengine(Container):
 
 
 class IDMRGengine(DMRGengine):
-
     """
-    IDMRGengine. __init__(mps,mpo,filename):
-    performs an IDMRG optimization of the ground-state of a Hamiltonian as given by mpo
-    mps: MPS object with infinite boundary conditions
-    mpo: MPO object with infinite boundary conditions
-    filename: the name of the simulation; will be appended to the output (if there is any)
+    IDMRGengine
+    container object for performing an IDMRG optimization of the ground-state of a Hamiltonian
     """
     def __init__(self,mps,mpo,filename):
         """
-        initialize an MPS object
-        mps: a list of np.ndarrays
-        mpo: an MPO object
+        initialize an IDMRG object
+        mps:      MPS object
+                  initial mps
+        mpo:      MPO object
+                  Hamiltonian in MPO format
         filename: str
                   the name of the simulation
         """
@@ -527,26 +523,8 @@ class IDMRGengine(DMRGengine):
 class HomogeneousIMPSengine(Container):
     """
 
-    HomogeneousIMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
-    initialize a homogeneous gradient optimization
-    
-    MPS optimization methods for homogeneous systems
-    uses gradient optimization to find the ground state of a Homogeneous system
-    mps (np.ndarray of shape (D,D,d)): an initial mps tensor 
-    mpo (np.ndarray of shape (M,M,d,d)): the mpo tensor
-    filename (str): filename of the simulation
-    alpha (float): initial steps size
-    alphas (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
-    normgrads (list of float): alphas[i] is the stepsizes to be use once gradient norm is smaller than normgrads[i] (see next)
-    dtype: type of the mps (float or complex)
-    factor (float): factor by which internal stepsize is reduced in case divergence is detected
-    normtol (float): absolute value by which gradient may increase without raising a "divergence" flag
-    epsilon (float): desired convergence of the gradient
-    tol (float): eigensolver tolerance used in regauging
-    lgmrestol (float): eigensolver tolerance used for calculating the infinite environements
-    ncv (int): number of krylov vectors used in sparse eigensolvers
-    numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
-    Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
+    HomogeneousIMPSengine
+    container object for homogeneous MPS optimization using a gradient descent method
     """
 
     def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,pinv=1E-100,trunc=1E-16):
@@ -763,25 +741,9 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
 class VUMPSengine(Container):
     """
 
-    VUMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
-    initialize a homogeneous VUMPS optimization
-    
-    MPS optimization methods for homogeneous systems
-    uses gradient optimization to find the ground state of a Homogeneous system
-    mps (np.ndarray of shape (D,D,d)): an initial mps tensor 
-    mpo (np.ndarray of shape (M,M,d,d)): the mpo tensor
-    filename (str): filename of the simulation
-    dtype: type of the mps (float or complex)
-    epsilon (float): desired convergence of the gradient
-    tol (float): eigensolver tolerance used in regauging
-    lgmrestol (float): eigensolver tolerance used for calculating the infinite environements
-    ncv (int): number of krylov vectors used in sparse eigensolvers
-    numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
-    Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
-    artol (int): tolerance of arnoldi solver
-    arnumvecs (int): number of eigenstates to be calculated by arnoldi solver; it arnumvecs>1, the gap to the first excited state is being printed as output
-    arncv (int):  number of krylov vectors in the arnolid solver
-    svd: do an svd instead of polar decomposition for gauge matching
+    VUMPSengine
+    container object for mps ground-state optimization using the VUMPS algorithm
+
     """
 
     def __init__(self,mps,mpo,filename):
@@ -851,9 +813,13 @@ class VUMPSengine(Container):
         self._rb[:,:,-1]+=np.copy(self._kright)
 
 
-
-        e1,self._mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,self._arnumvecs,self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
+        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps)
+        C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mat)
+        self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))
+        
+        e1,self._mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,numvecs=1,numcv=self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
         e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
+
 
         if self._arnumvecs>1:        
             self._mat/=np.linalg.norm(self._mat[0])
@@ -939,7 +905,6 @@ class VUMPSengine(Container):
         self._A,self._l=mf.regauge(self._mps,gauge='left',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._B,self._r=mf.regauge(self._mps,gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._mat=np.eye(self._A.shape[1])
-        Edensold=1E10
 
         while converged==False:
             if self._it<10:
@@ -953,18 +918,17 @@ class VUMPSengine(Container):
                 np.save('CP_mps'+self._filename,self._mps)
             self._it+=1
             if self._arnumvecs==1:
-                stdout.write("\rit %i: local E=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),leftn,rightn,self._D,np.abs(Edensold-Edens)))
+                stdout.write("\rit %i: local E=%.16f, D=%i, gradient norm=%.16f" %(self._it,np.real(Edens),self._D,self._gradnorm))
                 stdout.flush()
             if self._arnumvecs>1:
-                stdout.write("\rit %i: local E=%.16f, gap=%.16f, lnorm=%.6f, rnorm=%.6f, D=%i, eps=%.16f" %(self._it,np.real(Edens),np.real(self._gap),leftn,rightn,self._D,np.abs(Edensold-Edens)))
+                stdout.write("\rit %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f" %(self._it,np.real(Edens),np.real(self._gap),self._D,self._gradnorm))
                 stdout.flush()
-            if np.abs(Edensold-Edens)<self._epsilon:
+            if self._gradnorm<self._epsilon:
                 converged=True
-            Edensold=Edens
         print
         print()
         if self._it>=Nmax and (converged==False):
-            print ('simulation reached maximum number of steps ({1}) and stopped at precision of {0}'.format(np.abs(Edensold-Edens),Nmax))
+            print ('simulation reached maximum number of steps ({1}) and stopped at precision of {0}'.format(self._gradnorm,Nmax))
         if converged==True:
             print ('simulation converged to {0} in {1} steps'.format(self._epsilon,Nmax))
         print
@@ -973,12 +937,8 @@ class VUMPSengine(Container):
 
 class TEBDEngine(Container):
     """
-    TEBDEngine.__init__(mps,gatecontainer,filename):
-    initialize a TEBD simulation; this is an engine for real or imaginary time evolution using TEBD
-    mps: the initial state in mps form
-    gatecontainer: an object or method; gatecontainer(n,n+1,tau) has to return the gate to be applied at sites n and n+1
-                   tau (scalar) is the time step
-    filename: the file under which cp results will be stored (not yet implemented)
+    TEBDEngine
+    container object for performing real/imaginary time evolution using TEBD algorithm for finite systems 
     """
     
     def __init__(self,mps,gatecontainer,filename):
@@ -1077,20 +1037,14 @@ class TEBDEngine(Container):
 
 class TDVPEngine(Container):
     """
-    TDVPEngine.__init__(mps,mpo,filename,lb=None,rb=None):
-    initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
-    mps: the initial state in mps form
-    mpo: the generator of the time evolution in mpo form (list of np.ndarrays or MPO object)
-    filename: the file under which cp results will be stored (not yet implemented)
-    lb,rb: left and right Hamiltonian environment; for obc use None for either; 
-           user can provide lb and rb to fix the boundary condition of the mps (as of now (July 2018), this is not tested)
-           shapes of lb, rb, mps[0] and mps[-1] have to be consitent!
+    TDVPEngine
+    container object for performing real/imaginary time evolution using TDVP algorithm for finite systems 
     """
     
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         """
-        TEBDEngine.__init__(mps,gatecontainer,filename):
-        initialize a TEBD simulation; this is an engine for real or imaginary time evolution using TEBD
+        TDVPEngine.__init__(mps,gatecontainer,filename):
+        initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
