@@ -2,7 +2,7 @@
 @author: Martin Ganahl
 """
 import numpy as np
-import time
+import time,copy
 import scipy as sp
 
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
@@ -16,11 +16,23 @@ class MPO:
     
     """
 
-    def __init__(self):
+    def __init__(self,mpos=[]):
         #a list of mpo-tensors, to be initialized in the derived class
-        self._mpo=[]
-        self._N=0
+        self._mpo=copy.deepcopy(mpos)
+        self._N=len(self._mpo)
+    @classmethod
+    def fromMPO(cls,other):
+        #a list of mpo-tensors, to be initialized in the derived class
+        return cls(other._mpolist)
 
+    @classmethod        
+    def fromlist(cls,mpolist):
+        return cls(mpolist)
+        #a list of mpo-tensors, to be initialized in the derived class
+        #cls._mpo=copy.deepcopy(mpolist)
+        #cls._N=len(mpolist)
+        #return cls
+        
     def twoSiteGate(self,m,n,tau):
         """
         returns a two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)

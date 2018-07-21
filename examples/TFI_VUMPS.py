@@ -31,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-12)',type=float,default=1E-12)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-12)',type=float,default=1E-12)
     parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-10)',type=float,default=1E-10)
-    parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
+    parser.add_argument('--imax', help='maximum number of iterations (100)',type=int,default=100)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
     parser.add_argument('--filename', help='filename for output (_TFI_VUMPS)',type=str,default='_TFI_VUMPS')
     parser.add_argument('--seed', help='seed for initialization of Q and R matrices',type=int)
@@ -49,20 +49,19 @@ if __name__ == "__main__":
     N=1
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
-    mpo=H.TFI(Jx,B,False)[0]
-
+    mpo=H.TFI(Jx,B,False)
+    
     if args.dtype=='complex':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling+1j*(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=complex
     elif args.dtype=='float':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=float        
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
     
-        
+    mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
+    #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
-    [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
+    mps.regauge(gauge='right')
     iMPS=en.VUMPSengine(mps,mpo,args.filename)
     iMPS.simulate(args.imax,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
                 arncv=args.arncv,svd=args.svd,checkpoint=args.cp,solver=args.solver.upper())

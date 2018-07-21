@@ -743,41 +743,39 @@ class VUMPSengine(Container):
 
     VUMPSengine
     container object for mps ground-state optimization using the VUMPS algorithm
-
     """
-
     def __init__(self,mps,mpo,filename):
         """
         initialize a VUMPS simulation object
-        mps: a list of np.ndarrays
+        mps: a list of a single np.ndarray of shape(D,D,d), or an MPS object of length 1
         mpo: an MPO object
         filename: str
                   the name of the simulation
         """
-        self._dtype=np.result_type(mps.dtype,mpo.dtype)
+        if len(mps)>1:
+            raise ValueError("VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
+        if len(mpo)>1:
+            raise ValueError("VUMPSengine: got an mpo of len(mps)>1; VUMPSengine can only handle len(mpo)=1")
+        
+        self._dtype=np.result_type(mps[0].dtype,mpo.dtype)
 
-        self._mps=np.copy(mps)
-        self._D=np.shape(mps)[0]
+        self._mps=copy.deepcopy(mps)
+        self._D=np.shape(mps[0])[0]
         self._filename=filename
         
         self._kleft=np.random.rand(self._D,self._D)
         self._kright=np.random.rand(self._D,self._D)
         self._it=1
-        [B1,B2,d1,d2]=np.shape(mpo)
+        [B1,B2,d1,d2]=np.shape(mpo[0])
 
         mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
         mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
 
-        mpol[0,:,:,:]=mpo[-1,:,:,:]
+        mpol[0,:,:,:]=mpo[0][-1,:,:,:]
         mpol[0,0,:,:]/=2.0
-        mpor[:,0,:,:]=mpo[:,0,:,:]
+        mpor[:,0,:,:]=mpo[0][:,0,:,:]
         mpor[-1,0,:,:]/=2.0
-
-        self._mpo=[]
-        self._mpo.append(np.copy(mpol))
-        self._mpo.append(np.copy(mpo))
-        self._mpo.append(np.copy(mpor))
-
+        self._mpo=H.MPO.fromlist([mpol,mpo[0],mpor])
 
 
     def __doStep__(self):
@@ -813,39 +811,43 @@ class VUMPSengine(Container):
         self._rb[:,:,-1]+=np.copy(self._kright)
 
 
-        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps)
+        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps[0])
         C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mat)
         self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))
 
         if self._solver=='AR':
-            e1,self._mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps,self._artol_,numvecs=1,numcv=self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()            
+            e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps[0],self._artol_,numvecs=1,numcv=self._arncv,numvecs_returned=self._arnumvecs)#mps._mat set to 11 during call of __tensor__()
             e2,self._mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
             if self._arnumvecs>1:        
                 self._mat/=np.linalg.norm(self._mat[0])
                 self._gap=e1[1]-e1[0]
-                self._mps=self._mps[0]
+                self._mps[0]=mps[0]
+            else:
+                self._mps[0]=mps
         elif self._solver=='LAN':
-            e1,self._mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps,self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
+            e1,mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps[0],self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
             e2,self._mat=mf.lanczosbond(self._lb,self._mpo[1],self._A,self._rb,self._mat,'right',self._Ndiag,self._nmaxlan,self._arnumvecs,delta=self._landelta,deltaEta=self._artol)
             if self._arnumvecs>1:        
                 self._gap=e1[1]-e1[0]
-                self._mps=self._mps[0]
-                self._mat=self._mat[0]            
+                self._mps[0]=mps[0]
+                self._mat=self._mat[0]
+            else:
+                self._mps[0]=mps
         else:
             raise ValueError("in VUMPSengine: unknown solver type; use 'AR' or 'LAN'")
-        D1,D2,d=self._mps.shape
+        D1,D2,d=self._mps[0].shape
 
         if self._svd:
-            ACC_l=np.reshape(ncon.ncon([self._mps,herm(self._mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
-            CAC_r=np.reshape(ncon.ncon([herm(self._mat),self._mps],[[-1,1],[1,-2,-3]]),(D1,d*D2))
+            ACC_l=np.reshape(ncon.ncon([self._mps[0],herm(self._mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
+            CAC_r=np.reshape(ncon.ncon([herm(self._mat),self._mps[0]],[[-1,1],[1,-2,-3]]),(D1,d*D2))
             Ul,Sl,Vl=mf.svd(ACC_l)
             Ur,Sr,Vr=mf.svd(CAC_r)
             self._A=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
             self._B=np.reshape(Ur.dot(Vr),(D1,D2,d))
 
         else:
-            AC_l=np.reshape(np.transpose(self._mps,(0,2,1)),(D1*d,D2))
-            AC_r=np.reshape(self._mps,(D1,d*D2))
+            AC_l=np.reshape(np.transpose(self._mps[0],(0,2,1)),(D1*d,D2))
+            AC_r=np.reshape(self._mps[0],(D1,d*D2))
             
             UAC_l,PAC_l=sp.linalg.polar(AC_l,side='right')
             UAC_r,PAC_r=sp.linalg.polar(AC_r,side='left')
@@ -916,8 +918,8 @@ class VUMPSengine(Container):
         self._nmaxlan=nmaxlan
         self._landelta=landelta
         self._solver=solver
-        self._A,self._l=mf.regauge(self._mps,gauge='left',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
-        self._B,self._r=mf.regauge(self._mps,gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
+        self._A,self._l=mf.regauge(self._mps[0],gauge='left',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
+        self._B,self._r=mf.regauge(self._mps[0],gauge='right',initial=None,nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig)
         self._mat=np.eye(self._A.shape[1])
 
         while converged==False:
@@ -1191,6 +1193,34 @@ class TDVPEngine(Container):
 
 
 # ============================================================================     everything below this line is still in development =================================================
+
+class PeriodicMPSengine(Container):
+    
+    def __init__(self,mps,mpo,N,filename):
+        """
+        initialize a VUMPS simulation object
+        mps: a list of a single np.ndarray of shape(D,D,d), or an MPS object of length 1
+        mpo: an MPO object
+        filename: str
+                  the name of the simulation
+        """
+        if len(mps)>1:
+            raise ValueError("PeriodicMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
+        if (mps.obc==True):
+            raise ValueError("PeriodicMPSengine: got an mps with obc=True")
+        self._dtype=np.result_type(mps[0].dtype,mpo.dtype)
+        self._N=N
+        self._mpo=copy.deepcopy(mpo)        
+        self._mps=copy.deepcopy(mps)
+        self._D=np.shape(mps[0])[0]
+        self._filename=filename
+        self._it=1
+
+    def __siulate__(self):
+        self._mps.canonize()
+        
+
+
 """
 
 calculates excitation spectrum for a lattice MPS

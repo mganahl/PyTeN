@@ -1862,7 +1862,7 @@ def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datat
 def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12,thresh=1E-8):
     """
     takes an mps (can either be a list of np.arrays or an object of type MPS from mps.py) and regauges it in place
-    gauge can be either of {'left','right',symmetric'} (desired gauuge of the output mps)
+    gauge can be either of {'left','right',symmetric'} (desired gauge of the output mps)
     if gauge=symmetric, mps is right orthogonal; in this case the routine returns the schmidt-values in a diagonal matrix
     Note that in the case that gauge=symmetric and schmidt coefficients <= 1E-15 present, the state is truncated, and a bunch of
     additional back and forth sweeps are done 
@@ -2131,14 +2131,24 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
     
     """
     canonizes an mps, i.e. it returns the Gamma and lambda matrices in a list; routine can handle
-    either a mps in "list" format (i.e. a list of tensors) or an type lib.mpslib.mps.MPS object
+
+    Parameters 
+    ------------------------------------
+    mps: list of np.ndarrays of shape (D_i,D_i,d_i) or MPS object 
+         the mps can have obc or pbc boundaries; in the latter case,
+         the state has to be regauged into symmetric form prior to calling canonizeMPS
     
+    tr_thresh: float
+               threshold for truncation of the MPS
+    r_thresh:  float
+               internal parameter for capturing exceptions (ignore it)
     
-    tr_thresh: threshold for truncation of the MPS
-    r_thresh:  internal parameter for capturing exceptions (ignore it)
-    
-    Returns: Gamma: list of len(Gamma)=len(mps) containing the Gamma-matrices
-    Lam: list of np.arrays containing the Schmidt-values, stored as one-dimensional np.arrays
+    Returns: 
+    ------------------------------------
+    Gamma: list of np.ndarrays of shape (Di,Di,di)
+           of len(Gamma)=len(mps) containing the Gamma-matrices
+    Lam: list of np.arrays of shape (Di,)
+         containing the Schmidt-values, stored as one-dimensional np.arrays
     """
     
     if (mps[0].shape[0]==1) and (mps[-1].shape[1]==1):
