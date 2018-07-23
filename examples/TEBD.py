@@ -55,7 +55,7 @@ if __name__ == "__main__":
     #you don't have to pass an mpo here; the engine mererly assumes that
     #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
     #which should return an twosite gate
-    engine=en.TEBDEngine(dmrg._mps,mpo,"insert_name_here")
+    engine=en.TimeEvolutionEngine(dmrg._mps,mpo,"insert_name_here")
     dt=-1j*0.05  #time step
     numsteps=20  #numnber of steps to be taken in between measurements
     Dmax=40      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be

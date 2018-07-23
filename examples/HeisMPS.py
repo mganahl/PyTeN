@@ -46,9 +46,9 @@ if __name__ == "__main__":
     
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
-    dmrg.simulateTwoSite(1,1e-10,1e-6,40,verbose=1,solver='LAN')
+    dmrg.simulateTwoSite(1,1e-10,1e-6,40,verbose=1,solver='LOBPCG')
     #now switch to a single site DMRG (faster) to further converge state state
-    dmrg.simulate(4,1e-10,1e-10,30,verbose=1,solver='LAN')
+    dmrg.simulate(4,1e-10,1e-10,30,verbose=1,solver='LOBPCG')
 
 
     #a list of measurement operators to measured (here sz)

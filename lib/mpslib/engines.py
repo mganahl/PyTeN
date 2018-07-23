@@ -4,6 +4,7 @@
 from __future__ import absolute_import, division, print_function
 from sys import stdout
 import pickle
+import sympy
 import numpy as np
 import os,copy
 import time
@@ -116,7 +117,8 @@ class DMRGengine(Container):
 
         """
         
-        assert((solver=='AR') or (solver=='LAN'))
+        assert((solver=='AR') or (solver=='LAN') or (solver=='LOBPCG'))
+        solver='LOBPCG'
         converged=False
         energy=100000.0
         it=1
@@ -124,6 +126,8 @@ class DMRGengine(Container):
         self._mps.__position__(0)
         while not converged:
             for n in range(0,self._mps._N-1):
+                if solver=='LOBPCG':
+                    e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol)#mps._mat set to 11 during call of __tensor__()
                 if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
                 if solver=='LAN':
@@ -146,6 +150,8 @@ class DMRGengine(Container):
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
                 
             for n in range(self._mps._N-1,0,-1):
+                if solver=='LOBPCG':
+                    e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol)#mps._mat set to 11 during call of __tensor__()
                 if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)
                 if solver=='LAN':
@@ -209,7 +215,7 @@ class DMRGengine(Container):
 
         """
 
-        assert((solver=='AR') or (solver=='LAN'))
+        assert((solver=='AR') or (solver=='LAN')or (solver=='LOBPCG'))
         converged=False
         energy=100000.0
         it=1
@@ -224,6 +230,8 @@ class DMRGengine(Container):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
+                if solver=='LOBPCG':
+                    e,opt=mf.lobpcg(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
                 if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,numvecs,ncv)
                 if solver=='LAN':
@@ -257,6 +265,8 @@ class DMRGengine(Container):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
+                if solver=='LOBPCG':
+                    e,opt=mf.lobpcg(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
                 if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,numvecs,ncv)
                 if solver=='LAN':
@@ -421,11 +431,11 @@ class IDMRGengine(DMRGengine):
             if verbose>0:
                 if regauge==False:
                     if skip==False:
-                        stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
+                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
                     if skip==True:
                         skip=False
                 if regauge==True:
-                    stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
+                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
@@ -441,6 +451,8 @@ class IDMRGengine(DMRGengine):
                 break
         self._mps.resetZ()            
         it=it+1
+
+        
     def simulate(self,*args,**kwargs):
         """
         see __simulate__
@@ -520,6 +532,7 @@ class IDMRGengine(DMRGengine):
         
         self.__simulateTwoSite__(*args,**kwargs)
 
+        
 class HomogeneousIMPSengine(Container):
     """
 
@@ -867,11 +880,6 @@ class VUMPSengine(Container):
         """
         self.__simulate__(*args,**kwargs)
         
-    #def simulate(self,Nmax,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,\
-    #             artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,checkpoint=100):
-    #    self.__simulate__(Nmax,epsilon,tol,lgmrestol,ncv,numeig,Nmaxlgmres,\
-    #             artol,arnumvecs,arncv,svd,Ndiag,nmaxlan,landelta,checkpoint) 
-
     def __simulate__(self,Nmax,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,\
                      artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,solver='AR',checkpoint=100):
 
@@ -951,33 +959,59 @@ class VUMPSengine(Container):
  
         
 
-class TEBDEngine(Container):
+class TimeEvolutionEngine(Container):
     """
-    TEBDEngine
-    container object for performing real/imaginary time evolution using TEBD algorithm for finite systems 
+    TimeEvolutionEngine(Container):
+    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
     """
-    
-    def __init__(self,mps,gatecontainer,filename):
+    def __init__(self,mps,mpo,filename,lb=None,rb=None):
         """
-        TEBDEngine.__init__(mps,gatecontainer,filename):
-        initialize a TEBD simulation; this is an engine for real or imaginary time evolution using TEBD
+        TimeEvolutionEngine.__init__(mps,mpo,filename):
+        initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
                        the initial state 
-        gatecontainer: object or method 
-                       gatecontainer(n,n+1,tau) has to return the gate to be applied at sites n and n+1
-        tau:           float 
-                       the time step
+        mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m)
+                       The Hamiltonian/generator of time evolution
         filename:      str
                        the filename under which cp results will be stored (not yet implemented)
+        lb,rb:         None or np.ndarray
+                       left and right environment boundary conditions
+                       if None, obc are assumed
         """
         
+        if (np.all(lb)!=None) and (np.all(rb)!=None):
+            assert(mps[0].shape[0]==lb.shape[0])
+            assert(mps[-1].shape[1]==rb.shape[0])
+            assert(mpo[0].shape[0]==lb.shape[2])
+            assert(mpo[-1].shape[1]==rb.shape[2])
+            self._lb=np.copy(lb)
+            self._rb=np.copy(rb)
+            
+        else:
+            assert(mpo[0].shape[0]==1)
+            assert(mpo[-1].shape[1]==1)
+            assert(mps[0].shape[0]==1)
+            assert(mps[-1].shape[1]==1)            
+            
+            self._lb=np.ones((1,1,1))
+            self._rb=np.ones((1,1,1))
+        
         self._mps=copy.deepcopy(mps)
-        self._gates=copy.deepcopy(gatecontainer)
+        self._mpo=copy.deepcopy(mpo)
+
+
+        self._gates=copy.deepcopy(mpo)
+        
         self._filename=filename
         self._N=mps._N
-
+        self._mps.__position__(0)
+        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+        self._L.insert(0,self._lb)
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,self._rb)
+    
     def applyEven(self,tau,Dmax,tr_thresh):
         for n in range(0,self._mps._N-1,2):
             tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
@@ -1051,60 +1085,9 @@ class TEBDEngine(Container):
         return self._tw,it
 
 
-class TDVPEngine(Container):
-    """
-    TDVPEngine
-    container object for performing real/imaginary time evolution using TDVP algorithm for finite systems 
-    """
-    
-    def __init__(self,mps,mpo,filename,lb=None,rb=None):
-        """
-        TDVPEngine.__init__(mps,gatecontainer,filename):
-        initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
-        Parameters:
-        --------------------------------------------------------
-        mps:           MPS object
-                       the initial state 
-        mpo:           MPO object
-                       The Hamiltoian (generator of time evolution)
-        filename:      str
-                       the filename under which cp results will be stored (not yet implemented)
-        lb,rb:         None or np.ndarray
-                       left and right environment boundary conditions
-                       if None, obc are assumed
-        """
-        
-        if (np.all(lb)!=None) and (np.all(rb)!=None):
-            assert(mps[0].shape[0]==lb.shape[0])
-            assert(mps[-1].shape[1]==rb.shape[0])
-            assert(mpo[0].shape[0]==lb.shape[2])
-            assert(mpo[-1].shape[1]==rb.shape[2])
-            self._lb=np.copy(lb)
-            self._rb=np.copy(rb)
-            
-        else:
-            assert(mpo[0].shape[0]==1)
-            assert(mpo[-1].shape[1]==1)
-            assert(mps[0].shape[0]==1)
-            assert(mps[-1].shape[1]==1)            
-            
-            self._lb=np.ones((1,1,1))
-            self._rb=np.ones((1,1,1))
-        
-        self._mps=copy.deepcopy(mps)
-        self._mpo=copy.deepcopy(mpo)                
-        self._filename=filename
-        self._N=mps._N
-        self._mps.__position__(0)
-        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-        self._L.insert(0,self._lb)
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,self._rb)
-
-
     def doTDVP(self,*args,**kwargs):
         return self.__doTDVP__(*args,**kwargs)
-    def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False):
+    def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,solver='LAN'):
         """
         TDVPengine.__doTDVP__(dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False)
         does a TDVP real or imaginary time evolution
@@ -1116,11 +1099,12 @@ class TDVPEngine(Container):
         cnterset: sets the iteration counter of the simulation to cnterset; effects terminal output; useful for chaining simulations
         cp: checkpointing (currently not implemented)
         verbose: verbosity flag
-        use_split_step: if False, use Lanczos time evolution WITHOUT step-size optimization
-                        if True, use Lanczos time evolution WITH step-size optimization using gexpmv from Ash Milsted's evoMPS package
-                        the difference is that the split-step integrator chooses internal time-splitting to minimize the error
-                        of the evolution
+        solver: str in {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}: 
+                different intergration schemes
         """
+
+        if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
+            raise ValueError("TDVPengine.__doTDVP__(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
         converged=False
         it=cnterset
         self._mps.__position__(0)
@@ -1132,19 +1116,24 @@ class TDVPEngine(Container):
                     dt_=dt/2.0
                 self._mps.__position__(n+1)
                 #evolve tensor forward
-                if not use_split_step:
-                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
-                else:
-                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)                
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+                elif solver=='LAN':
+                    evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+                elif solver=='SEXPMV':                    
+                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)
+                    
                 tensor,mat,Z=mf.prepareTensor(evTen,1)
                 self._mps[n]=tensor
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
 
                 #evolve matrix backward                    
                 if n<(self._mps._N-1):
-                    if not use_split_step:
+                    if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                        evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],mat,-np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+                    elif solver=='LAN':                        
                         evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_,krylov_dimension=krylov_dim)
-                    else:
+                    elif solver=='SEXPMV':                                            
                         evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_)                                            
                     evMat/=np.linalg.norm(evMat)
                     self._mps._mat=evMat
@@ -1156,19 +1145,22 @@ class TDVPEngine(Container):
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.__position__(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
-                
-                if not use_split_step:
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                    
+                    evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-np.imag(dt_),method=solver) #clear=True resets self._mat to identity                    
+                elif solver=='LAN':                
                     evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_,krylov_dimension=krylov_dim)
-                else:
+                elif solver=='SEXPMV':                                    
                     evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_)                                    
                 evMat/=np.linalg.norm(evMat)#normalize wavefunction
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
             
             
                 #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
-                if not use_split_step:                
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                                    
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+                elif solver=='LAN':                                
                     evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim)
-                else:
+                elif solver=='SEXPMV':                                                        
                     evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt_)
                     
                 #split of a center matrix C ("mat" in my notation)
@@ -1179,7 +1171,7 @@ class TDVPEngine(Container):
                 self._mps._position=n
 
             if verbose==1:
-                stdout.write("\rTDVP engine: t=%4.4f"%(np.abs(np.imag(it*dt))))
+                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i,"%(solver,np.abs(np.imag(it*dt)),np.max(self._mps.D)))
                 stdout.flush()
 
             if (cp!=None) and (it>0) and (it%cp==0):
@@ -1191,11 +1183,183 @@ class TDVPEngine(Container):
         #returns the center bond matrix and the gs energy
 
 
+#class TDVPEngine(Container):
+#    """
+#    TDVPEngine
+#    container object for performing real/imaginary time evolution using TDVP algorithm for finite systems 
+#    """
+#    
+#    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+#        """
+#        TDVPEngine.__init__(mps,gatecontainer,filename):
+#        initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
+#        Parameters:
+#        --------------------------------------------------------
+#        mps:           MPS object
+#                       the initial state 
+#        mpo:           MPO object
+#                       The Hamiltoian (generator of time evolution)
+#        filename:      str
+#                       the filename under which cp results will be stored (not yet implemented)
+#        lb,rb:         None or np.ndarray
+#                       left and right environment boundary conditions
+#                       if None, obc are assumed
+#        """
+#        
+#        if (np.all(lb)!=None) and (np.all(rb)!=None):
+#            assert(mps[0].shape[0]==lb.shape[0])
+#            assert(mps[-1].shape[1]==rb.shape[0])
+#            assert(mpo[0].shape[0]==lb.shape[2])
+#            assert(mpo[-1].shape[1]==rb.shape[2])
+#            self._lb=np.copy(lb)
+#            self._rb=np.copy(rb)
+#            
+#        else:
+#            assert(mpo[0].shape[0]==1)
+#            assert(mpo[-1].shape[1]==1)
+#            assert(mps[0].shape[0]==1)
+#            assert(mps[-1].shape[1]==1)            
+#            
+#            self._lb=np.ones((1,1,1))
+#            self._rb=np.ones((1,1,1))
+#        
+#        self._mps=copy.deepcopy(mps)
+#        self._mpo=copy.deepcopy(mpo)                
+#        self._filename=filename
+#        self._N=mps._N
+#        self._mps.__position__(0)
+#        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+#        self._L.insert(0,self._lb)
+#        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+#        self._R.insert(0,self._rb)
+#
+#
+#    def doTDVP(self,*args,**kwargs):
+#        return self.__doTDVP__(*args,**kwargs)
+#    def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,solver='LAN'):
+#        """
+#        TDVPengine.__doTDVP__(dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False)
+#        does a TDVP real or imaginary time evolution
+#
+#        dt: step size
+#        numsteps: number of steps to be performed
+#        krylov_dim: if use_split_step=False, krylov_dim is the dimension of the krylov space used to perform evolution with lanczos
+#                    if use_split_step=True, method uses Ash Milsted's implementation of gexpmv (see evoMPS)
+#        cnterset: sets the iteration counter of the simulation to cnterset; effects terminal output; useful for chaining simulations
+#        cp: checkpointing (currently not implemented)
+#        verbose: verbosity flag
+#        solver: str in {'LAN','RK45,'RADAU','SEXPMV'}: 
+#                different intergration schemes
+#        """
+#
+#        if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA']:
+#            raise ValueError("TDVPengine.__doTDVP__(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA'}".format(solver))
+#        converged=False
+#        it=cnterset
+#        self._mps.__position__(0)
+#        for step in range(numsteps):
+#            for n in range(self._mps._N):
+#                if n==self._mps._N-1:
+#                    dt_=dt
+#                else:
+#                    dt_=dt/2.0
+#                self._mps.__position__(n+1)
+#                #evolve tensor forward
+#                if solver in ['Radau','RK45','RK23','BDF','LSODA']:
+#                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+#                elif solver=='LAN':
+#                    evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+#                elif solver=='SEXPMV':                    
+#                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)
+#                    
+#                tensor,mat,Z=mf.prepareTensor(evTen,1)
+#                self._mps[n]=tensor
+#                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
+#
+#                #evolve matrix backward                    
+#                if n<(self._mps._N-1):
+#                    if solver in ['Radau','RK45','RK23','BDF','LSODA']:
+#                        evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],mat,-np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+#                    elif solver=='LAN':                        
+#                        evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_,krylov_dimension=krylov_dim)
+#                    elif solver=='SEXPMV':                                            
+#                        evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_)                                            
+#                    evMat/=np.linalg.norm(evMat)
+#                    self._mps._mat=evMat
+#                else:
+#                    self._mps._mat=mat
+#                    
+#            for n in range(self._mps._N-2,-1,-1):
+#                dt_=dt/2.0
+#                #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
+#                self._mps.__position__(n+1)
+#                self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
+#                if solver in ['Radau','RK45','RK23','BDF','LSODA']:                    
+#                    evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-np.imag(dt_),method=solver) #clear=True resets self._mat to identity                    
+#                elif solver=='LAN':                
+#                    evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_,krylov_dimension=krylov_dim)
+#                elif solver=='SEXPMV':                                    
+#                    evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_)                                    
+#                evMat/=np.linalg.norm(evMat)#normalize wavefunction
+#                self._mps._mat=evMat        #set evolved matrix as new center-matrix
+#            
+#            
+#                #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
+#                if solver in ['Radau','RK45','RK23','BDF','LSODA']:                                    
+#                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver) #clear=True resets self._mat to identity
+#                elif solver=='LAN':                                
+#                    evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim)
+#                elif solver=='SEXPMV':                                                        
+#                    evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt_)
+#                    
+#                #split of a center matrix C ("mat" in my notation)
+#                tensor,mat,Z=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
+#                self._mps[n]=tensor
+#
+#                self._mps._mat=mat
+#                self._mps._position=n
+#
+#            if verbose==1:
+#                stdout.write("\rTDVP engine: t=%4.4f"%(np.abs(np.imag(it*dt))))
+#                stdout.flush()
+#
+#            if (cp!=None) and (it>0) and (it%cp==0):
+#                np.save(self._filename+'_tdvp_cp',self._mps._tensors)
+#            it=it+1
+#        self._mps.__position__(0)
+#        self._mps.resetZ()        
+#        return it
+#        #returns the center bond matrix and the gs energy
+
+
 
 # ============================================================================     everything below this line is still in development =================================================
+def matvec(Heff,mpo,vec):
+    D=Heff.shape[0]
+    d=mpo.shape[2]
+    tensor=np.reshape(vec,(D,D,d))
+    return np.reshape(ncon.ncon([Heff,mpo,tensor],[[1,-1,2,4,-2,5],[2,5,3,-3],[1,4,3]]),(D*D*d))
+
+def gram(Neff,d,vec):
+    D=Neff.shape[0]
+    tensor=np.reshape(vec,(D,D,d))
+    return np.reshape(ncon.ncon([Neff,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
+
+
+def matvecbond(Heff,vec):
+    D=Heff.shape[0]
+    mat=np.reshape(vec,(D,D))
+    return np.reshape(ncon.ncon([Heff,mat],[[1,-1,2,-2],[1,2]]),(D*D))
+
+def grambond(Neff,vec):
+    D=Neff.shape[0]
+    mat=np.reshape(vec,(D,D))
+    return np.reshape(ncon.ncon([Neff,mat],[[1,-1,2,-2],[1,2]]),(D*D))
+
+
+
 
 class PeriodicMPSengine(Container):
-    
     def __init__(self,mps,mpo,N,filename):
         """
         initialize a VUMPS simulation object
@@ -1210,15 +1374,141 @@ class PeriodicMPSengine(Container):
             raise ValueError("PeriodicMPSengine: got an mps with obc=True")
         self._dtype=np.result_type(mps[0].dtype,mpo.dtype)
         self._N=N
-        self._mpo=copy.deepcopy(mpo)        
+
+        [B1,B2,d1,d2]=mpo[0].shape
+        mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
+        mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
+
+        mpol[0,:,:,:]=mpo[0][-1,:,:,:]
+        mpol[0,0,:,:]*=0.0
+        mpor[:,0,:,:]=mpo[0][:,0,:,:]
+        mpor[-1,0,:,:]*=0.0
+
+        mpolist=[]
+        mpolist.append(np.copy(mpol))
+        mpolist.append(np.copy(mpo[0]))
+        mpolist.append(np.copy(mpor))
+        self._mpo=H.MPO.fromlist(mpolist)
         self._mps=copy.deepcopy(mps)
         self._D=np.shape(mps[0])[0]
         self._filename=filename
         self._it=1
 
-    def __siulate__(self):
-        self._mps.canonize()
-        
+    def getHeffNeff(self):
+        [D1,D2,d]=self._mps[0].shape
+        Hbla=ncon.ncon([self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-4,-1,1],[-6,-3,1,2],[-5,-2,2]])
+        n=1
+        while n<(self._N-1):
+            Hbla=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])
+            #bla=np.zeros((D1,D1),dtype=Hbla.dtype)
+            #for k in range(D1):
+            #    bla+=Hbla[:,:,0,k,k,0]
+            #print(bla)
+            #input()
+            n+=1            
+            if n==(self._N-3):
+                #N_temp contains all mps-tensors except those at 0,N-2 and N-1; will be contracted with local mpo to connect both ends
+                N_temp=np.copy(Hbla[:,:,0,:,:,0])
+                #print('length of N_temp: ',n,self._N)
+
+
+            #print('contracted ',n)
+        #Neffbond has all mps tensors contracted into it
+        Neffbond=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])[:,:,0,:,:,0]
+        #Neffbond has all but the N-1st mps tensors contracted into it        
+        Neffsite=np.zeros((D1,D1,1,D2,D2,1),dtype=Hbla.dtype)            
+        Neffsite[:,:,0,:,:,0]=Hbla[:,:,-1,:,:,-1]
+        #bla=np.zeros((D1,D1),dtype=Neffsite.dtype)
+        #for k in range(D1):
+        #    #bla+=Neffsite[:,:,0,k,k,0]
+        #    bla+=Neffbond[:,:,k,k]
+        #print(bla)
+        #input()        
+        Henv=Hbla[:,:,0,:,:,-1]
+        #Hevn contains all hamiltonian contributions that don't act on the last site N-1
+        #N_temp contains the mps overlap on sites 1,...,N-3
+        #Heffsite has will be contracted with a local mpo self._mpo[1] to get the full Hamiltonian
+        Heffsite=ncon.ncon([N_temp,self._mps[0],self._mpo[0],np.conj(self._mps[0]),self._mps[0],self._mpo[2],np.conj(self._mps[0])],[[1,4,5,8],[1,-1,2],[9,-3,2,3],[4,-2,3],[-4,5,6],[-6,9,6,7],[-5,8,7]])
+        Heffsite[:,:,-1,:,:,-1]+=Henv
+        Heffbond=ncon.ncon([Heffsite,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[1,5,3,-3,-4,6],[1,-1,2],[3,6,2,4],[5,-2,4]])
+        #Heffsite has will be contracted with a local mpo self._mpo[1] to get the full Hamiltonian        
+        energy=0
+        for n1 in range(Heffbond.shape[0]):
+            for n2 in range(Heffbond.shape[1]):
+                energy+=Heffbond[n1,n2,n1,n2]
+        return Heffsite,Neffsite,Heffbond,Neffbond,energy
+    
+    def simulate(self):
+        converged=False
+        while not converged:
+            self._mps.canonize()
+            self._mps.ortho(0,1) #state is in left orthogonal form
+            
+            Heffsite,Neffsite,Heffbond,Neffbond,energy=self.getHeffNeff()
+
+            [D1,D2,d]=self._mps[0].shape                                
+            Hsite=np.reshape(ncon.ncon([Heffsite,self._mpo[1]],[[-1,-4,1,-2,-5,2],[1,2,-3,-6]]),(D1*D2*d,D1*D2*d))
+            Nsite=np.reshape(ncon.ncon([Neffsite,np.reshape(np.eye(d),(1,1,d,d))],[[-1,-4,1,-2,-5,2],[1,2,-3,-6]]),(D1*D2*d,D1*D2*d))
+
+            Hbond=np.reshape(np.transpose(Heffbond,(0,2,1,3)),(D1*D1,D2*D2))
+            Nbond=np.reshape(np.transpose(Neffbond,(0,2,1,3)),(D1*D1,D2*D2))
+            #Htrans=np.linalg.inv(Nbond).dot(Hbond)
+            
+
+            mvsite=fct.partial(matvec,*[Heffsite,self._mpo[1]])
+            vvsite=fct.partial(matvec,*[Neffsite,np.reshape(np.eye(d),(1,1,d,d))])
+            #vv=fct.partial(gram,*[Neff,d])            
+            LOPsite=LinearOperator((D1*D2*d,D1*D2*d),matvec=mvsite,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
+            Msite=LinearOperator((D1*D2*d,D1*D2*d),matvec=vvsite,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
+            
+            mvbond=fct.partial(matvecbond,*[Heffbond])
+            vvbond=fct.partial(matvecbond,*[Neffbond])
+            #vv=fct.partial(gram,*[Neff,d])
+            
+            LOPbond=LinearOperator((D1*D2,D1*D2),matvec=mvbond,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
+            Mbond=LinearOperator((D1*D2,D1*D2),matvec=vvbond,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
+            
+            nmax=1000
+            tolerance=1E-4
+            ncv=40
+
+            gradmps=mv(self._mps[0])
+            gradmat=mv(n)
+            #etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,M=Msite,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            ##etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            #etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,M=Mbond,which='SR',v0=np.reshape(np.eye(D1),(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            ##etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,which='SR',v0=np.reshape(self._mps._mat,(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            #
+            #indsite=np.nonzero(np.real(etasite)==min(np.real(etasite)))[0][0]
+            #indbond=np.nonzero(np.real(etabond)==min(np.real(etabond)))[0][0]
+
+            mps=np.reshape(vecsite[:,indsite],(D1,D2,d))
+            mat=np.reshape(vecbond[:,indbond],(D1,D2))
+            ACC_l=np.reshape(ncon.ncon([mps,herm(mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
+            Ul,Sl,Vl=mf.svd(ACC_l)
+            self._mps[0]=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
+            self._mps._mat=np.eye(D1)
+            self._mps._connector=np.eye(D1)
+
+            eta1,U1=np.linalg.eig(Hsite)
+            eta2,U2=np.linalg.eig(Hbond)            
+            #print(np.sort(etasite))
+            print('the dimension of kernel of Nsite: ',D1**2*d-np.linalg.matrix_rank(Nsite))
+            print('the dimension of kernel of Nbond: ',D1**2-np.linalg.matrix_rank(Nbond))
+            
+            print()
+            print('lowest eigenvalue of Hsite from sparse: ',np.sort(etasite)[0])
+            print('lowest eigenvalue of Hsite from dense:  ',np.sort(eta1)[0])            
+            #print(np.sort(eta1))
+            #print()
+            print('lowest eigenvalue of Hbond from sparse: ',np.sort(etabond)[0])
+            print('lowest eigenvalue of Hbond from dense:  ',np.sort(eta2)[0])                        
+
+            #print(np.sort(eta2))
+            print('energy:',np.sort(etasite)[0]/self._N)
+            #print(self._mps[0])
+            #print(self._mps._mat)                
+
 
 
 """

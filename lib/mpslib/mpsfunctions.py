@@ -17,6 +17,8 @@ import lib.ncon as ncon
 import scipy as sp
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
+from scipy.integrate import solve_ivp
+
 import functools as fct
 from scipy.sparse.linalg import ArpackNoConvergence
 from scipy.interpolate import griddata
@@ -1221,6 +1223,46 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
             vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp)))
         return es,vs
 
+def lobpcg(L,mpo,R,mps0,tolerance=1e-6,numvecs_returned=1):
+    
+    """
+    calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
+    of the4 effective DMRG hamiltonian as given by L, mpo and R
+    L (np.ndarray of shape (Dl,Dl',d)): left hamiltonian environment
+    R (np.ndarray of shape (Dr,Dr',d)): right hamiltonian environment
+    mpo (np.ndarray of shape (Ml,Mr,d)): MPO
+    mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
+    see scipy eigsh documentation for details on the other parameters
+    """
+    
+    dtype=np.result_type(L,mpo,R,mps0)
+    [chi1,chi2,d]=np.shape(mps0)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    X=np.random.random_sample((chi1*chi2*d,numvecs_returned)).astype(dtype)
+    X[:,0]=np.reshape(mps0,(chi1*chi2*d))
+    e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False)
+    #return [e,np.reshape(v,(chi1p,chi2p,dp))]    
+    if numvecs_returned==1:
+        ind=np.nonzero(e==min(e))
+        return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp))
+
+    elif numvecs_returned>1:
+        if (numvecs_returned>numvecs):
+            sys.warning('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            numvecs_returned=numvecs
+        es=[]
+        vs=[]
+        esorted=np.sort(e)
+        for n in range(numvecs_returned):
+            es.append(esorted[n])
+            ind=np.nonzero(e==esorted[n])
+            vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp)))
+        return es,vs
+
 
 def evolveTensorSexpmv(L,mpo,R,mps,tau):
     dtype=np.result_type(L,mpo,R,mps,tau)
@@ -1283,6 +1325,62 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     lan=lanEn.LanczosTimeEvolution(mv,np.dot,np.zeros,ncv=krylov_dimension,delta=delta)
     v=lan.__doStep__(np.reshape(mat,(chi1*chi2)),tau)
     return np.reshape(v,mat.shape)
+
+
+def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-3,atol=1E-6):
+    if not np.issubdtype(type(tau),np.dtype(float)):                        
+        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
+    [chi1,chi2,d]=np.shape(mps)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+    out=solve_ivp(lambda t,y:(-1j)*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
+    #solver=RK45(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mps,(chi1*chi2*d)),t_bound=tau,rtol=rtol,atol=atol)    
+    #return np.reshape(solver.dense_output()(tau),mps.shape)
+    return np.reshape(out.y[:,-1],mps.shape)
+
+
+def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
+    if not np.issubdtype(type(tau),np.dtype(float)):                
+        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
+    
+    [chi1,chi2]=np.shape(mat)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    mv=fct.partial(HAproductBond,*[L,R])
+    out=solve_ivp(lambda t,y:(-1j)*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+    return np.reshape(out.y[:,-1],mat.shape)
+    #solver=RK45(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mat,(chi1*chi2)),t_bound=tau,rtol=rtol,atol=atol)
+    #solver.step()
+    #return np.reshape(solver.dense_output()(tau),mat.shape)    
+
+def evolveTensorRadau(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6):
+    if not np.issubdtype(type(tau),np.dtype(float)):        
+        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
+    
+    [chi1,chi2,d]=np.shape(mps)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    dp=np.shape(mpo)[3]
+    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+    solver=Radau(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mps,(chi1*chi2*d)),t_bound=tau,rtol=rtol,atol=atol)    
+    solver.step()
+    return np.reshape(solver.dense_output()(tau),mps.shape)
+
+def evolveMatrixRadau(L,R,mat,tau,rtol=1E-3,atol=1E-6):
+    if not np.issubdtype(type(tau),np.dtype(float)):
+        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
+    
+    [chi1,chi2]=np.shape(mat)
+    chi1p=np.shape(L)[1]
+    chi2p=np.shape(R)[1]
+    mv=fct.partial(HAproductBond,*[L,R])
+    solver=Radau(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mat,(chi1*chi2)),t_bound=tau,rtol=rtol,atol=atol)
+    solver.step()
+    return np.reshape(solver.dense_output()(tau),mat.shape)    
+
+
 
 
 #calls a sparse eigensolver to find the lowest eigenvalue
@@ -2156,7 +2254,12 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
         assert(mps[0].shape[0]==1)
         assert(mps[len(mps)-1].shape[1]==1)
         #make a copy of the state
-        Gamma=copy.deepcopy(mps)
+        if isinstance(mps,MPSL.MPS):
+            Gamma=copy.deepcopy(mps._tensors)
+        elif isinstance(mps,list):
+            Gamma=copy.deepcopy(mps)
+        else:
+            raise TypeError("in canonizeMPS: unknown type {0} for mps; use list of np.ndarrays or MPS object".format(type(mps)))
         Lam=[None]*(len(Gamma)-1)
         for n in range(len(mps)):
             #use QR decomposition on Gamma[n] to pruduce a left orthogonal tensor A 
@@ -2183,7 +2286,13 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
 
 
     elif (mps[0].shape[0]!=1) and (mps[-1].shape[1]!=1):
-        Gamma=copy.deepcopy(mps)
+        if isinstance(mps,MPSL.MPS):
+            Gamma=copy.deepcopy(mps._tensors)
+        elif isinstance(mps,list):
+            Gamma=copy.deepcopy(mps)
+        else:
+            raise TypeError("in canonizeMPS: unknown type {0} for mps; use list of np.ndarrays or MPS object".format(type(mps)))
+
         if tr_thresh<=1E-15:#no truncation is done
             D=max([s[0] for s in list(map(np.shape,Gamma))]+[Gamma[-1].shape[1]])
             

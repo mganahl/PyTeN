@@ -130,6 +130,9 @@ class MPS:
         the dtype of the mps tensors
         """
         return self._dtype
+    @property
+    def obc(self):
+        return self._obc
     
     @property
     def pos(self):
@@ -326,11 +329,11 @@ class MPS:
 
     def __getitem__(self,n):
         if isinstance(n,int):
-            assert(abs(n)<len(self))
+            assert((n<len(self)) and (abs(n)<=len(self)))
             return self._tensors[n]
 
     def __setitem__(self,n,tensor):
-        assert(abs(n)<len(self))
+        assert((n<len(self)) and (abs(n)<=len(self)))        
         self._tensors[n]=np.copy(tensor)
 
 

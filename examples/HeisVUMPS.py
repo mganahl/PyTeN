@@ -50,21 +50,18 @@ if __name__ == "__main__":
     Jz=args.Jz*np.ones(N)
     Jxy=np.ones(N)
     B=args.Bz*np.ones(N)
-    mpo=H.XXZ(Jz,Jxy,B,False)[0]
+    mpo=H.XXZ(Jz,Jxy,B,False)
 
     if args.dtype=='complex':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling+1j*(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=complex
     elif args.dtype=='float':
-        tensor=(np.random.rand(args.D,args.D,d)-0.5)*args.scaling
         dtype=float        
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
     
-        
+    mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10        
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jz,args.Bz)
-    [mps,lam]=mf.regauge(tensor,gauge='left',tol=args.regaugetol)
-
+    mps.regauge(gauge='right')
     iMPS=en.VUMPSengine(mps,mpo,args.filename)
     iMPS.__simulate__(Nmax=args.imax,epsilon=args.epsilon,tol=args.regaugetol,lgmrestol=args.lgmrestol,ncv=args.ncv,numeig=args.numeig,Nmaxlgmres=args.Nmaxlgmres,artol=args.artol,arnumvecs=1,\
                       arncv=args.arncv,svd=args.svd,checkpoint=args.cp,solver=args.solver.upper())
