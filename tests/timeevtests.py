@@ -147,12 +147,12 @@ class TestTimeEvolution(unittest.TestCase):
         tw=0  #accumulates the truncated weight (see below)
         for n in range(self.Nmax):
             #measure the operators 
-            #L=[engine._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            L=engine._mps.__measureList__(sz)            
+            #L=[engine._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            L=engine.measureLocal(sz)            
             #store result for later use
             SZ[n,:]=L
             
-            tw,it2=engine.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
+            tw,it2=engine.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-5)        
@@ -183,10 +183,10 @@ class TestTimeEvolution(unittest.TestCase):
         solver='LAN'        
         for n in range(self.Nmax):
             #measure the operators
-            L=engine._mps.__measureList__(sz)
+            L=engine.measureLocal(sz)
             #store result for later use
             SZ[n,:]=L 
-            it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)
         
@@ -216,14 +216,14 @@ class TestTimeEvolution(unittest.TestCase):
         solver='RK45'        
         for n in range(self.Nmax):
             #measure the operators
-            L=engine._mps.__measureList__(sz)
+            L=engine.measureLocal(sz)
             #store result for later use
             SZ[n,:]=L 
-            it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)
         
-    def testTDVP_RADAU(self):
+    def testTDVP_SEXPMV(self):
         N=self.N
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
@@ -246,13 +246,13 @@ class TestTimeEvolution(unittest.TestCase):
         it1=0  #counts the total iteration number
         it2=0  #counts the total iteration number
         tw=0  #accumulates the truncated weight (see below)
-        solver='RADAU'        
+        solver='SEXPMV'        
         for n in range(self.Nmax):
             #measure the operators
-            L=engine._mps.__measureList__(sz)
+            L=engine.measureLocal(sz)
             #store result for later use
             SZ[n,:]=L 
-            it1=engine.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
 
@@ -314,6 +314,7 @@ class TestPlot(unittest.TestCase):
         for n in range(len(basis1)):
             state1=basis1[n]
             splus=bb.setBit(state1,(N-1)/2)
+            #splus=bb.setBit(state1,1)            
             for m in range(len(basis2)):            
                 if splus==basis2[m]:
                     vnew[m]=v[n]
@@ -345,6 +346,7 @@ class TestPlot(unittest.TestCase):
         self.dmrg=en.DMRGengine(mps,self.mpo,'testXXZ',lb,rb)
         self.eps=1E-5
 
+        
     def test_plot_LAN(self):
         
         N=self.N
@@ -373,17 +375,21 @@ class TestPlot(unittest.TestCase):
         solver='LAN'
         for n in range(self.Nmax):
             #measure a list of local operators
-            L=[engine1._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            #L=engine1._mps.__measureList__(sz)
+            #L=[engine1._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            L=engine1.measureLocal(sz)
             #store result for later use
             SZ1[n,:]=L
-            #L=[engine2._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            L=engine2._mps.__measureList__(sz)
+            #note: when measuring with measureLocal function, one has to update the simulation container after that.
+            #this  is because measureLocal shifts the center site of the mps around, and that causes inconsistencies
+            #in the simulation container with the left and right environments
+            #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            #engine2.update()
+            L=engine2.measureLocal(sz)
             SZ2[n,:]=L
-            tw,it2=engine1.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
+            tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
 
-            it1=engine2.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+            it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
 
             plt.figure(1,figsize=(10,8))
             plt.clf()
@@ -406,6 +412,74 @@ class TestPlot(unittest.TestCase):
             plt.show()
             plt.pause(0.01)
             #input()            
+           
+    def test_plot_SEXPMV(self):
+        
+        N=self.N
+        
+        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+
+        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
+        self.dmrg._mps.__position__(self.N)
+        self.dmrg._mps.__position__(0)
+
+        engine1=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"insert_name_here")
+        engine2=en.TimeEvolutionEngine(self.dmrg._mps.__copy__(),self.mpo,"TDVP_insert_name_here")        
+        
+        Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
+        #adapted to this value in the TimeEvolutionEngine
+        thresh=1E-16  #truncation threshold
+
+        SZ1=np.zeros((self.Nmax,N)) #container for holding the measurements
+        SZ2=np.zeros((self.Nmax,N)) #container for holding the measurements        
+        plt.ion()
+        sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
+        it1=0  #counts the total iteration number
+        it2=0  #counts the total iteration number
+        tw=0  #accumulates the truncated weight (see below)
+        solver='LAN'
+        engine1._mps.resetZ()
+        engine2._mps.resetZ()        
+        for n in range(self.Nmax):
+            #measure a list of local operators
+            #L=[engine1._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            L=engine1.measureLocal(sz)
+            #store result for later use
+            SZ1[n,:]=L
+            #note: when measuring with measureLocal function, one has to update the simulation container after that.
+            #this  is because measureLocal shifts the center site of the mps around, and that causes inconsistencies
+            #in the simulation container with the left and right environments
+            #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            #engine2.update()
+            L=engine2.measureLocal(sz)
+            SZ2[n,:]=L
+            tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
+                                     cnterset=it2,tw=tw)
+
+            it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+
+            plt.figure(1,figsize=(10,8))
+            plt.clf()
+            plt.subplot(3,1,1)
+            plt.plot(range(self.N),self.Szexact[n,:],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
+            plt.ylim([-0.5,0.5])
+            plt.xlabel('lattice site n')
+            plt.ylabel(r'$\langle S^z_n\rangle$')
+            plt.legend(['exact','TDVP (SEXPMV)','TEBD'])
+            plt.subplot(3,1,2)
+            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ2[n,:]))
+            plt.xlabel('lattice site n')
+            plt.ylabel(r'$|\langle S^z_n\rangle_{tdvp}-\langle S^z_n\rangle_{exact}|$')            
+            plt.subplot(3,1,3)
+            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ1[n,:]))            
+            plt.xlabel('lattice site n')
+            plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')
+            plt.tight_layout()
+            plt.draw()
+            plt.show()
+            plt.pause(0.01)
+
             
 
 
@@ -435,19 +509,25 @@ class TestPlot(unittest.TestCase):
         it2=0  #counts the total iteration number
         tw=0  #accumulates the truncated weight (see below)
         solver='RK45'
+        engine2._mps.resetZ()
+        engine1._mps.resetZ()        
         for n in range(self.Nmax):
             #measure a list of local operators
-            L=[engine1._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            #L=engine1._mps.__measureList__(sz)
+            #L=[engine1._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            L=engine1.measureLocal(sz)            
             #store result for later use
             SZ1[n,:]=L
-            #L=[engine2._mps.__measureLocal__(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            L=engine2._mps.__measureList__(sz)
+            #note: when measuring with measureLocal function, one has to update the simulation container after that.
+            #this  is because measureLocal shifts the center site of the mps around, and that causes inconsistencies
+            #in the simulation container with the left and right environments
+            #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
+            #engine2.update()
+            L=engine2.measureLocal(sz)                        
             SZ2[n,:]=L
-            tw,it2=engine1.__doTEBD__(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
+            tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
                                      cnterset=it2,tw=tw)
 
-            it1=engine2.__doTDVP__(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+            it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
 
             plt.figure(1,figsize=(10,8))
             plt.clf()
@@ -469,16 +549,12 @@ class TestPlot(unittest.TestCase):
             plt.draw()
             plt.show()
             plt.pause(0.01)
-            #input()            
-            
-            
-            
-            
+
 
 
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestPlot)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite1)
     unittest.TextTestRunner(verbosity=2).run(suite2)     
 

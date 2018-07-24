@@ -29,14 +29,17 @@ class Container:
     def __init__(self):
         """
         Base class for simulation objects;
-        implements saving and loading of simlulations using pickle
-        for internal use only
         """
         pass
     def save(self,filename):
         """
         dumps a simulation into a pickle file named "filename"
+        Parameters:
+        -----------------------------------
+        filename: str
+                  the filename of the file
         """
+
         with open(filename+'.pickle', 'wb') as f:
             pickle.dump(self,f)
             
@@ -44,10 +47,130 @@ class Container:
         """
         reads a simulation from a pickle file "filename".pickle
         and returns a container object
+        Parameters:
+        -----------------------------------
+        filename: str
+                  the filename of the object to be loaded
         """
         with open(filename+'.pickle', 'rb') as f:
             return pickle.load(f)
-            
+
+    @property
+    def mps(self):
+        """
+        Container.mps:
+        return the underlying MPS object
+        """
+        return self._mps
+
+    
+    def measureLocal(self,operators):
+        """
+        Container.measure(operators):
+        measures the expectation values of a list of local operators;
+        len(operators) has to be the same as len(self.mps) 
+        Parameters:
+        --------------------------------------------
+        operators: list of np.ndarrays
+                   local operators to be measured
+
+
+
+        returns:
+        --------------------------------------------
+        a list of floats containing the expectation values
+        """
+        return self.mps.measureList(operators)
+    def truncateMPS(self,truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
+        """
+        Container.truncateMPS(truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
+        truncates the mps. After truncation, the mps is in right-orthogonal form, 
+        i.e. the mps.pos attribute is mps.pos=0. left and right Hamiltonian environments
+        are recalculated as well using the truncated msp, with self._L (left environment)
+        being a list of length len(mps)+1 with the only non-empty element being the first one:
+        self._L[0]=self._lb. self._lb is the left bundary condition of the simulation
+        self._R is a list of length len(mps)+1 holding all right-environment for all bipartitions
+        of the chain.
+
+        Parameters:
+        -------------------------------------------------------------------------
+        truncation_threshold: float
+                              desired truncation threshold
+        D:                    int
+                              maximally allowed bond-dimension after truncation
+        tol:                  float
+                              precision for the transfer-matrix eigensolver; relevant only for infinite MPS
+        ncv:                  int
+                              number of krylov vectors in the implicitly restarted arnoldi solver used for transfer-matrix
+                              eigen-decomposition; relevanty only for infinite MPS
+        pinv:                 float:
+                              pseudo-inverse parameter for invertion of reduced density matrices and Schmidt-values
+                              change this value with caution; too large values (e.g even values pinv=1E-16) can 
+                              cause erratic behaviour
+
+        returns: self
+        """
+        self._mps.truncate(schmidt_thresh=truncation_threshold,D=D,nmaxit=100000,tol=tol,ncv=ncv,pinv=pinv,r_thresh=1E-14)
+        self._mps.position(0)
+        self._L=[]*len(self._mps)
+        self._L.insert(0,self._lb)
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,self._rb)
+        return self
+        
+    def position(self,n):
+
+        """
+
+        Container.position(n)
+        shifts the center position of Container.mps to bond n, updates left and right environments
+        accordingly
+        Parameters:
+        ------------------------------------
+        n: int
+           the bond to which the position should be shifted
+
+        returns: self
+        """
+        if n>len(self.mps):
+            raise IndexError("Container.position(n): n>len(mps)")
+        if n<0:
+            raise IndexError("Container.position(n): n<0")
+        
+        if n>=self.mps.pos:
+            pos=self.mps.pos            
+            self.mps.position(n)
+            for m in range(pos,n):
+                self._L[m+1]=mf.addLayer(self._L[m],self._mps[m],self._mpo[m],self._mps[m],1)
+        if n<self.mps.pos:
+            pos=self.mps.pos            
+            self.mps.position(n)
+            for m in range(pos-1,n-1,-1):
+                self._R[len(self.mps)-m]=mf.addLayer(self._R[len(self.mps)-1-m],self._mps[m],self._mpo[m],self._mps[m],-1)                
+                
+        return self
+        
+    def update(self):
+        """
+        Container.update():
+        make the Container internally consistent after e.g. changing the mps object.
+        The mps.pos attribute after update() is mps.pos=0 (i.e. mps.position(0) is called)
+        The left and right Hamiltonian environments  are recalculated using msp, with self._L (left environment)
+        being a list of length len(mps)+1 with the only non-empty element being the first one:
+        self._L[0]=self._lb. self._lb is the left bundary condition of the simulation
+        self._R is a list of length len(mps)+1 holding all right-environment for all bipartitions
+        of the chain.
+
+        returns: self
+        """
+        self._mps.position(0)
+        self._L=[]*len(self._mps)        
+        self._L.insert(0,self._lb)
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,self._rb)
+        return self
+        
+    
 class DMRGengine(Container):
     """
     DMRGengine
@@ -91,13 +214,34 @@ class DMRGengine(Container):
         self._mpo=mpo
         self._filename=filename
         self._N=self._mps._N
-        self._mps.__position__(0)
+        self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
         self._L.insert(0,np.copy(self._lb))
         self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
         self._R.insert(0,np.copy(self._rb))
 
-
+        
+    def optimize(self,n,tol=1E-6,ncv=40,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,verbose=0):
+        if solver=='LOBPCG':
+            e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
+        elif solver=='AR':
+            e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
+        elif solver=='LAN':
+            e,opt=mf.lanczos(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
+                              deltaEta=landeltaEta)
+        else:
+            raise ValueError("DMRGengine.optimize: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+        Dnew=opt.shape[1]
+        if verbose>0:
+            stdout.write("\rSS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,self._it,self._Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
+            stdout.flush()
+        if verbose>1:
+            print("")
+            
+            #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
+        return e,opt
+    
+                
     def __simulate__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
         DMRGengine.__simulate__(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
@@ -116,79 +260,37 @@ class DMRGengine(Container):
         landeltaEta: desired convergence of lanzcos eigenenergies
 
         """
-        
-        assert((solver=='AR') or (solver=='LAN') or (solver=='LOBPCG'))
-        solver='LOBPCG'
+        if solver not in ['AR','LAN','LOBPCG']:
+            raise ValueError("DMRGengine.__simulate__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+        self._Nmax=Nmax
         converged=False
         energy=100000.0
-        it=1
-        Es=np.zeros(self._mps._N)
-        self._mps.__position__(0)
+        self._it=1
+
         while not converged:
-            for n in range(0,self._mps._N-1):
-                if solver=='LOBPCG':
-                    e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol)#mps._mat set to 11 during call of __tensor__()
-                if solver=='AR':
-                    e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
-                if solver=='LAN':
-                    e,opt=mf.lanczos(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
-                                      deltaEta=landeltaEta)
-
-                Dnew=opt.shape[1]
-                if verbose>0:
-                    stdout.write("\rSS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()
-                if verbose>1:
-                    print("")
-                    
-                    #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
-                Es[n]=e
-                tensor,r,Z=mf.prepareTensor(opt,1)
-                self._mps[n]=tensor
-                self._mps._mat=r
-                self._mps._position=n+1
-                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
-                
+            for n in range(self._mps._N-1):
+                self.position(n)
+                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)
+                self.mps[n]=opt
             for n in range(self._mps._N-1,0,-1):
-                if solver=='LOBPCG':
-                    e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol)#mps._mat set to 11 during call of __tensor__()
-                if solver=='AR':
-                    e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,numvecs,ncv)
-                if solver=='LAN':
-                    e,opt=mf.lanczos(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
-                                      deltaEta=landeltaEta)
-
-                Dnew=opt.shape[1]
-                if verbose>0:
-                    stdout.write("\rSS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
-                    stdout.flush()
-                if verbose>1:
-                    print("")
-                    #
-                    #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
-                Es[n]=e
-                tensor,r,Z=mf.prepareTensor(opt,-1)
-                self._mps[n]=tensor
-                self._mps._mat=r
-                self._mps._position=n
-                
-                self._R[self._mps._N-1-n+1]=mf.addLayer(self._R[self._mps._N-1-n],self._mps[n],self._mpo[n],self._mps[n],-1)
-
+                self.position(n+1)                
+                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)                
+                self.mps[n]=opt
                     
             if np.abs(e-energy)<Econv:
                 converged=True
             energy=e
-            if cp!=None and it>0 and it%cp==0:
+            if cp!=None and self._it>0 and self._it%cp==0:
                 self._mps.save(self._filename+'_dmrg_cp')
-            it=it+1
-            if it>Nmax:
+            self._it=self._it+1
+            if self._it>Nmax:
                 if verbose>0:
                     print()
                     print ('reached maximum iteration number ',Nmax)
                 break
         self._mps.resetZ()
         return e
-        #returns the center bond matrix and the gs energy
+
     def simulate(self,*args,**kwargs):
         """
         see __simulate__
@@ -214,12 +316,13 @@ class DMRGengine(Container):
         landeltaEta: desired convergence of lanzcos eigenenergies
 
         """
+        if solver not in ['AR','LAN','LOBPCG']:
+            raise ValueError("DMRGengine.__simulateTwoSite__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+        self._Nmax=Nmax
 
-        assert((solver=='AR') or (solver=='LAN')or (solver=='LOBPCG'))
         converged=False
         energy=100000.0
         it=1
-        Es=np.zeros(self._mps._N)
         self._mps.__position__(0)        
         while not converged:
             for n in range(0,self._mps._N-2):
@@ -238,7 +341,6 @@ class DMRGengine(Container):
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
-                Es[n]=e
                 temp3=np.reshape(np.transpose(np.reshape(opt,(Dl,Dr,dl,dr)),(0,2,3,1)),(Dl*dl,dr*Dr))
                 U,S,V=np.linalg.svd(temp3,full_matrices=False)
                 S=S[S>truncation]
@@ -273,7 +375,6 @@ class DMRGengine(Container):
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
-                Es[n]=e
                 temp3=np.reshape(np.transpose(np.reshape(opt,(Dl,Dr,dl,dr)),(0,2,3,1)),(Dl*dl,dr*Dr))
                 U,S,V=np.linalg.svd(temp3,full_matrices=False)
                 S=S[S>truncation]
@@ -613,7 +714,18 @@ class HomogeneousIMPSengine(Container):
         self._mpo.append(np.copy(mpo))
         self._mpo.append(np.copy(mpor))
 
+    def update(self):
+        raise NotImplementedError("")
 
+    def position(self):
+        raise NotImplementedError("")        
+
+    def mps(self):
+        raise NotImplementedError("")
+    def truncateMPS(self):
+        raise NotImplementedError("")
+    
+    
     def __doGradStep__(self):
         converged=False
         self._gamma,self._lam,trunc=mf.regauge(self._mps,gauge='symmetric',initial=np.reshape(np.diag(self._lam**2),self._D*self._D),\
@@ -964,15 +1076,60 @@ class TimeEvolutionEngine(Container):
     TimeEvolutionEngine(Container):
     container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
     """
-    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+
+    @classmethod
+    def TEBD(cls,mps,gatecontainer,filename):
         """
-        TimeEvolutionEngine.__init__(mps,mpo,filename):
+        TimeEvolutionEngine.TEBD(mps,mpo,filename):
+        initialize a TEBD vsimulation; this is an engine for real or imaginary time evolution using TEBD
+        Parameters:
+        --------------------------------------------------------
+        mps:           MPS object
+                       the initial state 
+        gatecontainer: nearest neighbor MPO object or a method f(n,m) which returns two-site gates at sites (n,m)
+                       The Hamiltonian/generator of time evolution
+        filename:      str
+                       the filename under which cp results will be stored (not yet implemented)
+        lb,rb:         None or np.ndarray
+                       left and right environment boundary conditions
+                       if None, obc are assumed
+        """
+        
+        cls._gates=copy.deepcopy(gatecontainer)
+        cls._mps=copy.deepcopy(mps)
+        cls._mpo=copy.deepcopy(mpo)
+        cls._filename=filename        
+        return cls
+
+    @classmethod
+    def TDVP(cls,mps,mpo,filename,lb=None,rb=None):
+        """
+        TimeEvolutionEngine.TDVP(mps,mpo,filename):
         initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
                        the initial state 
         mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m)
+                       The Hamiltonian/generator of time evolution
+        filename:      str
+                       the filename under which cp results will be stored (not yet implemented)
+        lb,rb:         None or np.ndarray
+                       left and right environment boundary conditions
+                       if None, obc are assumed
+        """
+        
+        return cls(mps,mpo,filename,lb,rb)
+    
+    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+        """
+        TimeEvolutionEngine.__init__(mps,mpo,filename):
+        initialize a TDVP or TEBD  simulation; this is an engine for real or imaginary time evolution
+        Parameters:
+        --------------------------------------------------------
+        mps:           MPS object
+                       the initial state 
+        mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m), or a nearest neighbor MPO
                        The Hamiltonian/generator of time evolution
         filename:      str
                        the filename under which cp results will be stored (not yet implemented)
@@ -1011,7 +1168,7 @@ class TimeEvolutionEngine(Container):
         self._L.insert(0,self._lb)
         self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
         self._R.insert(0,self._rb)
-    
+
     def applyEven(self,tau,Dmax,tr_thresh):
         for n in range(0,self._mps._N-1,2):
             tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
@@ -1087,6 +1244,8 @@ class TimeEvolutionEngine(Container):
 
     def doTDVP(self,*args,**kwargs):
         return self.__doTDVP__(*args,**kwargs)
+
+
     def __doTDVP__(self,dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,solver='LAN'):
         """
         TDVPengine.__doTDVP__(dt,numsteps,krylov_dim=20,cnterset=0,cp=None,verbose=1,use_split_step=False)
@@ -1141,7 +1300,10 @@ class TimeEvolutionEngine(Container):
                     self._mps._mat=mat
                     
             for n in range(self._mps._N-2,-1,-1):
+                #if n!=0:
                 dt_=dt/2.0
+                #else:
+                #    dt_=dt
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.__position__(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
@@ -1169,7 +1331,6 @@ class TimeEvolutionEngine(Container):
 
                 self._mps._mat=mat
                 self._mps._position=n
-
             if verbose==1:
                 stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i,"%(solver,np.abs(np.imag(it*dt)),np.max(self._mps.D)))
                 stdout.flush()
@@ -1177,7 +1338,7 @@ class TimeEvolutionEngine(Container):
             if (cp!=None) and (it>0) and (it%cp==0):
                 np.save(self._filename+'_tdvp_cp',self._mps._tensors)
             it=it+1
-        self._mps.__position__(0)
+        self._mps.position(0)
         self._mps.resetZ()        
         return it
         #returns the center bond matrix and the gs energy

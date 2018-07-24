@@ -1270,14 +1270,14 @@ def evolveTensorSexpmv(L,mpo,R,mps,tau):
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     dp=np.shape(mpo)[3]
-    if np.issubdtype(type(tau),complex):
+    if np.issubdtype(type(tau),np.dtype(complex)):
         fac=np.exp(1j*np.angle(tau))
         dt=np.abs(tau)
-    if np.issubdtype(type(tau),float):        
+    elif np.issubdtype(type(tau),np.dtype(float)):        
         dt=tau
         fac=1.0        
     else:
-        raise TypeError("evolveTensorSexpmv: unkown type for tau")
+        raise TypeError("evolveTensorSexpmv: unkown type {0} for tau".format(type(tau)))
 
     mv=fct.partial(HAproductSingleSite,*[L,fac*mpo,R])
     LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
@@ -1287,14 +1287,14 @@ def evolveTensorSexpmv(L,mpo,R,mps,tau):
 def evolveMatrixSexpmv(L,R,mat,tau):
 
     dtype=np.result_type(L,R,mat,tau)
-    if np.issubdtype(type(tau),complex):    
+    if np.issubdtype(type(tau),np.dtype(complex)):    
         fac=np.exp(1j*np.angle(tau))
         dt=np.abs(tau)
-    if np.issubdtype(type(tau),float):                
+    elif np.issubdtype(type(tau),np.dtype(float)):                
         dt=tau
         fac=1.0        
     else:
-        raise TypeError("evolveTensorSexpmv: unkown type for tau")
+        raise TypeError("evolveMatrixSexpmv: unkown type {0} for tau".format(type(tau)))        
 
 
     [chi1,chi2]=np.shape(mat)
