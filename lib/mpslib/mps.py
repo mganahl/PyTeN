@@ -273,16 +273,13 @@ class MPS:
         
     
     @classmethod
-    def productState(cls,localstate,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
+    def productState(cls,localstate,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
         """
         MPS.productState(localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
         initialize a product state MPS:
 
-        localstate: np.ndarray of dtyp=int
-                    an array of int specifying the local positions; i.e. localstate[n]=i 
-                    sets the state at position n to i, where 0<i<d[n]
-        d:          int or array of int
-                    local hilbert space dimensions
+        localstate: list of np.ndarray of float
+                    sets the local state at position n to sum_k localstate[n][k]|k>
         obc:        bool
                     boundary condition of the mps
         dtype:      python "float" type or "complex" type: 
@@ -292,9 +289,18 @@ class MPS:
         r_thresh: float 
                   internal parameter (ignore it)
         """
+        dtype=np.result_type(*localstate,dtype)
+              
+        d=np.asarray([len(s) for s in localstate])
+        if any([np.linalg.norm(t)<1E-10 for t in localstate]):
+            inds=np.nonzero(np.asarray([np.linalg.norm(t)<1E-10 for t in localstate]))
+            raise ValueError("in MPS.productState(localstate,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16): found a local state of norm <1E-10 at positions {0}".format(inds))
+        
         tensors=mf.MPSinitializer(np.zeros,len(localstate),D=1,d=d,obc=obc,dtype=dtype,scale=1.0,shift=0.0)
         for n in range(len(tensors)):
-            tensors[n][0,0,localstate[n]]=1.0
+            for s in range(d[n]):
+                tensors[n][0,0,s]=localstate[n][s]
+        
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
         mps._Z=1.0
@@ -645,6 +651,13 @@ class MPS:
         returns a list containig the bond-dimensions of the MPS
         """
         return self.__D__()
+    
+    @property
+    def d(self):
+        """
+        returns a list containig the bond-dimensions of the MPS
+        """
+        return [t.shape[2] for t in self._tensors]
     
     @property
     def Dmax(self):
@@ -1191,12 +1204,8 @@ class MPS:
         U,S,V=mf.svd(np.reshape(newState,(Dl*d1,Dr*d2)))
         tw=0
         Strunc=S[S>thresh]
-        #print("back in applyTwoSite Strunc=",Strunc)
-        #input()
-        tw=sum(S[len(Strunc)::]**2)        
-        if len(Strunc)>Dmax:
-            tw+=sum(Strunc[Dmax::]**2)
-            Strunc=Strunc[0:Dmax]
+        tw=sum(S[min(len(Strunc),Dmax)::]**2)
+        Strunc=S[0:min(len(Strunc),Dmax)]
         Strunc/=np.linalg.norm(Strunc)
         U=U[:,0:len(Strunc)]
         V=V[0:len(Strunc),:]

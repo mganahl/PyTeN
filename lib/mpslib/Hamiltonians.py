@@ -167,13 +167,112 @@ class TFI(MPO):
                 temp[2,2,0,0]=1.0
                 temp[2,2,1,1]=1.0
                 self._mpo.append(np.copy(temp))
+                
+class JessHamiltonian(MPO):
+    """
+    
+    """    
+    def __init__(self,J,w,chi,obc=True):
+        self._obc=obc
+        self._J=J
+        self._w=w
+        self._chi=chi
+        self._dtype=complex
+        self._N=len(chi)
 
+        sigma_x=np.asarray([[0,1],[1,0]])
+        sigma_y=np.asarray([[0,-1j],[1j,0]])
+        sigma_z=np.diag([1,-1])
+        
+        sig_x=np.kron(sigma_x,np.eye(2))
+        sig_y=np.kron(sigma_y,np.eye(2))
+        sig_z=np.kron(sigma_z,np.eye(2))
+        tau_x=np.kron(np.eye(2),sigma_x)
+        tau_y=np.kron(np.eye(2),sigma_y)
+        tau_z=np.kron(np.eye(2),sigma_z)
+        
+        if obc==True:
+            if len(J)!=(self._N-1):
+                raise ValueError("in JessHamiltonian: for obc=True, len(J) has to be N-1")
+            
+            self._mpo=[]
+            temp=np.zeros((1,8,4,4),self.dtype)
+            temp[0,0,:,:]=self._w[0]*(sig_x+tau_x)+self._chi[0]*np.kron(sigma_x,sigma_x)            
+            temp[0,1,:,:]=self._J[0]*sig_x
+            temp[0,2,:,:]=self._J[0]*sig_y
+            temp[0,3,:,:]=self._J[0]*sig_z                
+            temp[0,4,:,:]=self._J[0]*tau_x
+            temp[0,5,:,:]=self._J[0]*tau_y
+            temp[0,6,:,:]=self._J[0]*tau_z                
+            temp[0,7,:,:]=np.eye(4)
+            
+            self._mpo.append(np.copy(temp))
+            for n in range(1,self._N-1):
+                temp=np.zeros((8,8,4,4),self.dtype)
+                #11
+                temp[0,0,:,:]=np.eye(4)
+                temp[1,0,:,:]=sig_x
+                temp[2,0,:,:]=sig_y
+                temp[3,0,:,:]=sig_z                
+                temp[4,0,:,:]=tau_x
+                temp[5,0,:,:]=tau_y
+                temp[6,0,:,:]=tau_z
+                
+                temp[7,0,:,:]=self._w[n]*(sig_x+tau_x)+self._chi[n]*np.kron(sigma_x,sigma_x)
+
+                temp[7,1,:,:]=self._J[n]*sig_x
+                temp[7,2,:,:]=self._J[n]*sig_y
+                temp[7,3,:,:]=self._J[n]*sig_z                
+                temp[7,4,:,:]=self._J[n]*tau_x
+                temp[7,5,:,:]=self._J[n]*tau_y
+                temp[7,6,:,:]=self._J[n]*tau_z                
+                temp[7,7,:,:]=np.eye(4)
+        
+                self._mpo.append(np.copy(temp))
+
+            temp=np.zeros((8,1,4,4),self.dtype)                
+            temp[0,0,:,:]=np.eye(4)
+            temp[1,0,:,:]=sig_x
+            temp[2,0,:,:]=sig_y
+            temp[3,0,:,:]=sig_z                
+            temp[4,0,:,:]=tau_x
+            temp[5,0,:,:]=tau_y
+            temp[6,0,:,:]=tau_z
+            temp[7,0,:,:]=self._w[-1]*(sig_x+tau_x)+self._chi[-1]*np.kron(sigma_x,sigma_x)
+            self._mpo.append(np.copy(temp))
+
+        if obc==False:
+            if len(J)<self._N:
+                raise ValueError("in JessHamiltonian: for obc=False, len(J) has to be N")
+            self._mpo=[]
+            for n in range(self._N):
+                temp=np.zeros((8,8,4,4),self.dtype)
+                temp[0,0,:,:]=np.eye(4)
+                temp[1,0,:,:]=sig_x
+                temp[2,0,:,:]=sig_y
+                temp[3,0,:,:]=sig_z                
+                temp[4,0,:,:]=tau_x
+                temp[5,0,:,:]=tau_y
+                temp[6,0,:,:]=tau_z
+                
+                temp[7,0,:,:]=self._w[n]*(sig_x+tau_x)+self._chi[n]*np.kron(sigma_x,sigma_x)
+
+                temp[7,1,:,:]=self._J[n]*sig_x
+                temp[7,2,:,:]=self._J[n]*sig_y
+                temp[7,3,:,:]=self._J[n]*sig_z                
+                temp[7,4,:,:]=self._J[n]*tau_x
+                temp[7,5,:,:]=self._J[n]*tau_y
+                temp[7,6,:,:]=self._J[n]*tau_z                
+                temp[7,7,:,:]=np.eye(4)
+                self._mpo.append(np.copy(temp))
+
+
+    
         
 class XXZ(MPO):
     """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
-    
     def __init__(self,Jz,Jxy,Bz,obc=True,dtype=float):
         self._obc=obc
         self._Jz=Jz
@@ -253,6 +352,7 @@ class XXZ(MPO):
             assert(len(Bz)==len(Jz))
             self._mpo=[]
             for n in range(0,self._N):
+
                 temp=np.zeros((5,5,2,2),self.dtype)
                 #11
                 temp[0,0,0,0]=1.0
@@ -267,10 +367,11 @@ class XXZ(MPO):
                 #BSz
                 temp[4,0,0,0]=-0.5*Bz[n]
                 temp[4,0,1,1]= 0.5*Bz[n]
+        
             
                 #Sm
                 temp[4,1,0,1]=Jxy[n]/2.0*1.0
-                #Sp
+                 #Sp
                 temp[4,2,1,0]=Jxy[n]/2.0*1.0
                 #Sz
                 temp[4,3,0,0]=Jz[n]*(-0.5)
@@ -278,7 +379,33 @@ class XXZ(MPO):
                 #11
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
-        
+
+                
+                #temp=np.zeros((5,5,2,2),self.dtype)
+                ##11
+                #temp[0,0,0,0]=1.0
+                #temp[0,0,1,1]=1.0
+                ##Sp
+                #temp[1,0,1,0]=1.0
+                ##Sm
+                #temp[2,0,0,1]=1.0
+                ##Sz
+                #temp[3,0,0,0]=-0.5
+                #temp[3,0,1,1]=0.5
+                ##BSz
+                #temp[4,0,0,0]=-0.5*Bz[n]
+                #temp[4,0,1,1]= 0.5*Bz[n]
+                #
+                ##Sm
+                #temp[4,1,0,1]=Jxy[n]/2.0*1.0
+                ##Sp
+                #temp[4,2,1,0]=Jxy[n]/2.0*1.0
+                ##Sz
+                #temp[4,3,0,0]=Jz[n]*(-0.5)
+                #temp[4,3,1,1]=Jz[n]*0.5
+                ##11
+                #temp[4,4,0,0]=1.0
+                #temp[4,4,1,1]=1.0
                 self._mpo.append(np.copy(temp))
 
 

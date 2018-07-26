@@ -130,7 +130,6 @@ def svd(mat,full_matrices=False,r_thresh=1E-14):
     returns: exactly what you would expect!
     r_thresh: don't worry about it
     """
-    
     try: 
         [u,s,v]=np.linalg.svd(mat,full_matrices=False)
     except np.linalg.linalg.LinAlgError:
@@ -405,40 +404,51 @@ def measure4pointCorrelation(mps,ops,P=None):
     
 def measureLocal(mps,operators,lb,rb,ortho):
     """
-    measure a local operator, given an mps, a list of local operators, left and right boundaries of the MPS, and the orthogonal state of the MPS 
+    measure local operators, given an mps, a list of local operators, left and right boundaries of the MPS, and the orthogonal state of the MPS.
     len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
     efficient methods can be used.
     
     mps: a list of mps tensors (ndarrays), or an mpslib.mps.MPS object
-    operators: a list of operators of len(operators)=len(mps). The position within of an operator within the list is taken to be 
-    the site where it acts. Each operator is measured and the  result is returned in a list
+    operators: a list of np.ndarrays of len(operators)=len(mps). The position of the operator within the list is taken to be 
+               the site where it acts, i.e. operators[n] acts at site n. Each operator is measured and the  result is returned in a list
     lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
     rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
     ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
     """
+
+    if isinstance(mps,list):
+        temp=[m.dtype for m in mps]+[o.dtype for o in operators]+[lb,rb]
+        dtype=np.result_type(*temp)
+        
+    elif isinstance(mps,MPSL.MPS):
+        temp=[mps.dtype]+[o.dtype for o in operators]+[lb,rb]        
+        dtype=np.result_type(*temp)
     N=len(mps)
     if len(mps)!=len(operators):
         raise ValueError("measureLocal: len(operators) does not match len(mps)")
     if ortho != 'right' and ortho !='left':
         raise ValueError("measureLocal: unknown orthogonality state {0}".format(ortho))
-    loc=np.zeros(N)
+    
+    loc=np.zeros(N).astype(dtype)
     if ortho=='right':
-        L0=np.copy(lb)
+        L0=np.copy(lb).astype(dtype)
+        #print('L0: ',L0)
         for n in range(0,N-1):
             [D1,D2,d]=np.shape(mps[n])
+            exp=np.expand_dims(np.expand_dims(operators[n],0),0)
             Lmeasure=addLayer(L0,mps[n],np.expand_dims(np.expand_dims(operators[n],0),0),mps[n],1)
-            m=np.trace(Lmeasure[:,:,0])
-            loc[n]=np.real(m)
-            if np.abs(np.imag(m))>1e-12:
-                print ('detected imaginary values for observable')
-                print (np.imag(m))
             L0=addELayer(L0,mps[n],mps[n],1)
+            m=np.trace(Lmeasure[:,:,0])/np.trace(L0)
+            loc[n]=m
+            if np.abs(np.imag(m))>1e-12:
+                warnings.warn('detected imaginary value {0} for observable'.format(np.imag(m)))
+            
         Lmeasure=addLayer(L0,mps[N-1],np.expand_dims(np.expand_dims(operators[N-1],0),0),mps[N-1],1)
-        m=np.trace(Lmeasure[:,:,0])
-        loc[N-1]=np.real(m)
+        L0=addELayer(L0,mps[N-1],mps[N-1],1)        
+        m=np.trace(Lmeasure[:,:,0])/np.trace(L0)
+        loc[N-1]=m
         if np.abs(np.imag(m))>1e-12:
-            print ('detected imaginary values for observable')
-            print (np.imag(m))
+            warnings.warn('detected imaginary value {0} for observable'.format(np.imag(m)))            
         return loc
 
     if ortho=='left':
@@ -446,19 +456,20 @@ def measureLocal(mps,operators,lb,rb,ortho):
         for n in range(N-1,0,-1):
             [D1,D2,d]=np.shape(mps[n])
             Rmeasure=addLayer(R0,mps[n],np.expand_dims(np.expand_dims(operators[n],0),0),mps[n],-1)
-            m=np.trace(Rmeasure[:,:,-1])
-            loc[n]=np.real(m)
+            R0=addELayer(R0,mps[n],mps[n],-1)            
+            m=np.trace(Rmeasure[:,:,-1])/np.trace(R0)
+            loc[n]=m
             if np.abs(np.imag(m))>1e-12:
-                print ('detected imaginary values for observable')
-                print (np.imag(m))
-            R0=addELayer(R0,mps[n],mps[n],-1)
+                warnings.warn('detected imaginary value {0} for observable'.format(np.imag(m)))                            
+
+
         
         Rmeasure=addLayer(R0,mps[0],np.expand_dims(np.expand_dims(operators[0],0),0),mps[0],-1)
-        m=np.trace(Rmeasure[:,:,-1])
-        loc[0]=np.real(m)
+        R0=addELayer(R0,mps[0],mps[0],-1)                    
+        m=np.trace(Rmeasure[:,:,-1])/np.trace(R0)
+        loc[0]=m
         if np.abs(np.imag(m))>1e-12:
-            print ('detected imaginary values for observable')
-            print (np.imag(m))
+            warnings.warn('detected imaginary value {0} for observable'.format(np.imag(m)))                                        
 
         return loc
 
@@ -728,7 +739,9 @@ def prepareTensor(tensor,direction,fixphase=None):
     """
     
     assert(direction!=0),'do NOT use direction=0!'
+
     dtype=type(tensor[0,0,0])
+
     [l1,l2,d]=tensor.shape
     if direction>0:
         temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
@@ -2138,6 +2151,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
             lam=lam/np.linalg.norm(lam)
             Dold=len(lam)
             lam=lam[lam>1E-15]
+
             U=U[:,0:len(lam)]
             Vdag=Vdag[0:len(lam),:]
             lam/=np.linalg.norm(lam)

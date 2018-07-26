@@ -1214,7 +1214,7 @@ class TimeEvolutionEngine(Container):
             #odd step updates:
             self.applyOdd(dt,Dmax,tr_thresh)
             if verbose==1:
-                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i"%(np.abs(np.imag(it*dt)),self._tw,self._maxD))
+                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i/%i, truncation threshold=%1.16f"%(np.abs(np.imag(it*dt)),self._tw,np.max(self.mps.D),Dmax,tr_thresh))
                 stdout.flush()
 
             #if this is a cp step, save between two half-steps
@@ -1495,16 +1495,23 @@ class TimeEvolutionEngine(Container):
 
 
 # ============================================================================     everything below this line is still in development =================================================
-def matvec(Heff,mpo,vec):
+def matvec(Heff,Henv,mpo,vec):
     D=Heff.shape[0]
     d=mpo.shape[2]
     tensor=np.reshape(vec,(D,D,d))
-    return np.reshape(ncon.ncon([Heff,mpo,tensor],[[1,-1,2,4,-2,5],[2,5,3,-3],[1,4,3]]),(D*D*d))
+    return np.reshape(ncon.ncon([Heff,mpo,tensor],[[1,-1,3,4,-2,5],[3,5,2,-3],[1,4,2]])+ncon.ncon([Henv,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
 
-def gram(Neff,d,vec):
+def gram(Neff,mpo,vec):
+
     D=Neff.shape[0]
+    d=mpo.shape[2]
     tensor=np.reshape(vec,(D,D,d))
-    return np.reshape(ncon.ncon([Neff,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
+    return np.reshape(ncon.ncon([Neff,mpo,tensor],[[1,-1,3,4,-2,5],[3,5,2,-3],[1,4,2]]),(D*D*d))
+
+#def gram(Neff,d,vec):
+#    D=Neff.shape[0]
+#    tensor=np.reshape(vec,(D,D,d))
+#    return np.reshape(ncon.ncon([Neff,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
 
 
 def matvecbond(Heff,vec):
@@ -1516,7 +1523,6 @@ def grambond(Neff,vec):
     D=Neff.shape[0]
     mat=np.reshape(vec,(D,D))
     return np.reshape(ncon.ncon([Neff,mat],[[1,-1,2,-2],[1,2]]),(D*D))
-
 
 
 
@@ -1539,10 +1545,23 @@ class PeriodicMPSengine(Container):
         [B1,B2,d1,d2]=mpo[0].shape
         mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
         mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
+        
+        
+        mpolist2=[]
+        mpolist2.append(np.copy(mpo[0][-1,:,:,:]))
+        mpolist2.append(np.copy(mpo[0]))
+        mpolist2.append(np.copy(mpo[0][:,0,:,:]))
+        self._mpo2=H.MPO.fromlist(mpolist2)
+        
+        self._mpo3=H.MPO.fromlist(mpolist2)
+        self._mpo3[0][0,:,:]/=2.0
+        self._mpo3[2][-1,:,:]/=2.0
+        
+
 
         mpol[0,:,:,:]=mpo[0][-1,:,:,:]
-        mpol[0,0,:,:]*=0.0
         mpor[:,0,:,:]=mpo[0][:,0,:,:]
+        mpol[0,0,:,:]*=0.0
         mpor[-1,0,:,:]*=0.0
 
         mpolist=[]
@@ -1555,6 +1574,28 @@ class PeriodicMPSengine(Container):
         self._filename=filename
         self._it=1
 
+
+    def empty_pow(self,N):
+        empty=ncon.ncon([self._mps[0],np.conj(self._mps[0])],[[-3,-1,1],[-4,-2,1]])
+        for n in range(N-1):
+            empty=ncon.ncon([empty,self._mps[0],np.conj(self._mps[0])],[[-1,-2,1,3],[-3,1,2],[-4,3,2]])
+        return empty
+
+    def checkH(self,N):
+        Hlocall=ncon.ncon([self._mps[0],self._mpo2[0],np.conj(self._mps[0]),self._mps[0],self._mpo3[2],np.conj(self._mps[0])],[[-3,1,2],[3,2,4],[-4,5,4],[1,-1,7],[3,7,6],[5,-2,6]])
+        Hlocal=ncon.ncon([self._mps[0],self._mpo3[0],np.conj(self._mps[0]),self._mps[0],self._mpo3[2],np.conj(self._mps[0])],[[-3,1,2],[3,2,4],[-4,5,4],[1,-1,7],[3,7,6],[5,-2,6]])
+        Hlocalr=ncon.ncon([self._mps[0],self._mpo3[0],np.conj(self._mps[0]),self._mps[0],self._mpo2[2],np.conj(self._mps[0])],[[-3,1,2],[3,2,4],[-4,5,4],[1,-1,7],[3,7,6],[5,-2,6]])                
+        empty=ncon.ncon([self._mps[0],np.conj(self._mps[0])],[[-3,-1,1],[-4,-2,1]])
+        H=np.zeros(Hlocal.shape,dtype=Hlocal.dtype)
+        for n in range(N):
+            if n>0 and (N-n-2)>0:
+                H+=ncon.ncon([self.empty_pow(n),Hlocal,self.empty_pow(N-n-2)],[[3,4,-3,-4],[1,2,3,4],[-1,-2,1,2]])
+            if n==0 and (N-n-2)>0:
+                H+=ncon.ncon([Hlocall,self.empty_pow(N-n-2)],[[1,2,-3,-4],[-1,-2,1,2]])
+            if n>0 and (N-n-2)==0:
+                H+=ncon.ncon([self.empty_pow(n),Hlocalr],[[1,2,-3,-4],[-1,-2,1,2]])
+        return H
+        
     def getHeffNeff(self):
         [D1,D2,d]=self._mps[0].shape
         Hbla=ncon.ncon([self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-4,-1,1],[-6,-3,1,2],[-5,-2,2]])
@@ -1567,106 +1608,162 @@ class PeriodicMPSengine(Container):
             #print(bla)
             #input()
             n+=1            
-            if n==(self._N-3):
-                #N_temp contains all mps-tensors except those at 0,N-2 and N-1; will be contracted with local mpo to connect both ends
-                N_temp=np.copy(Hbla[:,:,0,:,:,0])
-                #print('length of N_temp: ',n,self._N)
+            #if n==(self._N-3):
+            #    #N_temp contains all mps-tensors except those at 0,N-2 and N-1; will be contracted with local mpo to connect both ends
+            #    N_temp=np.copy(Hbla[:,:,0,:,:,0])
+            #    #print('length of N_temp: ',n,self._N)
+            #print('contracted ',n,self._N)
 
-
-            #print('contracted ',n)
         #Neffbond has all mps tensors contracted into it
-        Neffbond=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])[:,:,0,:,:,0]
+        #Neffbond=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])[:,:,0,:,:,0]
+        Neffbond=self.empty_pow(self._N)
+        N_temp=self.empty_pow(self._N-3)
         #Neffbond has all but the N-1st mps tensors contracted into it        
         Neffsite=np.zeros((D1,D1,1,D2,D2,1),dtype=Hbla.dtype)            
-        Neffsite[:,:,0,:,:,0]=Hbla[:,:,-1,:,:,-1]
+        Neffsite[:,:,0,:,:,0]=Hbla[:,:,0,:,:,0]
         #bla=np.zeros((D1,D1),dtype=Neffsite.dtype)
         #for k in range(D1):
         #    #bla+=Neffsite[:,:,0,k,k,0]
         #    bla+=Neffbond[:,:,k,k]
         #print(bla)
         #input()        
-        Henv=Hbla[:,:,0,:,:,-1]
+        Henvsite=Hbla[:,:,0,:,:,-1]
+        #H2=self.checkH(self._N-1)
+        #print(np.linalg.norm(Henvsite-H2))
+        #print(np.linalg.norm(Neffsite[:,:,0,:,:,0]-self.empty_pow(self._N-1)))
+        #print(np.linalg.norm(Neffbond-self.empty_pow(self._N)))
+        #print(np.linalg.norm(N_temp-self.empty_pow(self._N-3)))        
+        #input()
         #Hevn contains all hamiltonian contributions that don't act on the last site N-1
         #N_temp contains the mps overlap on sites 1,...,N-3
         #Heffsite has will be contracted with a local mpo self._mpo[1] to get the full Hamiltonian
         Heffsite=ncon.ncon([N_temp,self._mps[0],self._mpo[0],np.conj(self._mps[0]),self._mps[0],self._mpo[2],np.conj(self._mps[0])],[[1,4,5,8],[1,-1,2],[9,-3,2,3],[4,-2,3],[-4,5,6],[-6,9,6,7],[-5,8,7]])
-        Heffsite[:,:,-1,:,:,-1]+=Henv
+
+        #Heffsite[:,:,-1,:,:,-1]+=Henv
         Heffbond=ncon.ncon([Heffsite,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[1,5,3,-3,-4,6],[1,-1,2],[3,6,2,4],[5,-2,4]])
+        #Henvbond=ncon.ncon([Henvsite,self._mps[0],np.conj(self._mps[0]),self._mps[0],np.conj(self._mps[0])],[[1,3,4,6],[1,-1,2],[3,-2,2],[-3,4,5],[-4,6,5]])
+        Henvbond=ncon.ncon([Henvsite,self._mps[0],np.conj(self._mps[0])],[[1,3,-3,-4],[1,-1,2],[3,-2,2]])
         #Heffsite has will be contracted with a local mpo self._mpo[1] to get the full Hamiltonian        
-        energy=0
-        for n1 in range(Heffbond.shape[0]):
-            for n2 in range(Heffbond.shape[1]):
-                energy+=Heffbond[n1,n2,n1,n2]
-        return Heffsite,Neffsite,Heffbond,Neffbond,energy
-    
-    def simulate(self):
+
+        return Heffsite,Neffsite,Henvsite,Heffbond,Neffbond,Henvbond
+        
+    def gradient_optimize(self,alpha=0.05,Econv=1E-3,Nmax=1000,verbose=1):
         converged=False
+        it=0
+        eold=1E10
         while not converged:
             self._mps.canonize()
-            self._mps.ortho(0,1) #state is in left orthogonal form
+            Heffsite,Neffsite,Henvsite,Heffbond,Neffbond,Henvbond=self.getHeffNeff()
+            [D1,D2,d]=self._mps[0].shape
+            mvsite=fct.partial(matvec,*[Heffsite,Henvsite,self._mpo[1]])
+            #mvbond=fct.partial(matvecbond,*[Heffbond+Henvbond])            
+            LOPsite=LinearOperator((D1*D2*d,D1*D2*d),matvec=mvsite,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
+            #LOPbond=LinearOperator((D1*D2,D1*D2),matvec=mvbond,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
             
-            Heffsite,Neffsite,Heffbond,Neffbond,energy=self.getHeffNeff()
+            gradmps=np.reshape(mvsite(self._mps[0]),(self._mps[0].shape))
+            #gradmat=np.reshape(mvbond(np.eye(D1)),(D1,D2))
+            
+            energy=np.tensordot(np.conj(self._mps[0]),gradmps,([0,1,2],[0,1,2]))
+            Z=np.trace(np.reshape(Neffbond,(D1*D1,D2*D2)))
+            edens=energy/Z/self._N
+            
+            self._mps[0]-=np.copy(alpha*gradmps)
+            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))
 
+            #mps=self._mps[0]-alpha*gradmps
+            #mat=np.eye(D1)-alpha*gradmat
+            #ACC_l=np.reshape(ncon.ncon([mps,herm(mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
+            #Ul,Sl,Vl=mf.svd(ACC_l)
+            #self._mps[0]=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
+            #self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))
+            
+            self._mps._mat=np.eye(D1)
+            self._mps._connector=np.eye(D1)
+            if verbose>0:
+                stdout.write("\rPeriodic MPS gradient optimization for N=%i sites: it=%i/%i, E=%.16f+%.16f at alpha=%1.5f, D=%i"%(self._N,it,Nmax,np.real(edens),np.imag(edens),alpha,D1))
+                stdout.flush()
+
+            if np.abs(eold-edens)<Econv:
+                converged=True
+                if verbose>0:
+                    print()
+                    print ('energy converged to within {0} after {1} iterations'.format(Econv,it))
+            eold=edens
+            it+=1
+            if it>Nmax:
+                if verbose>0:
+                    print()
+                    print ('simulation did not converge to desired accuracy of {0} within {1} iterations '.format(Econv,Nmax))
+                break
+
+    def simulateVUMPS(self):
+        converged=False
+        while not converged:
+            calls=[0]
+            stop=2
+            
+            self._mps.canonize()
+            Heffsite,Neffsite,Henvsite,Heffbond,Neffbond,Henvbond=self.getHeffNeff()
             [D1,D2,d]=self._mps[0].shape                                
-            Hsite=np.reshape(ncon.ncon([Heffsite,self._mpo[1]],[[-1,-4,1,-2,-5,2],[1,2,-3,-6]]),(D1*D2*d,D1*D2*d))
-            Nsite=np.reshape(ncon.ncon([Neffsite,np.reshape(np.eye(d),(1,1,d,d))],[[-1,-4,1,-2,-5,2],[1,2,-3,-6]]),(D1*D2*d,D1*D2*d))
 
-            Hbond=np.reshape(np.transpose(Heffbond,(0,2,1,3)),(D1*D1,D2*D2))
-            Nbond=np.reshape(np.transpose(Neffbond,(0,2,1,3)),(D1*D1,D2*D2))
-            #Htrans=np.linalg.inv(Nbond).dot(Hbond)
-            
+            mvsite=fct.partial(matvec,*[calls,stop,Heffsite,Henvsite,self._mpo[1]])
+            vvsite=fct.partial(gram,*[Neffsite,np.reshape(np.eye(d),(1,1,d,d))])
 
-            mvsite=fct.partial(matvec,*[Heffsite,self._mpo[1]])
-            vvsite=fct.partial(matvec,*[Neffsite,np.reshape(np.eye(d),(1,1,d,d))])
-            #vv=fct.partial(gram,*[Neff,d])            
             LOPsite=LinearOperator((D1*D2*d,D1*D2*d),matvec=mvsite,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
             Msite=LinearOperator((D1*D2*d,D1*D2*d),matvec=vvsite,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
             
-            mvbond=fct.partial(matvecbond,*[Heffbond])
-            vvbond=fct.partial(matvecbond,*[Neffbond])
-            #vv=fct.partial(gram,*[Neff,d])
+            mvbond=fct.partial(matvecbond,*[calls,stop,Heffbond+Henvbond])
+            vvbond=fct.partial(matvecbond,*[[0],1000,Neffbond])
             
             LOPbond=LinearOperator((D1*D2,D1*D2),matvec=mvbond,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
             Mbond=LinearOperator((D1*D2,D1*D2),matvec=vvbond,rmatvec=None,matmat=None,dtype=Heffsite.dtype)
             
-            nmax=1000
-            tolerance=1E-4
-            ncv=40
+            nmax=10000
+            tolerance=10.0
+            ncv=1
 
-            gradmps=mv(self._mps[0])
-            gradmat=mv(n)
-            #etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,M=Msite,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
-            ##etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
-            #etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,M=Mbond,which='SR',v0=np.reshape(np.eye(D1),(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
-            ##etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,which='SR',v0=np.reshape(self._mps._mat,(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
-            #
-            #indsite=np.nonzero(np.real(etasite)==min(np.real(etasite)))[0][0]
-            #indbond=np.nonzero(np.real(etabond)==min(np.real(etabond)))[0][0]
+            gradmps=np.reshape(mvsite(self._mps[0]),(self._mps[0].shape))
+            energy=np.tensordot(np.conj(self._mps[0]),gradmps,([0,1,2],[0,1,2]))
+            Z=np.trace(np.reshape(Neffbond,(D1*D1,D2*D2)))
 
+
+            etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,M=Msite,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            #etasite,vecsite=sp.sparse.linalg.eigs(LOPsite,k=6,which='SR',v0=np.reshape(self._mps[0],(D1*D2*d)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,M=Mbond,which='SR',v0=np.reshape(np.eye(D1),(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            #etabond,vecbond=sp.sparse.linalg.eigs(LOPbond,k=6,which='SR',v0=np.reshape(self._mps._mat,(D1*D2)),maxiter=nmax,tol=tolerance,ncv=ncv)
+            indsite=np.nonzero(np.real(etasite)==min(np.real(etasite)))[0][0]
+            indbond=np.nonzero(np.real(etabond)==min(np.real(etabond)))[0][0]
+            
             mps=np.reshape(vecsite[:,indsite],(D1,D2,d))
             mat=np.reshape(vecbond[:,indbond],(D1,D2))
             ACC_l=np.reshape(ncon.ncon([mps,herm(mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
             Ul,Sl,Vl=mf.svd(ACC_l)
-            self._mps[0]=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
+
+            self._mps[0]=mps#np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
+            print(mps.shape)
+            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))            
             self._mps._mat=np.eye(D1)
             self._mps._connector=np.eye(D1)
-
-            eta1,U1=np.linalg.eig(Hsite)
-            eta2,U2=np.linalg.eig(Hbond)            
-            #print(np.sort(etasite))
-            print('the dimension of kernel of Nsite: ',D1**2*d-np.linalg.matrix_rank(Nsite))
-            print('the dimension of kernel of Nbond: ',D1**2-np.linalg.matrix_rank(Nbond))
             
-            print()
-            print('lowest eigenvalue of Hsite from sparse: ',np.sort(etasite)[0])
-            print('lowest eigenvalue of Hsite from dense:  ',np.sort(eta1)[0])            
+            #eta1,U1=np.linalg.eig(Hsite)
+            #eta2,U2=np.linalg.eig(Hbond)            
+            #print(np.sort(etasite))
+            #print('the dimension of kernel of Nsite: ',D1**2*d-np.linalg.matrix_rank(Nsite))
+            #print('the dimension of kernel of Nbond: ',D1**2-np.linalg.matrix_rank(Nbond))
+            
+            #print()
+            #print('lowest eigenvalue of Hsite from sparse: ',np.sort(etasite)[0])
+            #print('lowest eigenvalue of Hsite from dense:  ',np.sort(eta1)[0])            
             #print(np.sort(eta1))
             #print()
-            print('lowest eigenvalue of Hbond from sparse: ',np.sort(etabond)[0])
-            print('lowest eigenvalue of Hbond from dense:  ',np.sort(eta2)[0])                        
+            #print('lowest eigenvalue of Hbond from sparse: ',np.sort(etabond)[0])
+            #print('lowest eigenvalue of Hbond from dense:  ',np.sort(eta2)[0])                        
 
             #print(np.sort(eta2))
-            print('energy:',np.sort(etasite)[0]/self._N)
+            print('etasite:',np.sort(etasite)[0]/self._N)
+            print('etabond:',np.sort(etabond)[0]/self._N)
+            print('energy ={0}, Z={1}, energy/N*Z={2}'.format(energy,Z,energy/Z/self._N))
+            input()
             #print(self._mps[0])
             #print(self._mps._mat)                
 

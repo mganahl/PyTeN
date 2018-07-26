@@ -33,11 +33,11 @@ if __name__ == "__main__":
     #initializes a product state with a specific arrangement of up and down spins
     #state is an array of length N defining which state should be put at each site;
     #values at state[n] can be in {0,1,..,d-1}
-    state=[0]*N              #initialize with all spins down
-    state[int(N/2)-10]=1     #put an up spin at site int(N/2)-10
-    state[int(N/2)]=1        #put an up spin at site int(N/2)
-    state[int(N/2)+10]=1     #put an up spin at site int(N/2)+10
-    mps=mpslib.MPS.productState(state,[d]*N,obc=True) #this mps for now has a maximally allowed bond dimension mps._D=1;
+    state=[np.asarray([1,0])]*N              #initialize with all spins down
+    state[int(N/2)-10]=np.asarray([0,1])        #put an up spin at site int(N/2)-10
+    state[int(N/2)]=np.asarray([0,1])        #put an up spin at site int(N/2)
+    state[int(N/2)+10]=np.asarray([0,1])     #put an up spin at site int(N/2)+10
+    mps=mpslib.MPS.productState(state,obc=True) #this mps for now has a maximally allowed bond dimension mps._D=1;
 
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     mps.position(N)

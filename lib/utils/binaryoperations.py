@@ -16,6 +16,10 @@ def setBit(b,pos):
     mask=np.uint64(1)<<np.uint64(pos)
     return mask|b
 
+def unsetBit(b,pos):
+    mask=np.uint64(1)<<np.uint64(pos)
+    return (~mask)&b
+
 def getBit(b, pos):
     mask=np.uint64(1)<<np.uint64(pos)
     return int((b & mask)>0)
