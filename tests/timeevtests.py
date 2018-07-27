@@ -38,6 +38,13 @@ def measureSz(state,basis,N):
             SZexact[n]+=(np.abs(state[m])**2)*spin
     return SZexact
 
+def Sz(b,N):
+    sz=0
+    for n in range(N):
+        spin=bb.getBit(b,n)-0.5
+        sz+=spin
+    return sz
+
 def measureSy(state,basis,N):
     assert(len(state)==len(basis))
     SYexact=np.zeros((N))
@@ -72,7 +79,6 @@ using exact diagonalization, calculate ground-state for a N=10 sites Heisenberg 
 the state forward;
 using dmrg, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5
 evolve the state using TDVP and TEBD; compare the results with ED
-
 """
 class TestTimeEvolution(unittest.TestCase):        
     def setUp(self):
@@ -81,6 +87,7 @@ class TestTimeEvolution(unittest.TestCase):
         self.N=10
         jz=1.0 
         jxy=1.0
+        Bz=1.0
         self.Nmax=10
         self.dt=-1j*0.05  #time step
         self.numsteps=10  #numnber of steps to be taken in between measurements        
@@ -108,13 +115,18 @@ class TestTimeEvolution(unittest.TestCase):
         e,v=sp.sparse.linalg.eigsh(Hsparse1,k=1,which='SA',maxiter=1000000,tol=1E-8,v0=None,ncv=40)
         #the Hamiltonian in the new sector
         Hsparse2=ed.XXZSparseHam(Jxyar,Jzar,N,Nup+1,Z2,grid)
-        
         #flip the spin at the center of the ground state
 
         basis1=ed.binarybasisU1(self.N,self.N/2)
         assert(len(basis1)==Hsparse1.shape[0])
         
         basis2=ed.binarybasisU1(self.N,self.N/2+1)
+
+        diag=[Sz(b,self.N)*Bz for b in basis2]        
+        inddiag=list(range(len(basis2)))
+        HB=csc_matrix((diag,(inddiag,inddiag)),shape=(len(basis2),len(basis2)))
+        Hsparse2+=HB
+        
         vnew=np.zeros(len(basis2),v.dtype)                
         assert(len(basis2)==Hsparse2.shape[0])        
         for n in range(len(basis1)):
@@ -146,7 +158,7 @@ class TestTimeEvolution(unittest.TestCase):
         mps._D=D
         mps.__position__(self.N)
         mps.__position__(0)
-        self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
+        self.mpo=H.XXZ(Jz,Jxy,Bz*np.ones(self.N),True)
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
         self.dmrg=en.DMRGengine(mps,self.mpo,'testXXZ',lb,rb)
@@ -294,9 +306,8 @@ the state forward;
 using dmrg, calculate ground-state for a N=10 sites Heisenberg model, apply S+ to site n=5
 evolve the state using TDVP and TEBD; compare the results with ED
 plots the results 
-
 """
-        
+
 class TestPlot(unittest.TestCase):        
     def setUp(self):
         D=32
@@ -304,6 +315,7 @@ class TestPlot(unittest.TestCase):
         self.N=10
         jz=1.0 
         jxy=1.0
+        Bz=1.0
         self.Nmax=10
         self.dt=-1j*0.05  #time step
         self.numsteps=10  #numnber of steps to be taken in between measurements        
@@ -338,6 +350,14 @@ class TestPlot(unittest.TestCase):
         assert(len(basis1)==Hsparse1.shape[0])
         
         basis2=ed.binarybasisU1(self.N,self.N/2+1)
+
+
+        diag=[Sz(b,self.N)*Bz for b in basis2]
+
+        inddiag=list(range(len(basis2)))
+        HB=csc_matrix((diag,(inddiag,inddiag)),shape=(len(basis2),len(basis2)))
+        Hsparse2+=HB
+        
         vnew=np.zeros(len(basis2),v.dtype)                
         assert(len(basis2)==Hsparse2.shape[0])        
         for n in range(len(basis1)):
@@ -373,6 +393,8 @@ class TestPlot(unittest.TestCase):
         mps.__position__(self.N)
         mps.__position__(0)
         self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
+        self.timeevmpo=H.XXZ(Jz,Jxy,Bz*np.ones(self.N),True)                
+        
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
 
@@ -383,12 +405,12 @@ class TestPlot(unittest.TestCase):
     def test_plot_LAN(self):
         
         def run_sim(dmrgcontainer,solver):
-            dmrgcontainer._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
+            dmrgcontainer._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
             dmrgcontainer._mps.__position__(self.N)
             dmrgcontainer._mps.__position__(0)
 
-            engine1=en.TimeEvolutionEngine(dmrgcontainer._mps,self.mpo,"insert_name_here")
-            engine2=en.TimeEvolutionEngine(dmrgcontainer._mps.__copy__(),self.mpo,"TDVP_insert_name_here")        
+            engine1=en.TimeEvolutionEngine(dmrgcontainer._mps,self.timeevmpo,"insert_name_here")
+            engine2=en.TimeEvolutionEngine(dmrgcontainer._mps.__copy__(),self.timeevmpo,"TDVP_insert_name_here")        
             engine1._mps.resetZ()
             engine2._mps.resetZ()        
             
@@ -507,13 +529,11 @@ class TestPlot(unittest.TestCase):
                 plt.draw()
                 plt.show()
                 plt.pause(0.01)
-                #input()
 
         N=self.N
         
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-                
         for solver in ['LAN','RK45','SEXPMV','RK23']:
             run_sim(copy.deepcopy(self.dmrg),solver)
             

@@ -11,9 +11,19 @@ herm=lambda x:np.conj(np.transpose(x))
 
 class MPO:
     """
-
     Base class for defining MPO; if you want to implement a custom MPO, derive from this class (see below for examples)
-    
+    Index convention:
+
+           3
+           |
+          ___
+         |   |
+    0----|   |----1
+         |___|
+           |
+           2
+
+    2,3 are the physical incoming and outgoing indices, respectively. The conjugates side of the MPS is on the bottom (at index 2)
     """
 
     def __init__(self,mpos=[]):
@@ -22,11 +32,27 @@ class MPO:
         self._N=len(self._mpo)
     @classmethod
     def fromMPO(cls,other):
+        """
+        create an MPO from another MPO by copying
+        Parameters:
+        -----------------------------
+        other: MPO object
+        
+        """
+        
         #a list of mpo-tensors, to be initialized in the derived class
         return cls(other._mpolist)
 
     @classmethod        
     def fromlist(cls,mpolist):
+        """
+        create an MPO from a list of np.ndarrays:
+        Parameters:
+        -----------------------------
+        mpolist: list of np.ndarray of shape (M,M,d,d)
+                 M is the ancilary dimension, d the physical dimension
+        
+        """
         return cls(mpolist)
         #a list of mpo-tensors, to be initialized in the derived class
         #cls._mpo=copy.deepcopy(mpolist)
@@ -35,7 +61,17 @@ class MPO:
         
     def twoSiteGate(self,m,n,tau):
         """
-        returns a two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
+        calculate the unitary two-site gates exp(tau*H(m,n))
+        Parameters:
+        --------------------------------------
+        m,n: int
+             lattice sites for which to calculate the gate
+        tau: float or complex
+             time-increment
+
+        Returns:
+        --------------------------------------------------
+        A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
         h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
         Gate=scipy.linalg..expm(tau*h); Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
         dm, dn the local hilbert space dimension at site m and n, respectively
@@ -59,6 +95,18 @@ class MPO:
             for s in range(1,mpo1.shape[0]-1):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
             h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)                
+            #A=np.random.rand(4,4)
+            #B=np.random.rand(4,4)
+            #bla=np.reshape(np.kron(A,B),(4,4,4,4))
+            #for n1 in range(4):
+            #    for n2 in range(4):
+            #        for n3 in range(4):
+            #            for n4 in range(4):
+            #                #print(bla[n1,n2,n3,n4]==mpo1[0,n1,n3]/2*mpo2[0,n2,n4])
+            #                #print(bla[n1,n2,n3,n4]==A[n3,n1]*B[n4,n2])
+            #                print(bla[n1,n2,n3,n4]==A[n1,n3]*B[n2,n4])
+            #                #print('-------')
+            #input()
                 
         elif nl!=0 and nr==(self._N-1):
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
@@ -82,12 +130,41 @@ class MPO:
         return len(self._mpo)
     @property
     def dtype(self):
+        """
+        return the type of the MPO
+        """
         return self._dtype
+    
+    def save(self,filename):
+        """
+        dumps a MPO into a pickle file named "filename"
+        Parameters:
+        -----------------------------------
+        filename: str
+                  the filename of the file
+        """
+
+        with open(filename+'.pickle', 'wb') as f:
+            pickle.dump(self,f)
+
+            
+    def load(self,filename):
+        """
+        reads an MPO from a pickle file "filename".pickle
+        and returns a container object
+        Parameters:
+        -----------------------------------
+        filename: str
+                  the filename of the object to be loaded
+        """
+        with open(filename+'.pickle', 'rb') as f:
+            return pickle.load(f)
+    
     
 class TFI(MPO):
 
     """ 
-    transverse field Ising MPO
+    the good old transverse field Ising MPO
     convention: sigma_z=diag([-0.5,0.5])
     
     """
@@ -168,9 +245,10 @@ class TFI(MPO):
                 temp[2,2,1,1]=1.0
                 self._mpo.append(np.copy(temp))
                 
+
 class JessHamiltonian(MPO):
     """
-    
+    Jess's Hamiltonian, everyone loves it!
     """    
     def __init__(self,J,w,chi,obc=True):
         self._obc=obc
@@ -180,9 +258,9 @@ class JessHamiltonian(MPO):
         self._dtype=complex
         self._N=len(chi)
 
-        sigma_x=np.asarray([[0,1],[1,0]])
-        sigma_y=np.asarray([[0,-1j],[1j,0]])
-        sigma_z=np.diag([1,-1])
+        sigma_x=np.asarray([[0,1],[1,0]]).astype(complex)
+        sigma_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
+        sigma_z=np.diag([1,-1]).astype(complex)
         
         sig_x=np.kron(sigma_x,np.eye(2))
         sig_y=np.kron(sigma_y,np.eye(2))
@@ -209,7 +287,6 @@ class JessHamiltonian(MPO):
             self._mpo.append(np.copy(temp))
             for n in range(1,self._N-1):
                 temp=np.zeros((8,8,4,4),self.dtype)
-                #11
                 temp[0,0,:,:]=np.eye(4)
                 temp[1,0,:,:]=sig_x
                 temp[2,0,:,:]=sig_y
@@ -219,7 +296,6 @@ class JessHamiltonian(MPO):
                 temp[6,0,:,:]=tau_z
                 
                 temp[7,0,:,:]=self._w[n]*(sig_x+tau_x)+self._chi[n]*np.kron(sigma_x,sigma_x)
-
                 temp[7,1,:,:]=self._J[n]*sig_x
                 temp[7,2,:,:]=self._J[n]*sig_y
                 temp[7,3,:,:]=self._J[n]*sig_z                
@@ -227,7 +303,6 @@ class JessHamiltonian(MPO):
                 temp[7,5,:,:]=self._J[n]*tau_y
                 temp[7,6,:,:]=self._J[n]*tau_z                
                 temp[7,7,:,:]=np.eye(4)
-        
                 self._mpo.append(np.copy(temp))
 
             temp=np.zeros((8,1,4,4),self.dtype)                
@@ -267,7 +342,6 @@ class JessHamiltonian(MPO):
                 self._mpo.append(np.copy(temp))
 
 
-    
         
 class XXZ(MPO):
     """
@@ -380,32 +454,6 @@ class XXZ(MPO):
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
 
-                
-                #temp=np.zeros((5,5,2,2),self.dtype)
-                ##11
-                #temp[0,0,0,0]=1.0
-                #temp[0,0,1,1]=1.0
-                ##Sp
-                #temp[1,0,1,0]=1.0
-                ##Sm
-                #temp[2,0,0,1]=1.0
-                ##Sz
-                #temp[3,0,0,0]=-0.5
-                #temp[3,0,1,1]=0.5
-                ##BSz
-                #temp[4,0,0,0]=-0.5*Bz[n]
-                #temp[4,0,1,1]= 0.5*Bz[n]
-                #
-                ##Sm
-                #temp[4,1,0,1]=Jxy[n]/2.0*1.0
-                ##Sp
-                #temp[4,2,1,0]=Jxy[n]/2.0*1.0
-                ##Sz
-                #temp[4,3,0,0]=Jz[n]*(-0.5)
-                #temp[4,3,1,1]=Jz[n]*0.5
-                ##11
-                #temp[4,4,0,0]=1.0
-                #temp[4,4,1,1]=1.0
                 self._mpo.append(np.copy(temp))
 
 
@@ -592,6 +640,90 @@ class SpinlessFermions(MPO):
                 self._mpo.append(np.copy(tensor))
 
 
+class HubbardChain(MPO):
+    """
+    The good old Fermi Hubbard model
+    """
+    
+    def __init__(self,U,t_up,t_down,mu_up,mu_down,obc,dtype=complex):
+        self._U=U
+        self._t_up=t_up
+        self._t_down=t_down
+        self._mu_up=mu_up
+        self._mu_down=mu_down
+        self._obc=obc
+        self._dtype=dtype
+        
+        self._N=len(U)
+        
+        assert(len(mu_up)==self._N)
+        assert(len(mu_down)==self._N)
+        assert(len(t_up)==self._N-1)
+        assert(len(t_down)==self._N-1)
+        
+        self._mpo=[]
+        c=np.zeros((2,2),dtype=self.dtype)
+        c[0,1]=1.0
+        c_down=np.kron(c,np.eye(2))    
+        c_up=np.kron(np.diag([1.0,-1.0]).astype(self.dtype),c)
+        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(self.dtype)
+        
+        if obc==True:
+            tensor=np.zeros((1,6,4,4)).astype(self.dtype)
+            tensor[0,0,:,:]=mu_up[0]*herm(c_up).dot(c_up)+mu_down[0]*herm(c_down).dot(c_down)+U[0]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
+            tensor[0,1,:,:]=(-1.0)*t_up[0]*herm(c_up).dot(P)
+            tensor[0,2,:,:]=(+1.0)*t_up[0]*c_up.dot(P)
+            tensor[0,3,:,:]=(-1.0)*t_down[0]*herm(c_down).dot(P)
+            tensor[0,4,:,:]=(+1.0)*t_down[0]*c_down.dot(P)
+            tensor[0,5,:,:]=np.eye(4)
+            self._mpo.append(np.copy(tensor))
+        
+            for n in range(1,self._N-1):        
+                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
+                tensor[0,0,:,:]=np.eye(4)
+                tensor[1,0,:,:]=c_up
+                tensor[2,0,:,:]=herm(c_up)
+                tensor[3,0,:,:]=c_down
+                tensor[4,0,:,:]=herm(c_down)
+        
+                tensor[5,0,:,:]=mu_up[n]*herm(c_up).dot(c_up)+mu_down[n]*herm(c_down).dot(c_down)+U[n]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
+                
+                tensor[5,1,:,:]=(-1.0)*t_up[n]*herm(c_up).dot(P)
+                tensor[5,2,:,:]=(+1.0)*t_up[n]*c_up.dot(P)
+                tensor[5,3,:,:]=(-1.0)*t_down[n]*herm(c_down).dot(P)
+                tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
+                tensor[5,5,:,:]=np.eye(4)
+                
+                self._mpo.append(np.copy(tensor))
+        
+            tensor=np.zeros((6,1,4,4)).astype(self.dtype)
+            tensor[0,0,:,:]=np.eye(4)
+            tensor[1,0,:,:]=c_up
+            tensor[2,0,:,:]=herm(c_up)
+            tensor[3,0,:,:]=c_down
+            tensor[4,0,:,:]=herm(c_down)
+            tensor[5,0,:,:]=mu_up[self._N-1]*herm(c_up).dot(c_up)+mu_down[self._N-1]*herm(c_down).dot(c_down)+U[self._N-1]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))            
+            self._mpo.append(np.copy(tensor))        
+        
+        if obc==False:
+            for n in range(self._N):
+                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
+                tensor[0,0,:,:]=np.eye(4)
+                tensor[1,0,:,:]=c_up
+                tensor[2,0,:,:]=herm(c_up)
+                tensor[3,0,:,:]=c_down
+                tensor[4,0,:,:]=herm(c_down)
+        
+                tensor[5,0,:,:]=mu_up[n]*herm(c_up).dot(c_up)+mu_down[n]*herm(c_down).dot(c_down)+U[n]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
+                
+                tensor[5,1,:,:]=(-1.0)*t_up[n]*herm(c_up).dot(P)
+                tensor[5,2,:,:]=(+1.0)*t_up[n]*c_up.dot(P)
+                tensor[5,3,:,:]=(-1.0)*t_down[n]*herm(c_down).dot(P)
+                tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
+                tensor[5,5,:,:]=np.eye(4)
+        
+                self._mpo.append(np.copy(tensor))
+        
 
 def PhiFourmpo(mu,nu,g,N,dx,cutoff,obc=False):
 
@@ -843,90 +975,6 @@ def TwoSitePhiFourMPO(mu,nu,g,dx,cutoff):
 
 
 
-class HubbardChain(MPO):
-    """
-    The good old Fermi Hubbard model
-    """
-    
-    def __init__(self,U,t_up,t_down,mu_up,mu_down,obc,dtype=complex):
-        self._U=U
-        self._t_up=t_up
-        self._t_down=t_down
-        self._mu_up=mu_up
-        self._mu_down=mu_down
-        self._obc=obc
-        self._dtype=dtype
-        
-        self._N=len(U)
-        
-        assert(len(mu_up)==self._N)
-        assert(len(mu_down)==self._N)
-        assert(len(t_up)==self._N-1)
-        assert(len(t_down)==self._N-1)
-        
-        self._mpo=[]
-        c=np.zeros((2,2),dtype=self.dtype)
-        c[0,1]=1.0
-        c_down=np.kron(c,np.eye(2))    
-        c_up=np.kron(np.diag([1.0,-1.0]).astype(self.dtype),c)
-        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(self.dtype)
-        
-        if obc==True:
-            tensor=np.zeros((1,6,4,4)).astype(self.dtype)
-            tensor[0,0,:,:]=mu_up[0]*herm(c_up).dot(c_up)+mu_down[0]*herm(c_down).dot(c_down)+U[0]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
-            tensor[0,1,:,:]=(-1.0)*t_up[0]*herm(c_up).dot(P)
-            tensor[0,2,:,:]=(+1.0)*t_up[0]*c_up.dot(P)
-            tensor[0,3,:,:]=(-1.0)*t_down[0]*herm(c_down).dot(P)
-            tensor[0,4,:,:]=(+1.0)*t_down[0]*c_down.dot(P)
-            tensor[0,5,:,:]=np.eye(4)
-            self._mpo.append(np.copy(tensor))
-        
-            for n in range(1,self._N-1):        
-                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
-                tensor[0,0,:,:]=np.eye(4)
-                tensor[1,0,:,:]=c_up
-                tensor[2,0,:,:]=herm(c_up)
-                tensor[3,0,:,:]=c_down
-                tensor[4,0,:,:]=herm(c_down)
-        
-                tensor[5,0,:,:]=mu_up[n]*herm(c_up).dot(c_up)+mu_down[n]*herm(c_down).dot(c_down)+U[n]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
-                
-                tensor[5,1,:,:]=(-1.0)*t_up[n]*herm(c_up).dot(P)
-                tensor[5,2,:,:]=(+1.0)*t_up[n]*c_up.dot(P)
-                tensor[5,3,:,:]=(-1.0)*t_down[n]*herm(c_down).dot(P)
-                tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
-                tensor[5,5,:,:]=np.eye(4)
-                
-                self._mpo.append(np.copy(tensor))
-        
-            tensor=np.zeros((6,1,4,4)).astype(self.dtype)
-            tensor[0,0,:,:]=np.eye(4)
-            tensor[1,0,:,:]=c_up
-            tensor[2,0,:,:]=herm(c_up)
-            tensor[3,0,:,:]=c_down
-            tensor[4,0,:,:]=herm(c_down)
-            tensor[5,0,:,:]=mu_up[self._N-1]*herm(c_up).dot(c_up)+mu_down[self._N-1]*herm(c_down).dot(c_down)+U[self._N-1]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))            
-            self._mpo.append(np.copy(tensor))        
-        
-        if obc==False:
-            for n in range(self._N):
-                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
-                tensor[0,0,:,:]=np.eye(4)
-                tensor[1,0,:,:]=c_up
-                tensor[2,0,:,:]=herm(c_up)
-                tensor[3,0,:,:]=c_down
-                tensor[4,0,:,:]=herm(c_down)
-        
-                tensor[5,0,:,:]=mu_up[n]*herm(c_up).dot(c_up)+mu_down[n]*herm(c_down).dot(c_down)+U[n]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
-                
-                tensor[5,1,:,:]=(-1.0)*t_up[n]*herm(c_up).dot(P)
-                tensor[5,2,:,:]=(+1.0)*t_up[n]*c_up.dot(P)
-                tensor[5,3,:,:]=(-1.0)*t_down[n]*herm(c_down).dot(P)
-                tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
-                tensor[5,5,:,:]=np.eye(4)
-        
-                self._mpo.append(np.copy(tensor))
-        
 
 
 

@@ -31,6 +31,7 @@ class Container:
         Base class for simulation objects;
         """
         pass
+    
     def save(self,filename):
         """
         dumps a simulation into a pickle file named "filename"
@@ -487,6 +488,7 @@ class IDMRGengine(DMRGengine):
             super().__init__(self._mps,self._mpo,self._filename,lb,rb)        
         return D
 
+    
     def __simulate__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):            
         """
         IDMRGengine.__simulate__(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
@@ -558,8 +560,8 @@ class IDMRGengine(DMRGengine):
         """
         see __simulate__
         """
-        
         self.__simulate__(*args,**kwargs)
+
         
     def __simulateTwoSite__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):
         """
@@ -630,17 +632,14 @@ class IDMRGengine(DMRGengine):
         """
         see __simulateTwoSite__
         """
-        
         self.__simulateTwoSite__(*args,**kwargs)
 
         
 class HomogeneousIMPSengine(Container):
     """
-
     HomogeneousIMPSengine
     container object for homogeneous MPS optimization using a gradient descent method
     """
-
     def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,pinv=1E-100,trunc=1E-16):
         """
         HomogeneousIMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
@@ -664,7 +663,6 @@ class HomogeneousIMPSengine(Container):
         numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
         Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
         """
-
 
         self._Nmax=Nmax
         self._mps=np.copy(mps)
@@ -698,7 +696,7 @@ class HomogeneousIMPSengine(Container):
         self._normgradold=10.0
         self._warmup=True
         self._reset=True
-        #self._reject=False:
+
         [B1,B2,d1,d2]=np.shape(mpo)
 
         mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
@@ -901,7 +899,6 @@ class VUMPSengine(Container):
         mpor[:,0,:,:]=mpo[0][:,0,:,:]
         mpor[-1,0,:,:]/=2.0
         self._mpo=H.MPO.fromlist([mpol,mpo[0],mpor])
-
 
     def __doStep__(self):
         [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=self._numeig,init=self._r,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
@@ -1168,6 +1165,17 @@ class TimeEvolutionEngine(Container):
         self._L.insert(0,self._lb)
         self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
         self._R.insert(0,self._rb)
+        self._t0=0.0
+    def initializeTDVP(self):
+        """
+        updates the TimeevolutionEngine by recalculating left and right environment blocks
+        such that the mps can be evolved with the mpo
+        """
+        self._mps.__position__(0)
+        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
+        self._L.insert(0,self._lb)
+        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
+        self._R.insert(0,self._rb)
 
     def applyEven(self,tau,Dmax,tr_thresh):
         for n in range(0,self._mps._N-1,2):
@@ -1213,8 +1221,9 @@ class TimeEvolutionEngine(Container):
         for step in range(numsteps):
             #odd step updates:
             self.applyOdd(dt,Dmax,tr_thresh)
-            if verbose==1:
-                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i/%i, truncation threshold=%1.16f"%(np.abs(np.imag(it*dt)),self._tw,np.max(self.mps.D),Dmax,tr_thresh))
+            if verbose>=1:
+                self._t0+=np.abs(np.imag(dt))
+                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D=%i/%i, truncation threshold=%1.16f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh))
                 stdout.flush()
 
             #if this is a cp step, save between two half-steps
@@ -1331,8 +1340,9 @@ class TimeEvolutionEngine(Container):
 
                 self._mps._mat=mat
                 self._mps._position=n
-            if verbose==1:
-                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i,"%(solver,np.abs(np.imag(it*dt)),np.max(self._mps.D)))
+            if verbose>=1:
+                self._t0+=np.abs(np.imag(dt))                
+                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i,"%(solver,self._t0,np.max(self._mps.D)))
                 stdout.flush()
 
             if (cp!=None) and (it>0) and (it%cp==0):

@@ -256,13 +256,13 @@ def applyMPO(mps,mpo,inplace=False):
         for n in range(len(mps)):
             [M1,M2,d1,d2]=mpo[n].shape
             [D1,D2,d]=mps[n].shape            
-            out.append(np.reshape(np.transpose(np.tensordot(mps[n],mpo[n],([2],[2])),(0,2,1,3,4)),(D1*M1,D2*M2,d2)))
+            out.append(np.reshape(np.transpose(np.tensordot(mps[n],mpo[n],([2],[3])),(0,2,1,3,4)),(D1*M1,D2*M2,d2)))
         return out
     if inplace:
         for n in range(len(mps)):
             [M1,M2,d1,d2]=mpo[n].shape
             [D1,D2,d]=mps[n].shape            
-            mps[n]=np.reshape(np.transpose(np.tensordot(mps[n],mpo[n],([2],[2])),(0,2,1,3,4)),(D1*M1,D2*M2,d2))
+            mps[n]=np.reshape(np.transpose(np.tensordot(mps[n],mpo[n],([2],[3])),(0,2,1,3,4)),(D1*M1,D2*M2,d2))
         return mps
 
 
@@ -277,7 +277,7 @@ def contractionH(L,mps,mpo,R):
     """
     
     term1=np.tensordot(L,mps,([0],[0]))
-    term2=np.tensordot(term1,mpo,([1,3],[0,2]))
+    term2=np.tensordot(term1,mpo,([1,3],[0,3]))
     term3=np.tensordot(term2,R,([1,2],[0,2]))
     return np.transpose(term3,[0,2,1])
 
@@ -907,11 +907,11 @@ def initializeLayer(A,x,B,mpo,direction):
     [D1,D2,d1,d2]=np.shape(mpo);
     if direction>0:
         t=np.tensordot(np.tensordot(x,A,([0],[0])),np.conj(B),([0],[0]))#that is a tensor of the form l,s,lpime,sprime ???
-        return np.reshape(np.tensordot(t,mpo,([1,3],[2,3])),(chi2,chi2_,D2))
+        return np.reshape(np.tensordot(t,mpo,([1,3],[3,2])),(chi2,chi2_,D2))
 
     if direction<0:
         t=np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(B),([0],[1]))#that is a tensor of the form l,s,lpime,sprime ???
-        return np.reshape(np.tensordot(t,mpo,([1,3],[2,3])),(chi1,chi1_,D1))
+        return np.reshape(np.tensordot(t,mpo,([1,3],[3,2])),(chi1,chi1_,D1))
 
 def addLayer(E,A,mpo,B,direction):
 
@@ -928,9 +928,9 @@ def addLayer(E,A,mpo,B,direction):
     """
 
     if direction>0:
-        return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[0])),mpo,([1,3],[0,2])),np.conj(B),([0,3],[0,2])),(0,2,1))
+        return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[0])),mpo,([1,3],[0,3])),np.conj(B),([0,3],[0,2])),(0,2,1))
     if direction<0:
-        return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[1])),mpo,([3,1],[2,1])),np.conj(B),([3,0],[2,1])),(0,2,1))
+        return np.transpose(np.tensordot(np.tensordot(np.tensordot(E,A,([0],[1])),mpo,([3,1],[3,1])),np.conj(B),([3,0],[2,1])),(0,2,1))
         
 def addELayer(E,A,B,direction):
     
@@ -963,7 +963,7 @@ def HAproductSingleSite(L,mpo,R,vec):
     d=np.shape(mpo)[2]
     mps=np.reshape(vec,(chi1,chi2,d))#,order='f')
     term1=np.tensordot(L,mps,([0],[0]))
-    term2=np.tensordot(term1,mpo,([1,3],[0,2]))
+    term2=np.tensordot(term1,mpo,([1,3],[0,3]))
     term3=np.tensordot(term2,R,([1,2],[0,2]))
     return np.reshape(np.transpose(term3,[0,2,1]),chi1*chi2*d)
 
@@ -974,7 +974,7 @@ def HAproductSingleSite(L,mpo,R,vec):
 #the order fo the returned vector is correct, i.e. no fortran like ordering
 def HAproductSingleSiteMPS(L,mpo,R,mps):
     term1=np.tensordot(L,mps,([0],[0]))
-    term2=np.tensordot(term1,mpo,([1,3],[0,2]))
+    term2=np.tensordot(term1,mpo,([1,3],[0,3]))
     term3=np.tensordot(term2,R,([1,2],[0,2]))
     return np.transpose(term3,[0,2,1])
 
@@ -1339,7 +1339,6 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     v=lan.__doStep__(np.reshape(mat,(chi1*chi2)),tau)
     return np.reshape(v,mat.shape)
 
-
 def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-3,atol=1E-6):
     if not np.issubdtype(type(tau),np.dtype(float)):                        
         raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
@@ -1348,9 +1347,7 @@ def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-3,atol=1E-6):
     chi2p=np.shape(R)[1]
     dp=np.shape(mpo)[3]
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    out=solve_ivp(lambda t,y:(-1j)*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
-    #solver=RK45(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mps,(chi1*chi2*d)),t_bound=tau,rtol=rtol,atol=atol)    
-    #return np.reshape(solver.dense_output()(tau),mps.shape)
+    out=solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
     return np.reshape(out.y[:,-1],mps.shape)
 
 
@@ -1362,38 +1359,8 @@ def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,R])
-    out=solve_ivp(lambda t,y:(-1j)*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+    out=solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
     return np.reshape(out.y[:,-1],mat.shape)
-    #solver=RK45(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mat,(chi1*chi2)),t_bound=tau,rtol=rtol,atol=atol)
-    #solver.step()
-    #return np.reshape(solver.dense_output()(tau),mat.shape)    
-
-def evolveTensorRadau(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6):
-    if not np.issubdtype(type(tau),np.dtype(float)):        
-        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
-    
-    [chi1,chi2,d]=np.shape(mps)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    dp=np.shape(mpo)[3]
-    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    solver=Radau(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mps,(chi1*chi2*d)),t_bound=tau,rtol=rtol,atol=atol)    
-    solver.step()
-    return np.reshape(solver.dense_output()(tau),mps.shape)
-
-def evolveMatrixRadau(L,R,mat,tau,rtol=1E-3,atol=1E-6):
-    if not np.issubdtype(type(tau),np.dtype(float)):
-        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
-    
-    [chi1,chi2]=np.shape(mat)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    mv=fct.partial(HAproductBond,*[L,R])
-    solver=Radau(lambda t,y:(-1j)*mv(y),t0=0.0,y0=np.reshape(mat,(chi1*chi2)),t_bound=tau,rtol=rtol,atol=atol)
-    solver.step()
-    return np.reshape(solver.dense_output()(tau),mat.shape)    
-
-
 
 
 #calls a sparse eigensolver to find the lowest eigenvalue
@@ -1494,7 +1461,7 @@ def gradient(L,mpo,R,mps0):
 def TransferOperator(direction,mps,vector):
     """
     computes the transfer matrix vector product 
-    mps: ndarray of MPS object of shape(D1,D2,d)
+    mps: ndarray or MPS object of shape(D1,D2,d)
     direction: int, direction > 0 does a left-side product; direction < 0 does a right side product;
     vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
              the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
@@ -2804,11 +2771,11 @@ def LiebLinigerHAproduct(Hl,mpo,Hr,A,mps,B):
     term2=np.transpose(np.tensordot(mps,Hr,([1],[0])),(0,2,1))
     L=initializeLayer(A,np.eye(D),A,mpo[0],1)
     temp=np.tensordot(L,mps,([0],[0]))
-    term3=np.transpose(np.tensordot(temp,mpo[1],([1,3],[0,2])),(0,1,3,2))[:,:,:,0]
+    term3=np.transpose(np.tensordot(temp,mpo[1],([1,3],[0,3])),(0,1,3,2))[:,:,:,0]
 
     R=initializeLayer(B,np.eye(D),B,mpo[1],-1)
     temp=np.tensordot(mps,R,([1],[0]))
-    term4=np.transpose(np.tensordot(temp,mpo[0],([3,1],[1,2])),(0,1,3,2))[:,:,:,0]
+    term4=np.transpose(np.tensordot(temp,mpo[0],([3,1],[1,3])),(0,1,3,2))[:,:,:,0]
 
     return term1+term2+term3+term4
     

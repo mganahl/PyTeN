@@ -1199,7 +1199,7 @@ class MPS:
         assert(site<len(self)-1)
         #print("in applyToSite; site+1=",site+1,"thresh=",thresh)
         self.__position__(site+1)        
-        newState=ncon.ncon([self.__tensor__(site,clear=True),self._tensors[site+1],gate],[[-1,1,2],[1,-4,3],[2,3,-2,-3]])
+        newState=ncon.ncon([self.__tensor__(site,clear=True),self._tensors[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
         [Dl,d1,d2,Dr]=newState.shape
         U,S,V=mf.svd(np.reshape(newState,(Dl*d1,Dr*d2)))
         tw=0
@@ -1234,13 +1234,13 @@ class MPS:
         assert(site<len(self))
         if preserve_position==True:
             self.__position__(site+1)
-            tensor=ncon.ncon([self.__tensor__(site,clear=True),gate],[[-1,-2,1],[1,-3]])
+            tensor=ncon.ncon([self.__tensor__(site,clear=True),gate],[[-1,-2,1],[-3,1]])
             A,mat,Z=mf.prepareTensor(tensor,1)
             self._Z*=Z
             self._tensors[site]=A
             self._mat=mat
         else:
-            tensor=ncon.ncon([self[site],gate],[[-1,-2,1],[1,-3]])
+            tensor=ncon.ncon([self[site],gate],[[-1,-2,1],[-3,1]])
             self[site]=tensor
 
 
@@ -1263,7 +1263,7 @@ class MPS:
             Dl,Dr,d=self[n].shape
             if n==0:
                 self._mat=np.eye(Ml*Dl)
-            self[n]=np.reshape(ncon.ncon([self[n],mpo[n]],[[-1,-3,1],[-2,-4,1,-5]]),(Ml*Dl,Mr*Dr,dout))
+            self[n]=np.reshape(ncon.ncon([self[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]),(Ml*Dl,Mr*Dr,dout))
             
     def resetZ(self):
         """
@@ -1271,8 +1271,8 @@ class MPS:
         through the system
         """
         self._Z=1.0
+        
     def save(self,filename):
-
         """
         MPS.save(filename):
         pickles the MPS object to a file "filename".pickle
@@ -1282,7 +1282,19 @@ class MPS:
         with open(filename+'.pickle', 'wb') as f:
             pickle.dump(self,f)
 
-    def load(self,filename):
+    @classmethod
+    def load(cls,filename):
+        """
+        MPS.load(filename):
+        unpickles an MPS object from a file "filename".pickle
+        returns an MPS object
+        """
+        
+        with open(filename+'.pickle', 'rb') as f:
+            mps=pickle.load(f)
+        return mps
+    
+    def loadAndOverwrite(self,filename):
         """
         MPS.load(filename):
         unpickles an MPS object from a file "filename".pickle
