@@ -1,6 +1,6 @@
 
 # PyTeN
-PyTeN is a small python-only tensor network library that can be used to calculate 
+PyTeN is a small python3-only tensor network library that can be used to calculate 
 ground-states and do real time evolution of 1d quantum systems. 
 
 
