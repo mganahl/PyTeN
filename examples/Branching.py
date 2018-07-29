@@ -98,6 +98,28 @@ if __name__ == "__main__":
 
     args=parser.parse_args()
 
+
+
+    if args.loadevoMPS:
+        #load an evoMPS marix trajectory        
+        if args.evostate==None:
+            raise ValueError("evostate has not been specified; please provide an integer number to specify which state should be loaded from the matrix-trajectory file")
+        mps,t0=loadevoMPS(root+'/'+args.loadevoMPS,args.evostate)
+    else:
+        #initializes a product state with a specific arrangement of up and down spins
+        #state is an array of length N defining which state should be put at each site;
+        t0=0.0        
+        #values at state[n] can be in {0,1,..,d-1}
+        def blochstate(theta,phi):
+            return np.asarray([np.cos(theta/2.)+0j,np.sin(theta/2.)*np.exp(1j*phi)])
+        state=[np.kron(blochstate(args.theta1,args.phi1),blochstate(args.theta2,args.phi2))]*args.N    
+        mps=mpslib.MPS.productState(state,obc=True,dtype=complex) #this mps for now has a maximally allowed bond dimension mps._D=1;
+        
+    N=len(mps)
+    #normalize the state by sweeping the orthogonalizty center once back and forth through the system
+    mps.position(N)
+    mps.position(0)
+    
     if args.switch:
         if (args.dt_TDVP==None):
             args.dt_TDVP=args.dt
@@ -107,7 +129,7 @@ if __name__ == "__main__":
     root=os.getcwd()
     date=datetime.datetime.now()
     today=str(date.year)+str(date.month)+str(date.day)
-    filename=today+args.filename+'_N{0}_D{1}_stiff{2}_chi{3}_w{4}_dt{5}'.format(args.N,args.D,args.stiffness,args.chi,args.w,args.dt)
+    filename=today+args.filename+'_N{0}_D{1}_stiff{2}_chi{3}_w{4}_dt{5}'.format(N,args.D,args.stiffness,args.chi,args.w,args.dt)
     if os.path.exists(filename):
         print('folder',filename,'exists already. Resuming will likely overwrite existing data. Hit enter to confirm')
         input()
@@ -120,47 +142,30 @@ if __name__ == "__main__":
             f.write(n + ': {0}\n'.format(parameters[n]))
     f.close()
     
-    N=args.N
-    J=-args.N*args.stiffness    
-    #initializes a product state with a specific arrangement of up and down spins
-    #state is an array of length N defining which state should be put at each site;
-    #values at state[n] can be in {0,1,..,d-1}
-    def blochstate(theta,phi):
-        return np.asarray([np.cos(theta/2.)+0j,np.sin(theta/2.)*np.exp(1j*phi)])
+    J=-N*args.stiffness
+    
 
-    state=[np.kron(blochstate(args.theta1,args.phi1),blochstate(args.theta2,args.phi2))]*args.N    
-    mps=mpslib.MPS.productState(state,obc=True,dtype=complex) #this mps for now has a maximally allowed bond dimension mps._D=1;
-    t0=0
-    if args.loadevoMPS:
-        if args.evostate==None:
-            raise ValueError("evostate has not been specified; please provide an integer number to specify which state should be loaded from the matrix-trajectory file")
-        mps,t0=loadevoMPS(root+'/'+args.loadevoMPS,args.evostate)
-    #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-    mps.position(N)
-    mps.position(0)
+        
 
     #initialize an MPO (MPOs are defined in lib.mpslib.Hamiltonians)
     #the MPO class in Hamiltonians implements a routine MPO.twoSiteGate(m,n,dt), which 
     #returns the exponential exp(dt*h(m,n)), where h(m,n) is the local Hamiltonian contribution 
     #acting on sites m and n
-
-    mpo=H.BranchingHamiltonian(J=J*np.ones(args.N-1),w=np.ones(args.N)*args.w,chi=np.ones(args.N)*args.chi,obc=True)
+    mpo=H.BranchingHamiltonian(J=J*np.ones(N-1),w=np.ones(N)*args.w,chi=np.ones(N)*args.chi,obc=True)
     
-    #initialize a TEBDEngine with an mps and an mpo
-    #you don't have to pass an mpo here; the engine mererly assumes that
-    #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
-    #which should return an twosite gate
+    #initialize a TimeEvolutionEngine with an mps and an mpo
+    #you don't have to pass an mpo here; for TEBD, the engine merely assumes that
+    #the passed object implements a memberfunction object.twoSiteGate(m,n,dt)
+    #which should return an twosite gate at sites m,n 
     engine=en.TimeEvolutionEngine(mps,mpo,filename)
-    
+
+    #evolution time step used in TEBD
     dt=-1j*args.dt/np.abs(J)
+
+    #if args.switch is given, define the TDVP time-increment
     if args.switch:
         dt_TDVP=-1j*args.dt_TDVP/np.abs(J)
-    Dmax=args.D   #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be adapted to this value in the TEBDEngine
-    thresh=args.truncthresh  #truncation threshold
-
-    S=np.zeros((1,N+1,3)).astype(complex) #container for holding the measurements
-    T=np.zeros((1,N+1,3)).astype(complex) #container for holding the measurements    
-
+        
     sigma_x=np.asarray([[0,1],[1,0]]).astype(complex)
     sigma_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
     sigma_z=np.diag([1,-1]).astype(complex)
@@ -172,6 +177,7 @@ if __name__ == "__main__":
     sz=[np.kron(sigma_z,np.eye(2)) for n in range(N)]  #a list of local operators to be measured
     tauz=[np.kron(np.eye(2),sigma_z) for n in range(N)]  #a list of local operators to be measured    
 
+    #set some initial values 
     n=0
     engine._t0=t0
     tw=0.0
@@ -185,6 +191,7 @@ if __name__ == "__main__":
     schmidt=np.append(schmidt,np.zeros(args.D-len(schmidt)))
     lams=np.expand_dims(np.append([engine._t0],schmidt).T,0)
     truncWeight=np.expand_dims(np.asarray([engine._t0,tw]),0)
+
     
     while engine._t0 < args.T:
         if args.plot:
@@ -223,9 +230,9 @@ if __name__ == "__main__":
             plt.pause(0.01)
 
         if (not args.switch):
-            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=Dmax,tr_thresh=thresh,cp=args.cp,keep_cp=args.keep_cp)
+            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         elif args.switch  and (max(engine.mps.D)<args.D):
-            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=Dmax,tr_thresh=thresh,cp=args.cp,keep_cp=args.keep_cp)
+            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         else:
             if firsttdvpstep:
                 engine.initializeTDVP()
