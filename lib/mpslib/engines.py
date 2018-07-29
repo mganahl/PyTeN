@@ -4,7 +4,6 @@
 from __future__ import absolute_import, division, print_function
 from sys import stdout
 import pickle
-import sympy
 import numpy as np
 import os,copy
 import time
