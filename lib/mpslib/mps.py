@@ -264,8 +264,9 @@ class MPS:
         """
 
         mps=cls(tensors,schmidt_thresh,r_thresh)
-        if all(mat)!=None:
+        if np.all(mat)!=None:
             mps._mat=np.copy(mat)
+
         mps.__position__(0)        
         mps.__position__(mps._N)
         mps._Z=1.0                
@@ -673,15 +674,20 @@ class MPS:
         self._D=D
     
     
-    def getSchmidt(self,n):
+    def SchmidtSpectrum(self,n):
         """
-        getSchmidt(n):
+        SchmidtSpectrum(n):
 
         return the Schmidt-values on bond n:
         Parameters:
         ---------------------------------
         n: int
            the bond number
+
+        Returns:
+        -------------------
+        S: np.ndarray of shape (D[n],)
+           the D[n] Schmidt values
         """
         self.__position__(n)
         U,S,V=mf.svd(self._mat)
@@ -782,21 +788,39 @@ class MPS:
 
     def measureList(self,ops,lb=None,rb=None):
         """
-        measure a list of N local operators "ops", where N=len(ops)=len(mps)
-        "lb" and "rb" are left and right boundary conditions to be applied 
-        if the state is pbc; for obc they can be left None
+        measure a list of N local operators "ops", where N=len(ops)=len(self)
         the routine moves the centersite to the left boundary, measures and moves
         it back to its original position; this might cause some overhead
+
+        Parameters:
+        --------------------------------
+        ops:           list of np.ndarrays of shape (d,d)
+                       local operators to be measured
+        lb,rb:         np.ndarrays, or None
+                       left and right boundary conditions to be applied if the state is pbc;
+                       for obc they can be left None
+                       only obc case is currently implemented
+
+        Returns:  np.ndarray containing the matrix elements
         """
         return self.__measureList__(ops,lb,rb)
     
     def __measureList__(self,ops,lb=None,rb=None):
         """
-        measure a list of N local operators "ops", where N=len(ops)=len(mps)
-        "lb" and "rb" are left and right boundary conditions to be applied 
-        if the state is pbc; for obc they can be left None
+        measure a list of N local operators "ops", where N=len(ops)=len(self)
         the routine moves the centersite to the left boundary, measures and moves
         it back to its original position; this might cause some overhead
+
+        Parameters:
+        --------------------------------
+        ops:           list of np.ndarrays of shape (d,d)
+                       local operators to be measured
+        lb,rb:         np.ndarrays, or None
+                       left and right boundary conditions to be applied if the state is pbc;
+                       for obc they can be left None
+                       only obc case is currently implemented
+
+        Returns:  np.ndarray containing the matrix elements
         """
         
         if lb==None or rb==None:
@@ -813,25 +837,47 @@ class MPS:
 
     def measureMatrixElementList(self,mps,ops,lb=None,rb=None):
         """
-        measure a list of N local operators "ops", where N=len(ops)=len(mps)
-        "lb" and "rb" are left and right boundary conditions to be applied 
-        if the state is pbc; for obc they can be left None
+        measure the matrix elements <self|ops[n]|mps> for a list of N local operators "ops", where N=len(ops)=len(mps)=len(self)
         the routine moves the centersite to the left boundary, measures and moves
         it back to its original position; this might cause some overhead
-        """
+
+        Parameters:
+        --------------------------------
+        mps:           an MPS object
+        ops:           list of np.ndarrays of shape (d,d)
+                       local operators to be measured
+        lb,rb:         np.ndarrays, or None
+                       left and right boundary conditions to be applied if the state is pbc;
+                       for obc they can be left None
+                       only obc case is currently implemented
+
+        Returns:  np.ndarray containing the matrix elements
         
+        """
         self.__measureMatrixElementList__(mps,ops,lb,rb)
         
     def __measureMatrixElementList__(self,mps,ops,lb=None,rb=None):
 
         """
-        measure a list of N local operators "ops", where N=len(ops)=len(mps)
-        "lb" and "rb" are left and right boundary conditions to be applied 
-        if the state is pbc; for obc they can be left None
+        measure the matrix elements <self|ops[n]|mps> for a list of N local operators "ops", where N=len(ops)=len(mps)=len(self)
         the routine moves the centersite to the left boundary, measures and moves
         it back to its original position; this might cause some overhead
-        """
+
+        Parameters:
+        --------------------------------
+        mps:           an MPS object
+        ops:           list of np.ndarrays of shape (d,d)
+                       local operators to be measured
+        lb,rb:         np.ndarrays, or None
+                       left and right boundary conditions to be applied if the state is pbc;
+                       for obc they can be left None
+                       only obc case is currently implemented
+
+        Returns:  np.ndarray containing the matrix elements
         
+        """
+        if lb!=None or rb!=None:
+            raise NotImplementedError("__measureMatrixElementList__: does currenlty not support non-trivial boundary conditions")
         if lb==None or rb==None:
             if self._obc==False:
                 return NotImplemented
@@ -877,10 +923,9 @@ class MPS:
                 self.__position__(site+1)                
                 t=self.__tensor__(site)                
                 self.__position__(pos)
-                #return np.tensordot(np.tensordot(t,np.conj(t),([0,1],[0,1])),([0,1],[0,1]))
+                #return np.tensordot(np.tensordot(t,np.conj(t),([0,1],[0,1])),([0,1],[0,1]))*self._Z*np.conj(self._Z)
                 return ncon.ncon([t,np.conj(t),op],[[1,3,2],[1,3,4],[2,4]])*self._Z*np.conj(self._Z)
             
-
 
     def measure(self,ops,sites,P=None):
         """ 

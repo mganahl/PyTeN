@@ -482,12 +482,11 @@ def matrixElementLocal(mps1,mps2,operators,lb,rb):
     len(operators) has to be the same as len(mps). The routine is not very efficient because the whole network is contracted. If the state is canonized, more
     efficient methods can be used.
     
-    mps: a list of mps tensors (ndarrays), or an mpslib.mps.MPS object
+    mps1,mps2: lists of mps tensors (ndarrays), or mpslib.mps.MPS objects
     operators: a list of operators of len(operators)=len(mps). The position within of an operator within the list is taken to be 
-    the site where it acts. Each operator is measured and the  result is returned in a list
-    lb: left boundary of the mps (for obc, lb=np.ones((1,1,1))
-    rb: right boundary of the mps (for obc, rb=np.ones((1,1,1))
-    ortho (str): can be {'left','right'} and denotes the orthogonal state of the mps
+               the site where it acts. Each operator is measured and the  result is returned in a list
+    lb:        left boundary of the mps (for obc, lb=np.ones((1,1,1))
+    rb:        right boundary of the mps (for obc, rb=np.ones((1,1,1))
     """
     dtype=np.result_type(mps1[0].dtype,mps2[0].dtype)
     N=len(mps1)
@@ -1339,7 +1338,7 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     v=lan.__doStep__(np.reshape(mat,(chi1*chi2)),tau)
     return np.reshape(v,mat.shape)
 
-def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-3,atol=1E-6):
+def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-8,atol=1E-12):
     if not np.issubdtype(type(tau),np.dtype(float)):                        
         raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
     [chi1,chi2,d]=np.shape(mps)

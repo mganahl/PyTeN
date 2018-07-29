@@ -246,7 +246,7 @@ class TFI(MPO):
                 self._mpo.append(np.copy(temp))
                 
 
-class JessHamiltonian(MPO):
+class BranchingHamiltonian(MPO):
     """
     Jess's Hamiltonian, everyone loves it!
     """    
@@ -268,14 +268,13 @@ class JessHamiltonian(MPO):
         tau_x=np.kron(np.eye(2),sigma_x)
         tau_y=np.kron(np.eye(2),sigma_y)
         tau_z=np.kron(np.eye(2),sigma_z)
-        
         if obc==True:
             if len(J)!=(self._N-1):
                 raise ValueError("in JessHamiltonian: for obc=True, len(J) has to be N-1")
             
             self._mpo=[]
             temp=np.zeros((1,8,4,4),self.dtype)
-            temp[0,0,:,:]=self._w[0]*(sig_x+tau_x)+self._chi[0]*np.kron(sigma_x,sigma_x)            
+            temp[0,0,:,:]=self._w[0]*(sig_z+tau_z)+self._chi[0]*np.kron(sigma_x,sigma_x)            
             temp[0,1,:,:]=self._J[0]*sig_x
             temp[0,2,:,:]=self._J[0]*sig_y
             temp[0,3,:,:]=self._J[0]*sig_z                
@@ -295,7 +294,7 @@ class JessHamiltonian(MPO):
                 temp[5,0,:,:]=tau_y
                 temp[6,0,:,:]=tau_z
                 
-                temp[7,0,:,:]=self._w[n]*(sig_x+tau_x)+self._chi[n]*np.kron(sigma_x,sigma_x)
+                temp[7,0,:,:]=self._w[n]*(sig_z+tau_z)+self._chi[n]*np.kron(sigma_x,sigma_x)
                 temp[7,1,:,:]=self._J[n]*sig_x
                 temp[7,2,:,:]=self._J[n]*sig_y
                 temp[7,3,:,:]=self._J[n]*sig_z                
@@ -313,7 +312,7 @@ class JessHamiltonian(MPO):
             temp[4,0,:,:]=tau_x
             temp[5,0,:,:]=tau_y
             temp[6,0,:,:]=tau_z
-            temp[7,0,:,:]=self._w[-1]*(sig_x+tau_x)+self._chi[-1]*np.kron(sigma_x,sigma_x)
+            temp[7,0,:,:]=self._w[-1]*(sig_z+tau_z)+self._chi[-1]*np.kron(sigma_x,sigma_x)
             self._mpo.append(np.copy(temp))
 
         if obc==False:
@@ -330,7 +329,7 @@ class JessHamiltonian(MPO):
                 temp[5,0,:,:]=tau_y
                 temp[6,0,:,:]=tau_z
                 
-                temp[7,0,:,:]=self._w[n]*(sig_x+tau_x)+self._chi[n]*np.kron(sigma_x,sigma_x)
+                temp[7,0,:,:]=self._w[n]*(sig_z+tau_z)+self._chi[n]*np.kron(sigma_x,sigma_x)
 
                 temp[7,1,:,:]=self._J[n]*sig_x
                 temp[7,2,:,:]=self._J[n]*sig_y
@@ -457,7 +456,54 @@ class XXZ(MPO):
                 self._mpo.append(np.copy(temp))
 
 
-                
+class XXZIsing(MPO):
+    """
+    the famous Heisenberg Hamiltonian, which we all know and love so much!
+    """    
+    def __init__(self,J,w,obc=True):
+        self._obc=obc
+        self._J=J
+        self._w=w
+        self._dtype=complex
+        self._N=len(w)
+        sig_x=np.asarray([[0,1],[1,0]]).astype(complex)
+        sig_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
+        sig_z=np.diag([1,-1]).astype(complex)
+        if obc==True:
+            if len(J)!=(self._N-1):
+                raise ValueError("in JessHamiltonian: for obc=True, len(J) has to be N-1")
+            
+            self._mpo=[]
+            temp=np.zeros((1,5,2,2),self.dtype)
+            temp[0,0,:,:]=self._w[0]*sig_z
+            temp[0,1,:,:]=self._J[0]*sig_x
+            temp[0,2,:,:]=self._J[0]*sig_y
+            temp[0,3,:,:]=self._J[0]*sig_z                
+            temp[0,4,:,:]=np.eye(2)
+            
+            self._mpo.append(np.copy(temp))
+            for n in range(1,self._N-1):
+                temp=np.zeros((5,5,2,2),self.dtype)
+                temp[0,0,:,:]=np.eye(2)
+                temp[1,0,:,:]=sig_x
+                temp[2,0,:,:]=sig_y
+                temp[3,0,:,:]=sig_z                
+                temp[4,0,:,:]=self._w[n]*sig_z
+                temp[4,1,:,:]=self._J[n]*sig_x
+                temp[4,2,:,:]=self._J[n]*sig_y
+                temp[4,3,:,:]=self._J[n]*sig_z                
+                temp[4,4,:,:]=np.eye(2)
+                self._mpo.append(np.copy(temp))
+
+            temp=np.zeros((5,1,2,2),self.dtype)                
+            temp[0,0,:,:]=np.eye(2)
+            temp[1,0,:,:]=sig_x
+            temp[2,0,:,:]=sig_y
+            temp[3,0,:,:]=sig_z                
+            temp[4,0,:,:]=self._w[-1]*sig_z
+            self._mpo.append(np.copy(temp))
+
+            
 class XXZflipped(MPO):
 
     """
