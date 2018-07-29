@@ -24,7 +24,7 @@ the examples folder contains examples of how to use it
 
 Dependencies:
 
-* scipy and numpy installation
+* scipy 1.1.0 and numpy 1.14.3 installation
 * ncon (https://github.com/mhauru/ncon) (ships with this repository)
 * matplotlib
 
@@ -53,7 +53,7 @@ There is currently no documentation, but most methods have docstring explaining 
 
 ### Prerequisites
 
-You need an numpy and scipy installation. I have tested the code with numpy 1.14.3 and scipy 0.19.0 and 1.1.0.
+You need an numpy and scipy installation. I have tested the code with numpy 1.14.3 and 1.1.0.
 To run the test cases, you additionally need the cython compiler installed on your OS (see below)
 
 ### Installing
