@@ -63,7 +63,7 @@ np.zeros
 np.sqrt
 np.conj
 """
-class MPS:
+class MPS(object):
 
     """
     MPS.__init__(tensors,schmidt_thresh=1E-16,r_thresh=1E-14):
@@ -290,7 +290,7 @@ class MPS:
         r_thresh: float 
                   internal parameter (ignore it)
         """
-        dtype=np.result_type(*localstate,dtype)
+        dtype=np.result_type(dtype,*localstate)
         print(dtype)
         d=np.asarray([len(s) for s in localstate])
         if any([np.linalg.norm(t)<1E-10 for t in localstate]):

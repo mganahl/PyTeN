@@ -23,7 +23,7 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 
-class Container:
+class Container(object):
 
     def __init__(self):
         """
@@ -171,7 +171,7 @@ class Container:
         return self
         
     
-class DMRGengine(Container):
+class DMRGengine(Container,object):
     """
     DMRGengine
     simulation container for density matrix renormalization group optimization
@@ -416,7 +416,7 @@ class DMRGengine(Container):
         return self.__simulateTwoSite__(*args,**kwargs)
 
 
-class IDMRGengine(DMRGengine):
+class IDMRGengine(DMRGengine,object):
     """
     IDMRGengine
     container object for performing an IDMRG optimization of the ground-state of a Hamiltonian
@@ -433,7 +433,7 @@ class IDMRGengine(DMRGengine):
         """
         
         lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(mps,mpo)                            
-        super().__init__(mps,mpo,filename,lb,rb)
+        super(IDMRGengine,self).__init__(mps,mpo,filename,lb,rb)
     #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
 
     def __update__(self,regauge=False):
@@ -484,7 +484,7 @@ class IDMRGengine(DMRGengine):
             self._R.insert(0,self._rb)
         elif regauge:
             lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(self._mps,self._mpo,regauge=True)
-            super().__init__(self._mps,self._mpo,self._filename,lb,rb)        
+            super(IDMRGengine,self).__init__(self._mps,self._mpo,self._filename,lb,rb)        
         return D
 
     
@@ -525,7 +525,7 @@ class IDMRGengine(DMRGengine):
         skip=False
         while not converged:
             regauge=False
-            e=super().__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
+            e=super(IDMRGengine,self).__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
@@ -598,7 +598,7 @@ class IDMRGengine(DMRGengine):
         skip=False
         while not converged:
             regauge=False
-            e=super().__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
+            e=super(IDMRGengine,self).__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
                                           landelta=landelta,landeltaEta=landeltaEta)
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
@@ -634,7 +634,7 @@ class IDMRGengine(DMRGengine):
         self.__simulateTwoSite__(*args,**kwargs)
 
         
-class HomogeneousIMPSengine(Container):
+class HomogeneousIMPSengine(Container,object):
     """
     HomogeneousIMPSengine
     container object for homogeneous MPS optimization using a gradient descent method
@@ -830,9 +830,9 @@ class HomogeneousIMPSengine(Container):
 """
 a derived class for discretized Boson simulations; teh only difference to HomogeneousIMPS is the calculation of certain observables
 """
-class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
+class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine,object):
     def __init__(self,Nmax,mps,mpo,dx,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):        
-        super().__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40)
+        super(HomogeneousDiscretizedBosonEngine,self).__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40)
         
     def simulate(self,*args,**kwargs):
         self.__simulate__(*args,**kwargs)
@@ -860,7 +860,7 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
         
 
 
-class VUMPSengine(Container):
+class VUMPSengine(Container,object):
     """
 
     VUMPSengine
@@ -1067,7 +1067,7 @@ class VUMPSengine(Container):
  
         
 
-class TimeEvolutionEngine(Container):
+class TimeEvolutionEngine(Container,object):
     """
     TimeEvolutionEngine(Container):
     container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
@@ -1322,7 +1322,7 @@ class TimeEvolutionEngine(Container):
                 self._mps.__position__(n+1)
                 #evolve tensor forward
                 if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
                 elif solver=='LAN':
                     evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
                 elif solver=='SEXPMV':                    
@@ -1362,7 +1362,7 @@ class TimeEvolutionEngine(Container):
             
                 #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
                 if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                                    
-                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),np.imag(dt_),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
                 elif solver=='LAN':                                
                     evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim)
                 elif solver=='SEXPMV':                                                        
@@ -1428,7 +1428,7 @@ def grambond(Neff,vec):
 
 
 
-class PeriodicMPSengine(Container):
+class PeriodicMPSengine(Container,object):
     def __init__(self,mps,mpo,N,filename):
         """
         initialize a VUMPS simulation object
@@ -1685,7 +1685,7 @@ basemps has to be left orthogonal
 
 
 """
-class ExcitationEngine:
+class ExcitationEngine(object):
     def __init__(self,basemps,basempstilde,mpo):
         NotImplemented
         self._mps=basemps

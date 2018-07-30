@@ -3,7 +3,7 @@ import numpy as np
 import scipy as sp
 import copy
 
-class LanczosEngine:
+class LanczosEngine(object):
     """
     This is a general purpose Lanczos-class. It performs a Lanczos tridiagonalization 
     of a Hamiltonian, defined by the matrix-vector product matvec. 
@@ -110,7 +110,7 @@ class LanczosEngine:
             states.append(state/np.sqrt(self._dot(state.conjugate(),state)))
         return eta[0:min(self._numeig,len(eta))],states,converged
                 
-class LanczosTimeEvolution(LanczosEngine):
+class LanczosTimeEvolution(LanczosEngine,object):
     """
     Lanzcos time evolution engine
     LanczosTimeEvolution(matvec,vecvec,zeros_initializer,ncv,delta)
@@ -123,8 +123,9 @@ class LanczosTimeEvolution(LanczosEngine):
     is encountered
     """
     def __init__(self,matvec,vecvec,zeros_initializer,ncv=10,delta=1E-10):
-        super().__init__(matvec=matvec,vecvec=vecvec,zeros_initializer=zeros_initializer,Ndiag=ncv,ncv=ncv,numeig=ncv,delta=delta,deltaEta=1E-10)
+        super(LanczosTimeEvolution,self).__init__(matvec=matvec,vecvec=vecvec,zeros_initializer=zeros_initializer,Ndiag=ncv,ncv=ncv,numeig=ncv,delta=delta,deltaEta=1E-10)
 
+    
 
     def __doStep__(self,state,dt,verbose=False):
         """

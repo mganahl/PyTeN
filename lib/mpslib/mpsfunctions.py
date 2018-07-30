@@ -17,7 +17,7 @@ import lib.ncon as ncon
 import scipy as sp
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
-from scipy.integrate import solve_ivp
+#from scipy.integrate import solve_ivp
 
 import functools as fct
 from scipy.sparse.linalg import ArpackNoConvergence
@@ -1285,7 +1285,7 @@ def evolveTensorSexpmv(L,mpo,R,mps,tau):
     if np.issubdtype(type(tau),np.dtype(complex)):
         fac=np.exp(1j*np.angle(tau))
         dt=np.abs(tau)
-    elif np.issubdtype(type(tau),np.dtype(float)):        
+    elif np.issubdtype(type(tau),np.dtype(float)):
         dt=tau
         fac=1.0        
     else:
@@ -1339,26 +1339,27 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     return np.reshape(v,mat.shape)
 
 def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-8,atol=1E-12):
-    if not np.issubdtype(type(tau),np.dtype(float)):                        
+    if not np.issubdtype(type(tau),np.dtype(float)):
         raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
     [chi1,chi2,d]=np.shape(mps)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     dp=np.shape(mpo)[3]
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    out=solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
+
+    out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
     return np.reshape(out.y[:,-1],mps.shape)
 
 
 def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
-    if not np.issubdtype(type(tau),np.dtype(float)):                
+    if not np.issubdtype(type(tau),np.dtype(float)):
         raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
     
     [chi1,chi2]=np.shape(mat)
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,R])
-    out=solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+    out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
     return np.reshape(out.y[:,-1],mat.shape)
 
 

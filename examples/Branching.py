@@ -232,7 +232,7 @@ if __name__ == "__main__":
         if (not args.switch):
             tw,t=engine.doTEBD(dt=dt,numsteps=min(args.msteps,int(np.ceil(np.abs(args.T/dt)))),Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         elif args.switch  and (max(engine.mps.D)<args.D):
-            tw,t=engine.doTEBD(dt=dt,numsteps=numsteps=min(args.msteps,int(np.ceil(np.abs(args.T/dt)))),Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
+            tw,t=engine.doTEBD(dt=dt,numsteps=min(args.msteps,int(np.ceil(np.abs(args.T/dt)))),Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         else:
             if firsttdvpstep:
                 engine.initializeTDVP()
