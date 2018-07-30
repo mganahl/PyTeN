@@ -3,6 +3,7 @@
 """
 
 from __future__ import absolute_import, division, print_function
+from distutils.version import StrictVersion
 from sys import stdout
 import sys,time,copy,warnings
 import numpy as np
@@ -1346,9 +1347,15 @@ def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-8,atol=1E-12):
     chi2p=np.shape(R)[1]
     dp=np.shape(mpo)[3]
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-
-    out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)    
-    return np.reshape(out.y[:,-1],mps.shape)
+    try:
+        out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)
+        return np.reshape(out.y[:,-1],mps.shape)        
+    except AttributeError as err:
+        if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
+            warnings.warn('in evolveTensorsolve_ivp: RK45 and RK23 solvers are only available for scipy versions >= 1.1.0',stacklevel=2)
+            raise err
+        else:
+            raise err
 
 
 def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
@@ -1359,8 +1366,15 @@ def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
     chi1p=np.shape(L)[1]
     chi2p=np.shape(R)[1]
     mv=fct.partial(HAproductBond,*[L,R])
-    out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
-    return np.reshape(out.y[:,-1],mat.shape)
+    try:
+        out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+        return np.reshape(out.y[:,-1],mat.shape)
+    except AttributeError as err:
+        if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
+            warnings.warn('in evolveMatrixsolve_ivp: RK45 and RK23 solvers are only available for scipy versions >= 1.1.0',stacklevel=2)
+            raise err
+        else:
+            raise err
 
 
 #calls a sparse eigensolver to find the lowest eigenvalue

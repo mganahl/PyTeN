@@ -108,10 +108,7 @@ class MPS(object):
             self._obc=True
         else:
             self._obc=False
-        self._dtype=np.dtype(float)
-        for n in range(self._N):
-            self._dtype=np.result_type(self._dtype,tensors[n].dtype)
-
+        self._dtype=np.result_type(*tensors)
         self._schmidt_thresh=schmidt_thresh
         self._r_thresh=r_thresh
         self._tensors=[np.copy(tensors[n]) for n in range(len(tensors))]
@@ -129,7 +126,8 @@ class MPS(object):
         """
         the dtype of the mps tensors
         """
-        return self._dtype
+        return np.result_type(*self._tensors)
+        #return self._dtype
     @property
     def obc(self):
         return self._obc
@@ -291,7 +289,6 @@ class MPS(object):
                   internal parameter (ignore it)
         """
         dtype=np.result_type(dtype,*localstate)
-        print(dtype)
         d=np.asarray([len(s) for s in localstate])
         if any([np.linalg.norm(t)<1E-10 for t in localstate]):
             inds=np.nonzero(np.asarray([np.linalg.norm(t)<1E-10 for t in localstate]))
@@ -474,7 +471,7 @@ class MPS(object):
             raise TypeError("in MPS.__mul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num
-        cpy._dtype=np.result_type(type(num),self._dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype)
         return cpy
 
     def __imul__(self,num):
@@ -510,7 +507,7 @@ class MPS(object):
             raise TypeError("in MPS.__mul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z/=num
-        cpy._dtype=np.result_type(type(num),self._dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype)
         return cpy
     
     
@@ -529,7 +526,7 @@ class MPS(object):
             raise TypeError("in MPS.__rmul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num        
-        cpy._dtype=np.result_type(type(num),self._dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype)
         return cpy
 
     def __add__(self,other):
@@ -966,11 +963,11 @@ class MPS(object):
         #the parity of the operator string one wants to measure:
         par=len(ops)%2
         if par==0 or P==None:
-            L=np.zeros((self[sites[s]].shape[0],self[sites[s]].shape[0],1)).astype(self._dtype)
+            L=np.zeros((self[sites[s]].shape[0],self[sites[s]].shape[0],1)).astype(self.dtype)
             L[:,:,0]=np.copy(np.eye(self[sites[s]].shape[0]))
         elif par==1 and P!=None:
             #for fermionic modes one has to take into consideration the fermionic minus signs from the start (if len(ops) is odd)
-            L=np.zeros((self[0].shape[0],self[0].shape[0],1)).astype(self._dtype)
+            L=np.zeros((self[0].shape[0],self[0].shape[0],1)).astype(self.dtype)
             L[:,:,0]=np.copy(np.eye(self[0].shape[0]))
             for n in range(sites[s]-1):
                 L=mf.addLayer(L,self[n],P[n],self[n],1)
@@ -985,7 +982,7 @@ class MPS(object):
                     n+=1
 
             assert(sites[s]==sites[n-1])
-            mpo=np.zeros((1,1,op.shape[0],op.shape[1])).astype(self._dtype)
+            mpo=np.zeros((1,1,op.shape[0],op.shape[1])).astype(self.dtype)
             if P==None or par==0:
                 mpo[0,0,:,:]=op
             elif P!=None and par==1:
@@ -1351,7 +1348,7 @@ class MPS(object):
         self._N=mps._N
         self._D=mps._N
         self._obc=mps._obc
-        self._dtype=mps._dtype
+        self._dtype=mps.dtype
         self._schmidt_thresh=mps._schmidt_thresh
         self._r_thresh=mps._r_thresh
         self._tensors=mps._tensors

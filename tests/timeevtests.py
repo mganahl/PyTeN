@@ -168,19 +168,19 @@ class TestTimeEvolution(unittest.TestCase):
         N=self.N
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-
+    
         self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
         self.dmrg._mps.__position__(self.N)
         self.dmrg._mps.__position__(0)
         self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate        
         engine=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"insert_name_here")
-
+    
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
         #adapted to this value in the TimeEvolutionEngine
         thresh=1E-16  #truncation threshold
-
+    
         SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
-
+    
         plt.ion()
         sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
         it1=0  #counts the total iteration number
@@ -189,12 +189,11 @@ class TestTimeEvolution(unittest.TestCase):
         for n in range(self.Nmax):
             #measure the operators 
             #L=[engine._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-            L=engine.measureLocal(sz)            
+            L=engine.measureLocal(sz)
             #store result for later use
             SZ[n,:]=L
             
-            tw,it2=engine.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
-                                     cnterset=it2,tw=tw)
+            tw,it2=engine.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh)
         print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-5)        
         
@@ -202,7 +201,7 @@ class TestTimeEvolution(unittest.TestCase):
         N=self.N
         self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-
+    
         self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
         self.dmrg._mps.__position__(self.N)
         self.dmrg._mps.__position__(0)
@@ -213,9 +212,9 @@ class TestTimeEvolution(unittest.TestCase):
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
         #adapted to this value in the TimeEvolutionEngine
         thresh=1E-16  #truncation threshold
-
+    
         SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
-
+    
         plt.ion()
         sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
         it1=0  #counts the total iteration number
@@ -227,75 +226,79 @@ class TestTimeEvolution(unittest.TestCase):
             L=engine.measureLocal(sz)
             #store result for later use
             SZ[n,:]=L 
-            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
-        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
+            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,solver=solver)
+        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))
+        print(SZ[0,:])
+        print(self.Szexact[0,:])
+        input()
         self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)
         
-    def testTDVP_RK45(self):
-        N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
-        self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
-        
-        engine=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
-        
-        Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
-        #adapted to this value in the TimeEvolutionEngine
-        thresh=1E-16  #truncation threshold
-
-        SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
-
-        plt.ion()
-        sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
-        it1=0  #counts the total iteration number
-        it2=0  #counts the total iteration number
-        tw=0  #accumulates the truncated weight (see below)
-        solver='RK45'        
-        for n in range(self.Nmax):
-            #measure the operators
-            L=engine.measureLocal(sz)
-            #store result for later use
-            SZ[n,:]=L 
-            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
-        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
-        self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)
-        
-    def testTDVP_SEXPMV(self):
-        N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
-        self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
-        
-        engine=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
-        
-        Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
-        #adapted to this value in the TimeEvolutionEngine
-        thresh=1E-16  #truncation threshold
-
-        SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
-
-        plt.ion()
-        sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
-        it1=0  #counts the total iteration number
-        it2=0  #counts the total iteration number
-        tw=0  #accumulates the truncated weight (see below)
-        solver='SEXPMV'        
-        for n in range(self.Nmax):
-            #measure the operators
-            L=engine.measureLocal(sz)
-            #store result for later use
-            SZ[n,:]=L 
-            it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
-        print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
-        self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
+    #def testTDVP_RK45(self):
+    #    N=self.N
+    #    self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+    #    edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+    #
+    #    self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
+    #    self.dmrg._mps.__position__(self.N)
+    #    self.dmrg._mps.__position__(0)
+    #    self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
+    #    
+    #    engine=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
+    #    
+    #    Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
+    #    #adapted to this value in the TimeEvolutionEngine
+    #    thresh=1E-16  #truncation threshold
+    #
+    #    SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
+    #
+    #    plt.ion()
+    #    sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
+    #    it1=0  #counts the total iteration number
+    #    it2=0  #counts the total iteration number
+    #    tw=0  #accumulates the truncated weight (see below)
+    #    solver='RK45'        
+    #    for n in range(self.Nmax):
+    #        #measure the operators
+    #        L=engine.measureLocal(sz)
+    #        #store result for later use
+    #        SZ[n,:]=L
+    #        it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,solver=solver)
+    #
+    #    print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
+    #    self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)
+    #    
+    #def testTDVP_SEXPMV(self):
+    #    N=self.N
+    #    self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+    #    edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+    #
+    #    self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
+    #    self.dmrg._mps.__position__(self.N)
+    #    self.dmrg._mps.__position__(0)
+    #    self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
+    #    
+    #    engine=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"TDVP_insert_name_here")        
+    #    
+    #    Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
+    #    #adapted to this value in the TimeEvolutionEngine
+    #    thresh=1E-16  #truncation threshold
+    #
+    #    SZ=np.zeros((self.Nmax,N)) #container for holding the measurements
+    #
+    #    plt.ion()
+    #    sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
+    #    it1=0  #counts the total iteration number
+    #    it2=0  #counts the total iteration number
+    #    tw=0  #accumulates the truncated weight (see below)
+    #    solver='SEXPMV'        
+    #    for n in range(self.Nmax):
+    #        #measure the operators
+    #        L=engine.measureLocal(sz)
+    #        #store result for later use
+    #        SZ[n,:]=L 
+    #        it1=engine.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,solver=solver)
+    #    print("                : ",np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N))            
+    #    self.assertTrue(np.linalg.norm(SZ-self.Szexact)/(self.Nmax*self.N)<1E-8)            
 
 
 """
@@ -445,10 +448,9 @@ class TestPlot(unittest.TestCase):
                 #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
                 #engine2.update()
                 SZ2[n,:],SY2[n,:],SX2[n,:]=engine2.measureLocal(sz),engine2.measureLocal(sy),engine2.measureLocal(sx)
-                tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
-                                         cnterset=it2,tw=tw)
+                tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh)
             
-                it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
+                it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,solver=solver)
             
                 plt.figure(1,figsize=(10,8))
                 plt.clf()
@@ -457,7 +459,7 @@ class TestPlot(unittest.TestCase):
                 plt.ylim([-0.5,0.5])
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\langle S^z_n\rangle$')
-                plt.legend(['exact','TDVP ('+solver+')','TEBD'])
+                plt.legend(['exact','TDVP ('+engine2._solver+')','TEBD'])
                 plt.subplot(3,3,4)
                 plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-np.real(SZ2[n,:])))
                 plt.xlabel('lattice site n')
@@ -473,7 +475,7 @@ class TestPlot(unittest.TestCase):
                 plt.ylim([-0.5,0.5])
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\langle S^y_n\rangle$')
-                plt.legend(['exact','TDVP ('+solver+')','TEBD'])                
+                plt.legend(['exact','TDVP ('+engine2._solver+')','TEBD'])                
                 plt.subplot(3,3,5)
                 plt.semilogy(range(self.N),np.abs(self.Syexact[n,:]-np.real(SY2[n,:])))
                 plt.xlabel('lattice site n')
@@ -491,7 +493,7 @@ class TestPlot(unittest.TestCase):
                 plt.ylim([-0.5,0.5])
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\langle S^x_n\rangle$')
-                plt.legend(['exact','TDVP ('+solver+')','TEBD'])                
+                plt.legend(['exact','TDVP ('+engine2._solver+')','TEBD'])                
                 plt.subplot(3,3,6)
                 plt.semilogy(range(self.N),np.abs(self.Sxexact[n,:]-np.real(SX2[n,:])))
                 plt.xlabel('lattice site n')
@@ -508,21 +510,21 @@ class TestPlot(unittest.TestCase):
                 plt.plot(range(self.N),np.imag(SZ2[n,:]),'rd',range(self.N),np.imag(SZ1[n,:]),'ko',Markersize=5)
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\Im\langle S^z_n\rangle$')
-                plt.legend(['TDVP ('+solver+')','TEBD'])                                
+                plt.legend(['TDVP ('+engine2._solver+')','TEBD'])                                
                 plt.tight_layout()
             
                 plt.subplot(3,1,2)
                 plt.plot(range(self.N),np.imag(SY2[n,:]),'rd',range(self.N),np.imag(SY1[n,:]),'ko',Markersize=5)
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\Im\langle S^y_n\rangle$')
-                plt.legend(['TDVP ('+solver+')','TEBD'])                                                
+                plt.legend(['TDVP ('+engine2._solver+')','TEBD'])                                                
                 plt.tight_layout()
                 
                 plt.subplot(3,1,3)
                 plt.plot(range(self.N),np.imag(SX2[n,:]),'rd',range(self.N),np.imag(SX1[n,:]),'ko',Markersize=5)
                 plt.xlabel('lattice site n')
                 plt.ylabel(r'$\Im\langle S^x_n\rangle$')
-                plt.legend(['TDVP ('+solver+')','TEBD'])                                                
+                plt.legend(['TDVP ('+engine2._solver+')','TEBD'])                                                
                 plt.tight_layout()
                 
                 
@@ -536,149 +538,11 @@ class TestPlot(unittest.TestCase):
         edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
         for solver in ['LAN','RK45','SEXPMV','RK23']:
             run_sim(copy.deepcopy(self.dmrg),solver)
-            
-#    def test_plot_SEXPMV(self):
-#        
-#        N=self.N
-#        
-#        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-#        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-#
-#        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
-#        self.dmrg._mps.__position__(self.N)
-#        self.dmrg._mps.__position__(0)
-#
-#        engine1=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"insert_name_here")
-#        engine2=en.TimeEvolutionEngine(self.dmrg._mps.__copy__(),self.mpo,"TDVP_insert_name_here")        
-#        
-#        Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
-#        #adapted to this value in the TimeEvolutionEngine
-#        thresh=1E-16  #truncation threshold
-#
-#        SZ1=np.zeros((self.Nmax,N)) #container for holding the measurements
-#        SZ2=np.zeros((self.Nmax,N)) #container for holding the measurements        
-#        plt.ion()
-#        sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
-#        it1=0  #counts the total iteration number
-#        it2=0  #counts the total iteration number
-#        tw=0  #accumulates the truncated weight (see below)
-#        solver='LAN'
-#        engine1._mps.resetZ()
-#        engine2._mps.resetZ()        
-#        for n in range(self.Nmax):
-#            #measure a list of local operators
-#            #L=[engine1._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-#            L=engine1.measureLocal(sz)
-#            #store result for later use
-#            SZ1[n,:]=L
-#            #note: when measuring with measureLocal function, one has to update the simulation container after that.
-#            #this  is because measureLocal shifts the center site of the mps around, and that causes inconsistencies
-#            #in the simulation container with the left and right environments
-#            #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-#            #engine2.update()
-#            L=engine2.measureLocal(sz)
-#            SZ2[n,:]=L
-#            tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
-#                                     cnterset=it2,tw=tw)
-#
-#            it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
-#
-#            plt.figure(1,figsize=(10,8))
-#            plt.clf()
-#            plt.subplot(3,1,1)
-#            plt.plot(range(self.N),self.Szexact[n,:],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
-#            plt.ylim([-0.5,0.5])
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$\langle S^z_n\rangle$')
-#            plt.legend(['exact','TDVP (SEXPMV)','TEBD'])
-#            plt.subplot(3,1,2)
-#            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ2[n,:]))
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$|\langle S^z_n\rangle_{tdvp}-\langle S^z_n\rangle_{exact}|$')            
-#            plt.subplot(3,1,3)
-#            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ1[n,:]))            
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')
-#            plt.tight_layout()
-#            plt.draw()
-#            plt.show()
-#            plt.pause(0.01)
-#
-#            
-#
-#
-#    def test_plot_RK45(self):
-#        
-#        N=self.N
-#        
-#        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-#        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
-#
-#        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,1.],[0.0,0.0]]),int(self.N/2))
-#        self.dmrg._mps.__position__(self.N)
-#        self.dmrg._mps.__position__(0)
-#
-#        engine1=en.TimeEvolutionEngine(self.dmrg._mps,self.mpo,"insert_name_here")
-#        engine2=en.TimeEvolutionEngine(self.dmrg._mps.__copy__(),self.mpo,"TDVP_insert_name_here")        
-#        
-#        Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
-#        #adapted to this value in the TEBDEngine
-#        thresh=1E-16  #truncation threshold
-#
-#        SZ1=np.zeros((self.Nmax,N)) #container for holding the measurements
-#        SZ2=np.zeros((self.Nmax,N)) #container for holding the measurements        
-#        plt.ion()
-#        sz=[np.diag([-0.5,0.5]) for n in range(N)]  #a list of local operators to be measured
-#        it1=0  #counts the total iteration number
-#        it2=0  #counts the total iteration number
-#        tw=0  #accumulates the truncated weight (see below)
-#        solver='RK45'
-#        engine2._mps.resetZ()
-#        engine1._mps.resetZ()        
-#        for n in range(self.Nmax):
-#            #measure a list of local operators
-#            #L=[engine1._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-#            L=engine1.measureLocal(sz)            
-#            #store result for later use
-#            SZ1[n,:]=L
-#            #note: when measuring with measureLocal function, one has to update the simulation container after that.
-#            #this  is because measureLocal shifts the center site of the mps around, and that causes inconsistencies
-#            #in the simulation container with the left and right environments
-#            #L=[engine2._mps.measureLocal(np.diag([-0.5,0.5]),site=n).real for n in range(N)]
-#            #engine2.update()
-#            L=engine2.measureLocal(sz)                        
-#            SZ2[n,:]=L
-#            tw,it2=engine1.doTEBD(dt=self.dt,numsteps=self.numsteps,Dmax=Dmax,tr_thresh=thresh,\
-#                                     cnterset=it2,tw=tw)
-#
-#            it1=engine2.doTDVP(self.dt,numsteps=self.numsteps,krylov_dim=10,cnterset=it1,solver=solver)
-#
-#            plt.figure(1,figsize=(10,8))
-#            plt.clf()
-#            plt.subplot(3,1,1)
-#            plt.plot(range(self.N),self.Szexact[n,:],range(self.N),SZ2[n,:],'rd',range(self.N),SZ1[n,:],'ko',Markersize=5)
-#            plt.ylim([-0.5,0.5])
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$\langle S^z_n\rangle$')
-#            plt.legend(['exact','TDVP (RK45)','TEBD'])
-#            plt.subplot(3,1,2)
-#            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ2[n,:]))
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$|\langle S^z_n\rangle_{tdvp}-\langle S^z_n\rangle_{exact}|$')            
-#            plt.subplot(3,1,3)
-#            plt.semilogy(range(self.N),np.abs(self.Szexact[n,:]-SZ1[n,:]))            
-#            plt.xlabel('lattice site n')
-#            plt.ylabel(r'$|\langle S^z_n\rangle_{tebd}-\langle S^z_n\rangle_{exact}|$')
-#            plt.tight_layout()
-#            plt.draw()
-#            plt.show()
-#            plt.pause(0.01)
-#
 
 
 if __name__ == "__main__":
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTimeEvolution)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestPlot)    
-    #unittest.TextTestRunner(verbosity=2).run(suite1)
-    unittest.TextTestRunner(verbosity=2).run(suite2)     
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    #unittest.TextTestRunner(verbosity=2).run(suite2)     
 

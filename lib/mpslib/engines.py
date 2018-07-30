@@ -2,8 +2,9 @@
 @author: Martin Ganahl
 """
 from __future__ import absolute_import, division, print_function
+from distutils.version import StrictVersion
 from sys import stdout
-import pickle
+import pickle,warnings
 import numpy as np
 import os,copy
 import time
@@ -262,6 +263,8 @@ class DMRGengine(Container,object):
         """
         if solver not in ['AR','LAN','LOBPCG']:
             raise ValueError("DMRGengine.__simulate__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+
+        self._solver=solver
         self._Nmax=Nmax
         converged=False
         energy=100000.0
@@ -270,11 +273,11 @@ class DMRGengine(Container,object):
         while not converged:
             for n in range(self._mps._N-1):
                 self.position(n)
-                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)
+                e,opt=self.optimize(n,tol,ncv,numvecs,self._solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)
                 self.mps[n]=opt
             for n in range(self._mps._N-1,0,-1):
                 self.position(n+1)                
-                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)                
+                e,opt=self.optimize(n,tol,ncv,numvecs,self._solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)                
                 self.mps[n]=opt
                     
             if np.abs(e-energy)<Econv:
@@ -318,6 +321,8 @@ class DMRGengine(Container,object):
         """
         if solver not in ['AR','LAN','LOBPCG']:
             raise ValueError("DMRGengine.__simulateTwoSite__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+        self._solver=solver
+        
         self._Nmax=Nmax
 
         converged=False
@@ -333,11 +338,11 @@ class DMRGengine(Container,object):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
-                if solver=='LOBPCG':
+                if self._solver=='LOBPCG':
                     e,opt=mf.lobpcg(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
-                if solver=='AR':
+                if self._solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,numvecs,ncv)
-                if solver=='LAN':
+                if self._solver=='LAN':
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
@@ -351,7 +356,7 @@ class DMRGengine(Container,object):
                 U=U[:,0:Dnew]
                 V=V[0:Dnew,:]
                 if verbose>0:
-                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
+                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
                 self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
@@ -367,11 +372,11 @@ class DMRGengine(Container,object):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
-                if solver=='LOBPCG':
+                if self._solver=='LOBPCG':
                     e,opt=mf.lobpcg(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
-                if solver=='AR':
+                if self._solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,numvecs,ncv)
-                if solver=='LAN':
+                if self._solver=='LAN':
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[self._mps._N-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
@@ -385,7 +390,7 @@ class DMRGengine(Container,object):
                 U=U[:,0:Dnew]
                 V=V[0:Dnew,:]
                 if verbose>0:
-                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
+                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,n,self._N,np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
                 self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
@@ -501,7 +506,7 @@ class IDMRGengine(DMRGengine,object):
         cp: chekpoint step
         verbose: verbosity flag
         numvecs: the number of eigenvectors to be calculated; should be 1
-        solver: type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
+        solver: type of eigensolver: 'AR' or 'LAN' or 'LOBPCG' for arnoldi or lanczos or conjugate gradient
         Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
         nmaxlan: maximum number of lanczos stesp
         landelta: lanczos stops if a krylov vector with norm < landelta is encountered
@@ -512,12 +517,6 @@ class IDMRGengine(DMRGengine,object):
         if regaugestep==1:
             raise ValueError("IDMRGengine.__simulate__(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
         
-        print ('# simulation parameters:')
-        print ('# of idmrg iterations: {0}'.format(Nmax))
-        print ('# of sweeps per unit cell: {0}'.format(NUC))
-        print ('# Econv: {0}'.format(Econv))
-        print ('# Arnoldi tolerance: {0}'.format(tol))
-        print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
         it=0
         converged=False
         eold=0.0
@@ -533,11 +532,11 @@ class IDMRGengine(DMRGengine,object):
             if verbose>0:
                 if regauge==False:
                     if skip==False:
-                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
+                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,np.real((e-eold)/(self._mps._N)),np.imag((e-eold)/(self._mps._N)),D))
                     if skip==True:
                         skip=False
                 if regauge==True:
-                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
+                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,np.real(self._hl/self._N),np.imag(self._hl/self._N),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
@@ -1307,9 +1306,16 @@ class TimeEvolutionEngine(Container,object):
         solver: str in {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}: 
                 different intergration schemes
         """
-
+        
         if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
             raise ValueError("TDVPengine.__doTDVP__(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
+
+        if solver in ['Radau','RK45','BDF','LSODA','RK23']:
+            if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
+                warnings.warn('{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'.format(solver),stacklevel=2)
+                solver='LAN'
+
+        self._solver=solver
         converged=False
         current='None'
         self._mps.__position__(0)
@@ -1321,11 +1327,11 @@ class TimeEvolutionEngine(Container,object):
                     dt_=dt/2.0
                 self._mps.__position__(n+1)
                 #evolve tensor forward
-                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
-                elif solver=='LAN':
+                if self._solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=self._solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+                elif self._solver=='LAN':
                     evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
-                elif solver=='SEXPMV':                    
+                elif self._solver=='SEXPMV':                    
                     evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_)
                     
                 tensor,mat,Z=mf.prepareTensor(evTen,1)
@@ -1334,11 +1340,11 @@ class TimeEvolutionEngine(Container,object):
 
                 #evolve matrix backward                    
                 if n<(self._mps._N-1):
-                    if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-                        evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],mat,-np.imag(dt_),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
-                    elif solver=='LAN':                        
+                    if self._solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                        evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],mat,-np.imag(dt_),method=self._solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+                    elif self._solver=='LAN':                        
                         evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_,krylov_dimension=krylov_dim)
-                    elif solver=='SEXPMV':                                            
+                    elif self._solver=='SEXPMV':                                            
                         evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],mat,-dt_)                                            
                     evMat/=np.linalg.norm(evMat)
                     self._mps._mat=evMat
@@ -1350,22 +1356,22 @@ class TimeEvolutionEngine(Container,object):
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.__position__(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
-                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                    
-                    evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-np.imag(dt_),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity                    
-                elif solver=='LAN':                
+                if self._solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                    
+                    evMat=mf.evolveMatrixsolve_ivp(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-np.imag(dt_),method=self._solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity                    
+                elif self._solver=='LAN':                
                     evMat=mf. evolveMatrixLan(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_,krylov_dimension=krylov_dim)
-                elif solver=='SEXPMV':                                    
+                elif self._solver=='SEXPMV':                                    
                     evMat=mf.evolveMatrixSexpmv(self._L[n+1],self._R[self._mps._N-1-n],self._mps._mat,-dt_)                                    
                 evMat/=np.linalg.norm(evMat)#normalize wavefunction
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
             
             
                 #evolve tensor forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
-                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                                    
-                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
-                elif solver=='LAN':                                
+                if self._solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:                                    
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),float(np.imag(dt_)),method=self._solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+                elif self._solver=='LAN':                                
                     evTen=mf. evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt_,krylov_dimension=krylov_dim)
-                elif solver=='SEXPMV':                                                        
+                elif self._solver=='SEXPMV':                                                        
                     evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=False),dt_)
                     
                 #split of a center matrix C ("mat" in my notation)
@@ -1376,7 +1382,7 @@ class TimeEvolutionEngine(Container,object):
                 self._mps._position=n
             if verbose>=1:
                 self._t0+=np.abs(np.imag(dt))                
-                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i, |dt|=%1.5f"%(solver,self._t0,np.max(self._mps.D),np.abs(dt)))
+                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i, |dt|=%1.5f"%(self._solver,self._t0,np.max(self._mps.D),np.abs(dt)))
                 stdout.flush()
             if verbose>=2:                
                 print('')
