@@ -230,14 +230,15 @@ if __name__ == "__main__":
             plt.pause(0.01)
 
         if (not args.switch):
-            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
+            tw,t=engine.doTEBD(dt=dt,numsteps=min(args.msteps,int(np.ceil(np.abs(args.T/dt)))),Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         elif args.switch  and (max(engine.mps.D)<args.D):
-            tw,t=engine.doTEBD(dt=dt,numsteps=args.msteps,Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
+            tw,t=engine.doTEBD(dt=dt,numsteps=numsteps=min(args.msteps,int(np.ceil(np.abs(args.T/dt)))),Dmax=args.D,tr_thresh=args.truncthresh,cp=args.cp,keep_cp=args.keep_cp)
         else:
             if firsttdvpstep:
                 engine.initializeTDVP()
+                Tremain=args.T-engine._t0
                 firsttdvpstep=False
-            t=engine.doTDVP(dt=dt_TDVP,numsteps=args.mstepsTDVP,solver=args.solver.upper(),krylov_dim=args.ncv,cp=args.cp,keep_cp=args.keep_cp,rtol=args.rtol,atol=args.atol)
+            t=engine.doTDVP(dt=dt_TDVP,numsteps=min(args.mstepsTDVP,int(np.ceil(np.abs(Tremain/dt_TDVP)))),solver=args.solver.upper(),krylov_dim=args.ncv,cp=args.cp,keep_cp=args.keep_cp,rtol=args.rtol,atol=args.atol)
 
             
         S=np.append(S,np.expand_dims(np.asarray([engine._mps.measureList(sx),engine._mps.measureList(sy),engine._mps.measureList(sz)]).T,0),axis=0)

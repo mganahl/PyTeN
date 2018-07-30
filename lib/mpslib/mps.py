@@ -291,7 +291,7 @@ class MPS:
                   internal parameter (ignore it)
         """
         dtype=np.result_type(*localstate,dtype)
-              
+        print(dtype)
         d=np.asarray([len(s) for s in localstate])
         if any([np.linalg.norm(t)<1E-10 for t in localstate]):
             inds=np.nonzero(np.asarray([np.linalg.norm(t)<1E-10 for t in localstate]))
