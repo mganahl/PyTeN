@@ -1168,7 +1168,7 @@ def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,de
     else:
         es=[]
         vs=[]
-        for n in range(numeig):
+        for n in range(min(len(e),numeig)):
             es.append(e[n])
             vs.append(np.reshape(v[n],(chi1p,chi2p,dp)))
         return es,vs
@@ -1190,8 +1190,7 @@ def lanczosbond(L,mpo,mps,R,mat0,position,Ndiag=10,nmax=500,numeig=1,delta=1E-10
     else:
         es=[]
         vs=[]
-        
-        for n in range(numeig):
+        for n in range(min(len(e),numeig)):        
             es.append(e[n])
             vs.append(np.reshape(v[n],(chi1p,chi2p)))
         return es,vs
@@ -1225,7 +1224,7 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
 
     elif numvecs_returned>1:
         if (numvecs_returned>numvecs):
-            sys.warning('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            warnings.warn('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
             numvecs_returned=numvecs
         es=[]
         vs=[]
@@ -1265,7 +1264,7 @@ def lobpcg(L,mpo,R,mps0,tolerance=1e-6,numvecs_returned=1):
 
     elif numvecs_returned>1:
         if (numvecs_returned>numvecs):
-            sys.warning('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            warnings.warn('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
             numvecs_returned=numvecs
         es=[]
         vs=[]
@@ -1340,15 +1339,19 @@ def evolveMatrixLan(L,R,mat,tau,krylov_dimension=20,delta=1E-8):
     return np.reshape(v,mat.shape)
 
 def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-8,atol=1E-12):
-    if not np.issubdtype(type(tau),np.dtype(float)):
-        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
-    [chi1,chi2,d]=np.shape(mps)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    dp=np.shape(mpo)[3]
-    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    try:
-        out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)
+    if (np.real(tau)!=0.0) and (np.imag(tau)!=0.0):
+        raise TypeError(" evolveTensorsolve_ivp(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be either real or imaginary")
+    try:    
+        tau_=np.real(tau)+np.imag(tau)
+        [chi1,chi2,d]=np.shape(mps)
+        chi1p=np.shape(L)[1]
+        chi2p=np.shape(R)[1]
+        dp=np.shape(mpo)[3]
+        mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
+        if np.real(tau)==0.0:
+            out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau_),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)
+        else:
+            out=sp.integrate.solve_ivp(lambda t,y:mv(y),t_span=(0.0,tau_),y0=np.reshape(mps,(chi1*chi2*d)),method=method,rtol=rtol,atol=atol)            
         return np.reshape(out.y[:,-1],mps.shape)        
     except AttributeError as err:
         if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
@@ -1357,17 +1360,19 @@ def evolveTensorsolve_ivp(L,mpo,R,mps,tau,method='RK45',rtol=1E-8,atol=1E-12):
         else:
             raise err
 
-
 def evolveMatrixsolve_ivp(L,R,mat,tau,method='RK45',rtol=1E-3,atol=1E-6):
-    if not np.issubdtype(type(tau),np.dtype(float)):
-        raise TypeError(" evolveTensorRK45(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be a float")
-    
-    [chi1,chi2]=np.shape(mat)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    mv=fct.partial(HAproductBond,*[L,R])
+    if (np.real(tau)!=0.0) and (np.imag(tau)!=0.0):
+        raise TypeError(" evolveTensorsolve_ivp(L,mpo,R,mps,tau,rtol=1E-3,atol=1E-6): tau has to be either real or imaginary")
     try:
-        out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+        tau_=np.real(tau)+np.imag(tau)        
+        [chi1,chi2]=np.shape(mat)
+        chi1p=np.shape(L)[1]
+        chi2p=np.shape(R)[1]
+        mv=fct.partial(HAproductBond,*[L,R])
+        if np.real(tau)==0.0:        
+            out=sp.integrate.solve_ivp(lambda t,y:1j*mv(y),t_span=(0.0,tau_),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)
+        else:
+            out=sp.integrate.solve_ivp(lambda t,y:mv(y),t_span=(0.0,tau_),y0=np.reshape(mat,(chi1*chi2)),method=method,rtol=rtol,atol=atol)            
         return np.reshape(out.y[:,-1],mat.shape)
     except AttributeError as err:
         if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
@@ -1406,7 +1411,7 @@ def eigshbond(L,mpo,mps,R,mat0,position,tolerance=1e-6,numvecs=1,numcv=10,numvec
         return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p))
     elif numvecs_returned>1:
         if (numvecs_returned>numvecs):
-            sys.warning('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            warnings.warn('mpsfunctions.eigsh: request to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
             numvecs_returned=numvecs
             es=[]
             vs=[]

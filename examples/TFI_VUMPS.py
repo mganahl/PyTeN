@@ -14,6 +14,7 @@ import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib
+import datetime
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
@@ -31,9 +32,11 @@ if __name__ == "__main__":
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-12)',type=float,default=1E-12)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-12)',type=float,default=1E-12)
     parser.add_argument('--epsilon', help='desired convergence of the gradient (1E-10)',type=float,default=1E-10)
+    parser.add_argument('--landelta', help='lanczos stopping criterion (1E-10)',type=float,default=1E-10)    
     parser.add_argument('--imax', help='maximum number of iterations (100)',type=int,default=100)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
-    parser.add_argument('--filename', help='filename for output (_TFI_VUMPS)',type=str,default='_TFI_VUMPS')
+    parser.add_argument('--filename', help='filename for output (_TFI_VUMPS)',type=str,default='TFI_VUMPS')
+    parser.add_argument('--load', help='load a file (None)',type=str)    
     parser.add_argument('--seed', help='seed for initialization of Q and R matrices',type=int)
     parser.add_argument('--numeig', help='number of eigenvector in TMeigs (5)',type=int,default=5)
     parser.add_argument('--ncv', help='number of krylov vectors in TMeigs (20)',type=int,default=20)
@@ -45,8 +48,20 @@ if __name__ == "__main__":
     parser.add_argument('--outerklgmres', help='Number of vectors to carry between inner GMRES iterations. According to [R271], good values are in the range of 1...3. However, note that if you want to use the additional vectors to accelerate solving multiple similar problems, larger values may be beneficial (from scipy.sparse.linalg.lgmres manual)',type=int,default=10)
     parser.add_argument('--innermlgmres', help='Number of inner GMRES iterations per each outer iteration (from scipy.sparse.linalg.lgmres manual)',type=int,default=30)
     args=parser.parse_args()
+    date=datetime.datetime.now()
+    today=str(date.year)+str(date.month)+str(date.day)
+    
     d=2
     N=1
+    filename=today+'_'+args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
+    root=os.getcwd()
+    if os.path.exists(filename):
+        print('folder',filename,'exists already. Resuming will likely overwrite existing data. Hit enter to confirm')
+        input()
+    elif not os.path.exists(filename):
+        os.mkdir(filename)
+    os.chdir(filename)
+    
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
     mpo=H.TFI(Jx,B,False)
@@ -62,16 +77,21 @@ if __name__ == "__main__":
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
     mps.regauge(gauge='right')
-    iMPS=en.VUMPSengine(mps,mpo,args.filename)
-    iMPS.simulate(args.imax,args.epsilon,args.regaugetol,args.lgmrestol,args.ncv,args.numeig,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
-                arncv=args.arncv,svd=args.svd,checkpoint=args.cp,solver=args.solver.upper())
 
-
+    if args.load==None:
+        iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)        
+        iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
+                      arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
+    else:
+        iMPS=en.VUMPSengine.load(args.load)
+        iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
+                      arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False)
+        
     [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
-    print()
+    print('Schmidt values, normalization')
     print(lam,np.sum(lam**2))
-
-    print()
+    print('normalized and rescaled natural logarithm of Schmidt values')    
     loglam=np.log(lam)
-    
     print((loglam-loglam[0])/(loglam[1]-loglam[0]))
+    np.save('mps',iMPS._A)
+    np.save('lam',lam)    
