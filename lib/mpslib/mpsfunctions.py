@@ -2737,7 +2737,7 @@ def TDVPupdate(r,tensor,mpo,kold=None,tol=1E-10):
     [D1,D2,d1,d2]=np.shape(mpo[0])
     l=np.eye(chi1)    
     lb=initializeLayer(tensor,l,tensor,mpo[0],1)
-    lb=np.reshape(addLayer(lb,tensor,mpo[1],tensor,1),(chi2,chi2));#(l|H^AA_AA
+    lb=np.reshape(addLayer(lb,tensor,mpo[1],tensor,1),(chi2,chi2))
     h=np.tensordot(lb,r,([0,1],[0,1]))
     inhom=np.reshape(lb-h*l,chi2*chi2)
     #def TDVPGMRES(tensor,r,l,inhom,x0,tolerance=1e-10,maxiteration=2000,datatype=float,direction=1):

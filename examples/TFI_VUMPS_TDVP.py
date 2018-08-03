@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--dt', help='time step (1E-2)',type=complex,default=1E-2)
     parser.add_argument('--imax', help='maximum number of time steps (1000)',type=int,default=1000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
-    parser.add_argument('--filename', help='filename for output (_TFI_VUMPS)',type=str,default='TFI_TDVP')
+    parser.add_argument('--filename', help='filename for output (TFI_VUMPS_TDVP)',type=str,default='TFI_VUMPS_TDVP')
     parser.add_argument('--ncv', help='number of krylov vectors in TMeigs (20)',type=int,default=40)
     parser.add_argument('--svd', help='do svd instead of polar decompostion for  guage matching',action="store_true")    
     parser.add_argument('--krylov_dim', help='number of Krylov vectors in lan (10)',type=int,default=10)

@@ -11,7 +11,7 @@ import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as Hams
 import lib.mpslib.mps as mpslib
-
+import datetime
 import argparse
 herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
@@ -20,23 +20,36 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser('HeisTDVP.py: ground-state simulation for the infinite XXZ model using TDVP imaginary time evolution')
     parser.add_argument('--D', help='cMPS bond dimension (8)',type=int,default=8)
     parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')    
-    parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=1.0)
-    parser.add_argument('--B', help='magnetic field (0.5)',type=float,default=0.5)
+    parser.add_argument('--Jx', help='Jx intercation (1.0)',type=float,default=-1.0)
+    parser.add_argument('--Bz', help='magnetic field (0.5)',type=float,default=1.0)
     parser.add_argument('--dt',help='time step for imaginary time evolution (0.05)',type=float,default=0.005)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-10)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-10)
     parser.add_argument('--epsilon', help='desired convergence of the state (1E-5)',type=float,default=1E-6)
     parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
-    parser.add_argument('--filename', help='filename for output (_cMPSoptnew)',type=str,default='_HeisTDVP')
+    parser.add_argument('--filename', help='filename for output (TFITDVP)',type=str,default='TFITDVP')
     parser.add_argument('--numeig', help='number of eigenvector in TMeigs',type=int,default=5)
     parser.add_argument('--ncv', help='number of krylov vectors in TMeigs',type=int,default=20)
     args=parser.parse_args()
+    
     #run in left mps gauge and left mps-tangent gauge
+    date=datetime.datetime.now()
+    today=str(date.year)+str(date.month)+str(date.day)
+    d=2
+    N=1
+    filename=today+'_'+args.filename+'D{0}_Jx{1}_B{2}_dt{3}'.format(args.D,args.Jx,args.Bz,args.dt)
+    root=os.getcwd()
+    if os.path.exists(filename):
+        print('folder',filename,'exists already. Resuming will likely overwrite existing data. Hit enter to confirm')
+        input()
+    elif not os.path.exists(filename):
+        os.mkdir(filename)
+    os.chdir(filename)
     
     N=2
     d=2
     Jx=args.Jx*np.ones(N)
-    B=args.B*np.ones(N)
+    B=args.Bz/2.0*np.ones(N) #Bz has to be halfed here, due to how TDVP works; different to other TFI scripts
     mpo=Hams.TFI(Jx,B,obc=True)
     
     if args.dtype=='complex':
@@ -84,4 +97,14 @@ if __name__ == "__main__":
 
         if it>args.imax:
             converged=True
-    np.save(args.filename,A)
+
+    [Gamma,lam,r]=mf.regauge(A,gauge='symmetric',tol=args.regaugetol)
+
+    print('Schmidt values, normalization')
+    print(lam,np.sum(lam**2))
+    print('normalized and rescaled natural logarithm of Schmidt values')    
+    loglam=np.log(lam)
+    print((loglam-loglam[0])/(loglam[1]-loglam[0]))
+    np.save('mps',A)
+    np.save('lam',lam)    
+    
