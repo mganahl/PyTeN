@@ -1029,6 +1029,8 @@ class VUMPSengine(Container,object):
         """
         warnings.warn('VUMPS.simulate is deprecated; use optimize')
         self.optimize(*args,**kwargs)
+
+
         
         
     def optimize(self,Nmax,epsilon=1E-10,lgmrestol=1E-10,Nmaxlgmres=40,\
@@ -1385,13 +1387,22 @@ class TimeEvolutionEngine(Container,object):
         
     @property
     def iteration(self):
+        """
+        return the current value of the iteration counter
+        """
         return self._it
     
     @property
     def time(self):
+        """
+        return the current time self._t0 of the simulation
+        """
         return self._t0
     @property
     def truncatedWeight(self):
+        """
+        returns the accumulated truncated weight of the simulation (if accessible)
+        """
         return self._tw
 
     def reset(self):
@@ -1415,12 +1426,35 @@ class TimeEvolutionEngine(Container,object):
         self._R.insert(0,self._rb)
 
     def applyEven(self,tau,Dmax,tr_thresh):
+        """
+        apply the TEBD gates on all even sites
+        Parameters:
+        ------------------------------------------
+        tau:       float
+                   the time-stepsize
+        Dmax:      int
+                   The maximally allowed bond dimension after the gate application (overrides tr_thresh)
+        tr_tresh:  float
+                   threshold for truncation
+        """
         for n in range(0,self._mps._N-1,2):
             tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
             self._maxD=max(self._maxD,D)
             self._tw+=tw_
 
-    def applyOdd(self,tau,Dmax,tr_thresh):            
+    def applyOdd(self,tau,Dmax,tr_thresh):
+        """
+        apply the TEBD gates on all odd sites
+        Parameters:
+        ------------------------------------------
+        tau:       float
+                   the time-stepsize
+        Dmax:      int
+                   The maximally allowed bond dimension after the gate application (overrides tr_thresh)
+        tr_tresh:  float
+                   threshold for truncation
+        """
+        
         if self._mps._N%2==0:
             lstart=self._mps._N-3
         elif self._mps._N%2==1:
@@ -1566,21 +1600,28 @@ class TimeEvolutionEngine(Container,object):
     def doTDVP(self,*args,**kwargs):
         return self.__doTDVP__(*args,**kwargs)
 
-    def __doTDVP__(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='RK45',rtol=1E-6,atol=1e-12):
+    def __doTDVP__(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
         """
-        TDVPengine.__doTDVP__(dt,numsteps,krylov_dim=20,cp=None,verbose=1,use_split_step=False)
-        does a TDVP real or imaginary time evolution
+        do real or imaginary time evolution using a single-site TDVP 
 
-        dt: step size
-        numsteps: number of steps to be performed
-        krylov_dim: if use_split_step=False, krylov_dim is the dimension of the krylov space used to perform evolution with lanczos
-                    if use_split_step=True, method uses Ash Milsted's implementation of gexpmv (see evoMPS)
-        cp: checkpointing (currently not implemented)
-        keep_cp: bool
-                 if True, keep all checkpointed files, if False, only keep the last one
-        verbose: verbosity flag
-        solver: str in {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}: 
-                different intergration schemes
+        dt:         complex or float: 
+                    step size
+        numsteps:   int
+                    number of steps to be performed
+        krylov_dim: int 
+                    dimension of the krylov space used to perform evolution with solver='LAN' (see below)
+        cp:         int or None
+                    if int>0, do checkpointing every cp steps
+        keep_cp:    bool
+                    if True, keep all checkpointed files, if False, only keep the last one
+        verbose:    int
+                    verbosity flag
+        solver:     str, can be any of {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}
+                    different intergration schemes; note that only RK45, RK23, LAN and SEXPMV work for complex arguments
+        rtol/atol:  float
+                    relative and absolute precision of the RK45 and RK23 solver
+
+        
         """
         
         if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
@@ -1654,6 +1695,170 @@ class TimeEvolutionEngine(Container,object):
         return self._t0
         #returns the center bond matrix and the gs energy
 
+    def doTwoSiteTDVP(self,dt,numsteps,Dmax,tr_thresh,krylov_dim=12,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
+        """
+        do real or imaginary time evolution using a two-site TDVP 
+
+        dt:         complex or float: 
+                    step size
+        numsteps:   int
+                    number of steps to be performed
+        Dmax:       int
+                    maximum bond dimension to be kept (overrides tr_thresh)
+        tr_thresh:  treshold for truncation of Schmidt values
+        krylov_dim: int 
+                    dimension of the krylov space used to perform evolution with solver='LAN' (see below)
+        cp:         int or None
+                    if int>0, do checkpointing every cp steps
+        keep_cp:    bool
+                    if True, keep all checkpointed files, if False, only keep the last one
+        verbose:    int
+                    verbosity flag
+        solver:     str, can be any of {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}
+                    different intergration schemes; note that only RK45, RK23, LAN and SEXPMV work for complex arguments
+        rtol/atol:  float
+                    relative and absolute precision of the RK45 and RK23 solver
+        """
+        
+        if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
+            raise ValueError("TDVPengine.doTwoSiteTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
+
+        if solver in ['Radau','RK45','BDF','LSODA','RK23']:
+            if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
+                warnings.warn('{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'.format(solver),stacklevel=2)
+                solver='LAN'
+
+        self._solver=solver
+        converged=False
+        current='None'
+        self._mps.__position__(0)
+        self._mps._D=Dmax
+        
+        for step in range(numsteps):
+            for n in range(self._mps._N-1):
+                if n==self._mps._N-2:
+                    dt_=dt
+                else:
+                    dt_=dt/2.0
+                self._mps.__position__(n+1)
+                #build the twosite mps
+                temp1=ncon.ncon([self._mps.__tensor__(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                Dl,dl,dr,Dr=temp1.shape
+                twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
+                temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
+                Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
+                twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
+                
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_,method=solver,rtol=rtol,atol=atol)
+                elif solver=='LAN':
+                    evTen=mf.evolveTensorLan(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_,krylov_dimension=krylov_dim) 
+                elif solver=='SEXPMV':                    
+                    evTen=mf.evolveTensorSexpmv(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_)
+
+                temp3=np.reshape(np.transpose(np.reshape(evTen,(Dl,Dr,dl,dr)),(0,2,3,1)),(Dl*dl,dr*Dr))
+                U,S,V=np.linalg.svd(temp3,full_matrices=False)
+                self._tw+=np.sum(S[S<=tr_thresh]**2)
+                S=S[S>tr_thresh]
+                Dnew=len(S)
+                Dnew=min(len(S),Dmax)
+                self._tw+=np.sum(S[Dnew::]**2)                
+                S=S[0:Dnew]
+                S/=np.linalg.norm(S)
+                U=U[:,0:Dnew]
+                V=V[0:Dnew,:]
+                
+                #the local two-site tensors has now been evolved forward by a half-time-step.
+                #the right-most twosite mps is evolved by a full time step.
+                self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
+                self._mps[n+1]=np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1))
+                self._mps._mat=np.diag(S)
+                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
+
+                if n<len(self._mps)-2:
+                    if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                        evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
+                    elif solver=='LAN':
+                        evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
+                    elif solver=='SEXPMV':                    
+                        evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_)
+                
+                    tensor,mat,Z=mf.prepareTensor(evTen,1)
+                    self._mps[n+1]=tensor
+                    self._mps._mat=mat
+                    self._mps._position=n+2
+                    
+            for n in range(self._mps._N-3,-1,-1):
+                dt_=dt/2.0
+                #evolve the right tensor at positoin n+1 backwards. Note that the tensor at N-1 has already been fully evolved forward at this point.
+                self._mps.__position__(n+1)
+                self._R[self._mps._N-n-2]=mf.addLayer(self._R[self._mps._N-3-n],self._mps[n+2],self._mpo[n+2],self._mps[n+2],-1)
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
+                elif solver=='LAN':
+                    evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
+                elif solver=='SEXPMV':                    
+                    evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_)
+
+                tensor,mat,Z=mf.prepareTensor(evTen,-1) 
+                self._mps[n+1]=tensor
+                self._mps._mat=mat
+
+                #now evolve the two-site tensor forward
+                #build the twosite mps
+                temp1=ncon.ncon([self._mps.__tensor__(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                Dl,dl,dr,Dr=temp1.shape
+                twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
+                temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
+                Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
+                twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
+                
+                if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_,method=solver,rtol=rtol,atol=atol)
+                elif solver=='LAN':
+                    evTen=mf.evolveTensorLan(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_,krylov_dimension=krylov_dim) 
+                elif solver=='SEXPMV':                    
+                    evTen=mf.evolveTensorSexpmv(self._L[n],twositempo,self._R[self._mps._N-2-n],twositemps,dt_)
+
+                temp3=np.reshape(np.transpose(np.reshape(evTen,(Dl,Dr,dl,dr)),(0,2,3,1)),(Dl*dl,dr*Dr))
+                U,S,V=np.linalg.svd(temp3,full_matrices=False)
+                self._tw+=np.sum(S[S<=tr_thresh]**2)                
+                S=S[S>tr_thresh]
+                Dnew=len(S)
+                Dnew=min(len(S),Dmax)
+                self._tw+=np.sum(S[Dnew::]**2)
+                S=S[0:Dnew]
+                S/=np.linalg.norm(S)
+                U=U[:,0:Dnew]
+                V=V[0:Dnew,:]
+                #the local two-site tensors has now been evolved forward by a half-time-step.
+                #the right-most twosite mps is evolved by a full time step.
+                self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
+                self._mps[n+1]=np.transpose(np.reshape(V,(Dnew,dr,Dr)),(0,2,1))
+                self._mps._mat=np.diag(S)
+                
+            if verbose>=1:
+                self._t0+=np.abs(dt)
+                stdout.write("\rTwo-site TDVP engine using %s solver: t=%4.4f, truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self._solver,self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
+                stdout.flush()
+            if verbose>=2:                
+                print('')
+            if (cp!=None) and (self._it>0) and (self._it%cp==0):
+                if not keep_cp:
+                    if os.path.exists(current+'.pickle'):
+                        os.remove(current+'.pickle')
+                    current=self._filename+'_two_site_tdvp_cp'+str(self._it)
+                    self.save(current)
+                else:
+                    current=self._filename+'_two_site_tdvp_cp'+str(self._it)
+                    self.save(current)
+
+            self._it=self._it+1
+        self._mps.position(0)
+        self._mps.resetZ()        
+        return self._t0
+        #returns the center bond matrix and the gs energy
+        
 # ============================================================================     everything below this line is still in development =================================================
 def matvec(Heff,Henv,mpo,vec):
     D=Heff.shape[0]
