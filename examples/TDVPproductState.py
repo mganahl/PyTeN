@@ -67,7 +67,7 @@ if __name__ == "__main__":
     it=0  #counts the total iteration number
     solver='LAN'
     tw=0  #accumulates the truncated weight (see below)
-    help(engine.doTwoSiteTDVP)
+
     for n in range(Nmax):
         #do numsteps TEBD steps 
         it1=engine.doTwoSiteTDVP(dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,krylov_dim=10,solver=solver)
