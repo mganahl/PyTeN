@@ -1293,7 +1293,7 @@ class TimeEvolutionEngine(Container,object):
     def TEBD(cls,mps,gatecontainer,filename):
         """
         TimeEvolutionEngine.TEBD(mps,mpo,filename):
-        initialize a TEBD vsimulation; this is an engine for real or imaginary time evolution using TEBD
+        initialize a TEBD simulation for finite systems. this is an engine for real or imaginary time evolution using TEBD
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
@@ -1317,7 +1317,7 @@ class TimeEvolutionEngine(Container,object):
     def TDVP(cls,mps,mpo,filename,lb=None,rb=None):
         """
         TimeEvolutionEngine.TDVP(mps,mpo,filename):
-        initialize a TDVP simulation; this is an engine for real or imaginary time evolution using TDVP
+        initialize a TDVP simulation for finite systems; this is an engine for real or imaginary time evolution using TDVP
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
@@ -1336,7 +1336,7 @@ class TimeEvolutionEngine(Container,object):
     def __init__(self,mps,mpo,filename,lb=None,rb=None):
         """
         TimeEvolutionEngine.__init__(mps,mpo,filename):
-        initialize a TDVP or TEBD  simulation; this is an engine for real or imaginary time evolution
+        initialize a TDVP or TEBD  simulation for finite systems; this is an engine for real or imaginary time evolution
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
@@ -1490,6 +1490,9 @@ class TimeEvolutionEngine(Container,object):
                    checkpointing flag: checkpoint every cp steps
         keep_cp:   bool
                    if True, keep all checkpointed files, if False, only keep the last one
+
+        Returns:
+        a tuple containing the truncated weight and the simulated time
         """
 
         #even half-step:
@@ -1602,8 +1605,9 @@ class TimeEvolutionEngine(Container,object):
 
     def __doTDVP__(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
         """
-        do real or imaginary time evolution using a single-site TDVP 
-
+        do real or imaginary time evolution for finite systems using single-site TDVP 
+        Parameters:
+        ----------------------------------------
         dt:         complex or float: 
                     step size
         numsteps:   int
@@ -1620,7 +1624,8 @@ class TimeEvolutionEngine(Container,object):
                     different intergration schemes; note that only RK45, RK23, LAN and SEXPMV work for complex arguments
         rtol/atol:  float
                     relative and absolute precision of the RK45 and RK23 solver
-
+        Returns:
+        the simulated time
         
         """
         
@@ -1695,10 +1700,13 @@ class TimeEvolutionEngine(Container,object):
         return self._t0
         #returns the center bond matrix and the gs energy
 
+
     def doTwoSiteTDVP(self,dt,numsteps,Dmax,tr_thresh,krylov_dim=12,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
         """
-        do real or imaginary time evolution using a two-site TDVP 
-
+        do real or imaginary time evolution for finite systems using a two-site TDVP 
+        
+        Parameters:
+        --------------------------------------------
         dt:         complex or float: 
                     step size
         numsteps:   int
@@ -1718,6 +1726,9 @@ class TimeEvolutionEngine(Container,object):
                     different intergration schemes; note that only RK45, RK23, LAN and SEXPMV work for complex arguments
         rtol/atol:  float
                     relative and absolute precision of the RK45 and RK23 solver
+        Returns:
+        a tuple containing the truncated weight and the simulated time
+
         """
         
         if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
@@ -1856,8 +1867,16 @@ class TimeEvolutionEngine(Container,object):
             self._it=self._it+1
         self._mps.position(0)
         self._mps.resetZ()        
-        return self._t0
+        return self._tw,self._t0    
         #returns the center bond matrix and the gs energy
+
+
+
+
+
+
+
+
         
 # ============================================================================     everything below this line is still in development =================================================
 def matvec(Heff,Henv,mpo,vec):
@@ -1867,7 +1886,6 @@ def matvec(Heff,Henv,mpo,vec):
     return np.reshape(ncon.ncon([Heff,mpo,tensor],[[1,-1,3,4,-2,5],[3,5,2,-3],[1,4,2]])+ncon.ncon([Henv,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
 
 def gram(Neff,mpo,vec):
-
     D=Neff.shape[0]
     d=mpo.shape[2]
     tensor=np.reshape(vec,(D,D,d))
