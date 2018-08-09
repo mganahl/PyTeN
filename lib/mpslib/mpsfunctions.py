@@ -1611,8 +1611,8 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
 
         if np.issubdtype(dtype,np.dtype(float)):
             out=np.reshape(vec[:,m],chi1*chi1)
-            if np.linalg.norm(np.imag(out))>1E-10:
-                raise TypeError("UnitcellTMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
+            if np.linalg.norm(np.imag(out))>1E-6:
+                raise TypeError("TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
             return np.real(eta[m]),np.real(out),numeig
         if np.issubdtype(dtype,np.dtype(complex)):        
             return eta[m],np.reshape(vec[:,m],chi1*chi1),numeig

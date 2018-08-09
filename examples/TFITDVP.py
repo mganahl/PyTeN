@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-10)',type=float,default=1E-10)
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-10)',type=float,default=1E-10)
     parser.add_argument('--epsilon', help='desired convergence of the state (1E-5)',type=float,default=1E-6)
-    parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=20000)
+    parser.add_argument('--imax', help='maximum number of iterations (20000)',type=int,default=200)
     parser.add_argument('--filename', help='filename for output (TFITDVP)',type=str,default='TFITDVP')
     parser.add_argument('--numeig', help='number of eigenvector in TMeigs',type=int,default=5)
     parser.add_argument('--ncv', help='number of krylov vectors in TMeigs',type=int,default=20)

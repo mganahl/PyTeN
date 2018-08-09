@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('--imax', help='maximum number of time steps (1000)',type=int,default=1000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
     parser.add_argument('--filename', help='filename for output (TFI_VUMPS_TDVP)',type=str,default='TFI_VUMPS_TDVP')
-    parser.add_argument('--ncv', help='number of krylov vectors in TMeigs (20)',type=int,default=40)
+    parser.add_argument('--ncv', help='number of krylov vectors in TMeigs (40)',type=int,default=40)
     parser.add_argument('--svd', help='do svd instead of polar decompostion for  guage matching',action="store_true")    
     parser.add_argument('--krylov_dim', help='number of Krylov vectors in lan (10)',type=int,default=10)
     parser.add_argument('--atol', help='absolute tolerance of RK45 and RK32 solver (1E-12)',type=float,default=1E-12)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
                     verbose=args.verbose,rtol=args.rtol,atol=args.atol)
 
         
-    [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
+    [Gamma,lam,r]=mf.regauge(iMPS._B,gauge='symmetric',tol=args.regaugetol)
     print('Schmidt values, normalization')
     print(lam,np.sum(lam**2))
     print('normalized and rescaled natural logarithm of Schmidt values')    

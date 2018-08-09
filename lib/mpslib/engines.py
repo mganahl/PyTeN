@@ -975,10 +975,13 @@ class VUMPSengine(Container,object):
 
     
     def __doOptimStep__(self):
-
         AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False))
-        C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mps._mat)
-        self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))
+        if self._mps._position==1:
+            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mps._mat)
+            self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))            
+        if self._mps._position==0:
+            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._B,self._rb,position='left',mat=self._mps._mat)
+            self._gradnorm=np.linalg.norm(AC_-ncon.ncon([C_,self._B],[[-1,1],[1,-2,-3]]))            
 
         if self._solver=='AR':
             e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),self._artol_,numvecs=self._arnumvecs,numcv=self._arncv,numvecs_returned=self._arnumvecs)
@@ -1024,8 +1027,8 @@ class VUMPSengine(Container,object):
         self._mps[0]=np.copy(self._A)
         self._mps._mat=np.copy(mat)
         self._mps._connector=np.linalg.pinv(mat)
-
-
+        self._mps._position=1
+        
     def simulate(self,*args,**kwargs):
         """
         see __simulate__
@@ -1226,10 +1229,10 @@ class VUMPSengine(Container,object):
         Ur,Sr,Vr=mf.svd(CAC_r)
         self._A=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
         self._B=np.reshape(Ur.dot(Vr),(D1,D2,d))
-        self._mps[0]=np.copy(self._A)
+        self._mps[0]=np.copy(self._B)
         self._mps._mat=np.copy(evMat)
         self._mps._connector=np.linalg.pinv(evMat)
-        self._mps._position=1
+        self._mps._position=0
 
     def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
         """
@@ -1283,7 +1286,6 @@ class VUMPSengine(Container,object):
             if (cp!=None) and (self._it>0) and (self._it%cp==0):
                 if not keep_cp:
                     if os.path.exists(current+'.pickle'):
-                        print('removing ',current)
                         os.remove(current+'.pickle')
                     current=self._filename+'_tdvp_cp'+str(self._it)
                     self.save(current)

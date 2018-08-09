@@ -75,7 +75,6 @@ if __name__ == "__main__":
     
     mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-    filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
     mps.regauge(gauge='right')
 
     if args.load==None:
