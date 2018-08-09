@@ -30,10 +30,11 @@ if __name__ == "__main__":
     parser.add_argument('--solver', help='solver type;  us lan, rk45 or rk32',type=str,default='lan')        
     parser.add_argument('--Jx', help='Jx intercation (-1.0)',type=float,default=-1.0)
     parser.add_argument('--Bz', help='magnetic field (1.0)',type=float,default=1.0)
+    parser.add_argument('--load', help='load a file (None)',type=str)        
     parser.add_argument('--scaling',help='scaling of the initial MPS entries (0.5)',type=float,default=0.5)    
     parser.add_argument('--lgmrestol', help='lgmres tolerance for reduced hamiltonians (1E-12)',type=float,default=1E-12)
     parser.add_argument('--regaugetol', help='tolerance of eigensolver for finding left and right reduced DM (1E-12)',type=float,default=1E-12)
-    parser.add_argument('--dt', help='time step (1E-2)',type=complex,default=1E-2)
+    parser.add_argument('--dt', help='time step; use negative imaginary for imaginary time evolution (-0.01j)',type=complex,default=-0.01j)
     parser.add_argument('--imax', help='maximum number of time steps (1000)',type=int,default=1000)
     parser.add_argument('--saveit', help='save the simulation every saveit iterations for checkpointing (10)',type=int,default=10)
     parser.add_argument('--filename', help='filename for output (TFI_VUMPS_TDVP)',type=str,default='TFI_VUMPS_TDVP')
@@ -56,37 +57,44 @@ if __name__ == "__main__":
         input()
     elif not os.path.exists(filename):
         os.mkdir(filename)
-    os.chdir(filename)
+
 
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
     mpo=H.TFI(Jx,B,False)
-    
     if args.dtype=='complex':
         dtype=complex
     elif args.dtype=='float':
         dtype=float        
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
-    try:
-        mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
-        #normalize the state by sweeping the orthogonalizty center once back and forth through the system
+    if args.load==None:
+        os.chdir(filename)        
+        try:
+            mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
+            #normalize the state by sweeping the orthogonalizty center once back and forth through the system
+        
+            mps.regauge(gauge='right')
+            iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
+            #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
+            iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
+                        verbose=args.verbose,rtol=args.rtol,atol=args.atol)
+        except TypeError:
+            dtype=complex
+            mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
+            #normalize the state by sweeping the orthogonalizty center once back and forth through the system
+            filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
+            mps.regauge(gauge='right')
+            iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
+            #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
+            iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
+                        verbose=args.verbose,rtol=args.rtol,atol=args.atol)
+    else:
+        iMPS=en.VUMPSengine.load(args.load)
+        os.chdir(filename)        
+        iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
+                    verbose=args.verbose,rtol=args.rtol,atol=args.atol)
 
-        mps.regauge(gauge='right')
-        iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
-        #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
-        iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
-                    verbose=args.verbose,rtol=args.rtol,atol=args.atol)
-    except TypeError:
-        dtype=complex
-        mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
-        #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-        filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jx,args.Bz)
-        mps.regauge(gauge='right')
-        iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
-        #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
-        iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
-                    verbose=args.verbose,rtol=args.rtol,atol=args.atol)
         
     [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
     print('Schmidt values, normalization')

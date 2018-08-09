@@ -60,7 +60,7 @@ if __name__ == "__main__":
         input()
     elif not os.path.exists(filename):
         os.mkdir(filename)
-    os.chdir(filename)
+
     
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
@@ -79,11 +79,13 @@ if __name__ == "__main__":
     mps.regauge(gauge='right')
 
     if args.load==None:
+        os.chdir(filename)        
         iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)        
         iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
                       arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
     else:
         iMPS=en.VUMPSengine.load(args.load)
+        os.chdir(filename)        
         iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
                       arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False)
         

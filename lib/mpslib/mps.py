@@ -139,7 +139,6 @@ class MPS(object):
         """
         return self._position
     
-    
 
     @classmethod
     def random(cls,N,D,d,obc,scaling=0.5,dtype=np.dtype(float),shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
@@ -627,6 +626,7 @@ class MPS(object):
         """
         
         return mf.overlap(self,mps)
+    
     def dot(self,mps):
         """
         calculate the overlap of self with mps 
@@ -1361,4 +1361,3 @@ class MPS(object):
         self._lambda=mps._lambda
         
         
-

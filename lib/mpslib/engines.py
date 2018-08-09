@@ -54,8 +54,20 @@ class Container(object):
         filename: str
                   the filename of the object to be loaded
         """
-        with open(filename+'.pickle', 'rb') as f:
-            return pickle.load(f)
+        try:
+            drive, path_and_file = os.path.splitdrive(filename)
+            path, thefile = os.path.split(path_and_file)
+            root=os.getcwd()
+            os.chdir(path)        
+            with open(thefile, 'rb') as f:
+                out=pickle.load(f)
+            os.chdir(root)
+            return out
+        except FileNotFoundError:
+            with open(filename, 'rb') as f:
+                out=pickle.load(f)
+            
+            return out
 
     @property
     def mps(self):
@@ -1259,18 +1271,19 @@ class VUMPSengine(Container,object):
                 solver='LAN'
 
         current='None'
-        for step in range(numsteps):
+        while self._it <=numsteps:
             Edens,Elocright,leftn,rightn=self.__prepareStep__()            
             self.__doEvoStep__(solver,dt,krylov_dim,rtol,atol)
             if verbose>=1:
                 self._t0+=np.abs(dt)
-                stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,step,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self._mps.D),np.abs(dt)))                
+                stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,self._it,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self._mps.D),np.abs(dt)))                
                 stdout.flush()
             if verbose>=2:                
                 print('')
             if (cp!=None) and (self._it>0) and (self._it%cp==0):
                 if not keep_cp:
                     if os.path.exists(current+'.pickle'):
+                        print('removing ',current)
                         os.remove(current+'.pickle')
                     current=self._filename+'_tdvp_cp'+str(self._it)
                     self.save(current)
@@ -1278,7 +1291,7 @@ class VUMPSengine(Container,object):
                     current=self._filename+'_tdvp_cp'+str(self._it)
                     self.save(current)
 
-            self._it=self._it+1
+            self._it+=1
         self._mps.position(0)
         self._mps.resetZ()        
         return self._t0

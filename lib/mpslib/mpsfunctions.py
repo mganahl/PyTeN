@@ -1571,14 +1571,26 @@ def GeneralizedMatrixVectorProduct(direction,A,B,vector):
 
 def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
     """
-    TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
     sparse computation of the dominant left or right eigenvector of the transfer matrix, using the TransferOperator function to
     to do the matrix-vector multiplication
-    tensor: an ndarray or MPS object of length 1;
-    direction: int, direction>0 gives the left eigenvector, direction<0 gives the right eigenvector
-    numeig: hyperparameter, number of eigenvectors to be calculated by argpack; note that numeig is not the 
-            number of returned eigenvectors, this number will always be one; numeig influences the arpack solver
-            due to a bug in lapack/arpack, and should usually be chosen >4 for stability reasonsl
+    tensor:     ndarray or MPS object of length 1
+                the mps tensor
+    direction:  int 
+                direction>0 gives the left eigenvector, direction<0 gives the right eigenvector
+    numeig:     int 
+                hyperparameter, number of eigenvectors to be calculated by argpack; note that numeig is not the 
+                number of returned eigenvectors, the number of returned eigenvectors is always one; numeig influences the arpack solver
+                due to a bug in lapack/arpack, and should usually be chosen >4 for stability reasons
+    init:       None or np.ndarray of shape D**2
+                an initial guess for the eigenvector
+    nmax:       int
+                maximum numbers of iteration in eigs
+    tolerance:  float
+                precision of the eigen-values
+    ncv:        int
+                number of krylov vectors in eigs
+    which:      str, any of {'LR','SM','LA','SA'}
+                which eigenvector to calculate; use 'LR' or 'SM' 
     """
 
     dtype=tensor.dtype
@@ -1612,50 +1624,109 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
         return TMeigs(tensor,direction,numeig,np.random.rand(chi1*chi2),nmax,tolerance,ncv,which)
         
 
-
-#takes a vector, returns a vector
 def UnitcellTransferOperator(direction,mps,vector):
     """
-    
+    computes the transfer matrix vector product 
+    mps: list of ndarray or MPS object
+    direction: int
+               direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
+             the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
+             
+    returns: a vector obtained from the contracting the input vector with the utni-cell transfer operator
     """
+    
+    #return MixedUnitcellTransferOperator(direction,mps,mps,vector)
     [D1l,D2l,dl]= np.shape(mps[0])
-    [D1r,D2r,dr]= np.shape(mps[-1])
+    [D1r,D2r,dr]= np.shape(mps[len(mps)-1])
+    if D1l!=D2r:
+        raise ValueError("UnitcellTransferOperator: mps[0] and mps[-1] have non-matching dimensions")
     x=np.copy(vector)
     if direction>0:
+        x=np.reshape(vector,(D1l,D1l))
         for n in range(len(mps)):
-            x=TransferOperator(direction,mps[n],x)
-        return x
+            x=np.tensordot(np.tensordot(x,mps[n],([0],[0])),np.conj(mps[n]),([0,2],[0,2]))
+        return np.reshape(x,(D2r*D2r))
     if direction<0:
+        x=np.reshape(vector,(D2r,D2r))
         for n in range(len(mps)-1,-1,-1):
-            x=TransferOperator(direction,mps[n],x)
-        return x
+            x=np.tensordot(np.tensordot(x,mps[n],([0],[1])),np.conj(mps[n]),([0,2],[1,2]))
+        return np.reshape(x,(D1l*D1l))
+    
 
-
-#takes a vector, returns a vector
-#mps1 is the lower (conjugated) MPS, mps2 the upper (unconjugated) MPS
 def MixedUnitcellTransferOperator(direction,Upper,Lower,vector):
+
+    """
+    computes the mixed transfer-matrix vector product 
+    mps: list of ndarray or MPS object
+    direction: int
+               direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
+             the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
+             
+    returns: a vector obtained from the contracting the input vector with the utni-cell transfer operator
+    """
+    
+    if len(Upper)!=len(Lower):
+        raise ValueError("MixedUnitcellTransferOperator: Upper and Lower mps have different lengths")
+    
+    [D1l,D2l,dl]= np.shape(Upper[0])
+    [D1l_,D2l_,dl_]= np.shape(Lower[0])
+    
+    [D1r,D2r,dr]= np.shape(Upper[len(Upper)-1])
+    [D1r_,D2r_,dr_]= np.shape(Lower[len(Lower)-1])    
+    if D1l!=D2r:
+        raise ValueError("MixedUnitcellTransferOperator: Upper[0] and Upper[-1] have non-matching dimensions")
+    if D1l_!=D2r_:
+        raise ValueError("MixedUnitcellTransferOperator: Lower[0] and Lower[-1] have non-matching dimensions")
+    
     x=np.copy(vector)
-    assert(len(mps1)==len(mps2))
     if direction>0:
-        #bring the vector in matrix form
-        for n in range(len(mps1)):
-            x=MixedTransferOperator(direction,Upper[n],Lower[n],x)
-        return x
+        x=np.reshape(vector,(D1l,D1l_))
+        for n in range(len(mps)):
+            x=np.tensordot(np.tensordot(x,Upper[n],([0],[0])),np.conj(Lower[n]),([0,2],[0,2]))
+        return np.reshape(x,(D2r*D2r_))
     if direction<0:
-        #bring the vector in matrix form
-        for n in range(len(mps1)-1,-1,-1):
-            x=MixedTransferOperator(direction,Upper[n],Lower[n],x)
-        return x
+        x=np.reshape(vector,(D2r,D2r_))
+        for n in range(len(mps)-1,-1,-1):
+            x=np.tensordot(np.tensordot(x,Upper[n],([0],[1])),np.conj(Lower[n]),([0,2],[1,2]))
+        return np.reshape(x,(D1l*D1l_))
 
 
-#returns the unitcellTO eigenvector with 'LR'
+
 def UnitcellTMeigs(mps,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=10,which='LM'):
-    #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
+    """
+    sparse computation of the dominant left or right eigenvector of the transfer matrix
+    Parameters:
+    -----------------------------------------------
+    mps:        list of np.ndarray, or MPS object
+                the mps tensor
+    direction:  int 
+                direction>0 gives the left eigenvector, direction<0 gives the right eigenvector
+    numeig:     int 
+                hyperparameter, number of eigenvectors to be calculated by argpack; note that numeig is not the 
+                number of returned eigenvectors, the number of returned eigenvectors is always one; numeig influences the arpack solver
+                due to a bug in lapack/arpack, and should usually be chosen >4 for stability reasons
+    init:       None or np.ndarray of shape D**2
+                an initial guess for the eigenvector
+    nmax:       int
+                maximum numbers of iteration in eigs
+    tolerance:  float
+                precision of the eigen-values
+    ncv:        int
+                number of krylov vectors in eigs
+    which:      str, any of {'LR','SM','LA','SA'}
+                which eigenvector to calculate; use 'LR' or 'SM' 
+    """
+
+
     if isinstance(mps,MPSL.MPS):
-        dtype=mps.dtype
+        dtype=np.result_type(*mps._tensors)
+        if not np.issubdtype(dtype,mps.dtype):
+            raise TypeError("UnitcellTMeigs: result-type={0} and mps.dtype={1} are different".format(dtype,mps.dtype))
     elif isinstance(mps,list):
-        dtype=mps[0].dtype
-        
+        dtype=np.result_type(*mps)        
+
     [D1l,D2l,dl]=np.shape(mps[0])
     [D1r,D2r,dr]=np.shape(mps[-1])
     if D1l!=D2r:
@@ -1681,28 +1752,62 @@ def UnitcellTMeigs(mps,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=1
         return eta[m],np.reshape(vec[:,m],D1l*D1l),numeig
 
 
-#returns the mixed unitcellTO eigenvector with 'LR'
-#mps1 is the lower (conjugated) MPS, mps2 the upper (unconjugated) MPS
-def MixedUnitcellTMeigs(mps1,mps2,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=10,which='LM'):
-    #define the matrix vector product mv(v) using functools.partial and GeneralizedMatrixVectorProduct(direction,A,B,vector):
-    assert(len(mps1)==len(mps2))
-    for n in range(len(mps1)):
-        if(mps1[n].dtype!=mps2[n].dtype):
-            sys.exit('mpsfunction.py: MixedUnitcellTMeigs: mps1 and mps2 have different dtypes; use same dtype on both;')
-    [D1lmps1,D2lmps1,dlmps1]= np.shape(mps1[0])
-    [D1rmps1,D2rmps1,drmps1]= np.shape(mps1[-1])
+def MixedUnitcellTMeigs(Upper,Lower,direction,numeig,init=None,nmax=800,tolerance=1e-12,ncv=10,which='LM'):
+    """
+    sparse computation of the dominant left or right eigenvector of the mixed transfer matrix
+    Parameters:
+    -----------------------------------------------
+    Upper/Lower: list of np.ndarray, or MPS objects
+                 the mps tensor
+    direction:   int 
+                 direction>0 gives the left eigenvector, direction<0 gives the right eigenvector
+    numeig:      int 
+                 hyperparameter, number of eigenvectors to be calculated by argpack; note that numeig is not the 
+                 number of returned eigenvectors, the number of returned eigenvectors is always one; numeig influences the arpack solver
+                 due to a bug in lapack/arpack, and should usually be chosen >4 for stability reasons
+    init:        None or np.ndarray of shape D**2
+                 an initial guess for the eigenvector
+    nmax:        int
+                 maximum numbers of iteration in eigs
+    tolerance:   float
+                 precision of the eigen-values
+    ncv:         int
+                 number of krylov vectors in eigs
+    which:       str, any of {'LR','SM','LA','SA'}
+                 which eigenvector to calculate; use 'LR' or 'SM' 
 
-    [D1lmps2,D2lmps2,dlmps2]= np.shape(mps2[0])
-    [D1rmps2,D2rmps2,drmps2]= np.shape(mps2[-1])
+    Returns:
+    the eigenvector to the eigenvalue with largest absolute value
+    """
 
-    mv=fct.partial(MixedUnitcellTransferOperator,*[direction,mps2,mps1])
-    LOP=LinearOperator((D1lmps1*D1lmps2,D2rmps1*D2rmps2),matvec=mv,rmatvec=None,matmat=None,dtype=mps1[0].dtype)
+    if isinstance(Upper,MPSL.MPS) and isinstance(Lower,MPSL.MPS):
+        dtype=np.result_type([mps._tensors,Lower._tensors])
+
+    elif isinstance(Upper,list) and isinstance(Lower,list):
+        dtype=np.result_type([Upper,Lower])        
+    else:
+        raise TypeError("MixedUnitcellTMeigs: Upper and Lower have to be either both MPS objects or both lists of np.ndarrays")
+    
+    [D1l,D2l,dl]=np.shape(Upper[0])
+    [D1r,D2r,dr]=np.shape(Upper[-1])
+
+    [D1l_,D2l_,dl_]=np.shape(Lower[0])
+    [D1r_,D2r_,dr_]=np.shape(Lower[-1])
+    
+    if D1l!=D2r:
+        raise ValueError(" in UnitcellTMeigs: ancillary dimensions of the upper mps have to be the same on left and right side")
+    if D1l_!=D2r_:
+        raise ValueError(" in UnitcellTMeigs: ancillary dimensions of the lower mps have to be the same on left and right side")
+
+
+    mv=fct.partial(MixedUnitcellTransferOperator,*[direction,Upper,Lower])
+    LOP=LinearOperator((D1l*D1l_,D2r*D2r_),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
     m=np.argmax(np.abs(eta))
     if direction<0:
-        return eta[m],np.reshape(vec[:,m],D1lmps1*D1lmps2),numeig
+        return eta[m],vec[:,m]
     if direction>0:
-        return eta[m],np.reshape(vec[:,m],D2rmps1*D2rmps2),numeig
+        return eta[m],vec[:,m]
 
 
 #gets L and R at "index"; shifts position of mps to index
@@ -1895,7 +2000,6 @@ def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,directi
     else:
         raise TypeError("computeUCsteadyStateHamiltonianGMRES: unknow type for mps")
 
-    
     NUC=len(mps)
     [D1r,D2r,d]=np.shape(mps[NUC-1])
     [D1l,D2l,d]=np.shape(mps[0])
@@ -1927,7 +2031,6 @@ def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,directi
         [k2,info]=TDVPGMRESUC(mps,ldens,rdens,inhom,np.reshape(boundary,(D2r*D2r)),thresh,imax,datatype=dtype,direction=-1)
         R[:,:,-1]=np.reshape(k2,(D2r,D2r))
         return np.copy(R),h
-
 
 def pseudoUnitcellTransferOperator(direction,mps,ldens,rdens,vector):
     [D1l,D2l,dl]= np.shape(mps[0])
