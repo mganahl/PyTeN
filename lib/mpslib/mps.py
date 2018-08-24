@@ -1300,7 +1300,7 @@ class MPS(object):
         assert(len(mpo)==len(self))
         self.__position__(0)
         self.__absorbCenterMatrix__(1)
-        for n in range(len(mps)):
+        for n in range(len(self)):
             Ml,Mr,din,dout=mpo[n].shape 
             Dl,Dr,d=self[n].shape
             if n==0:
