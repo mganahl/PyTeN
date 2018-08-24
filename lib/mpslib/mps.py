@@ -1297,7 +1297,7 @@ class MPS(object):
         """
         applies an mpo to an mps; no truncation is done
         """
-        assert(len(mpo)==len(mps))
+        assert(len(mpo)==len(self))
         self.__position__(0)
         self.__absorbCenterMatrix__(1)
         for n in range(len(mps)):
