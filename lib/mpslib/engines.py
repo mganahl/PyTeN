@@ -237,11 +237,11 @@ class DMRGengine(Container,object):
         
     def optimize(self,n,tol=1E-6,ncv=40,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,verbose=0):
         if solver=='LOBPCG':
-            e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
+            e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
         elif solver=='AR':
-            e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
+            e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
         elif solver=='LAN':
-            e,opt=mf.lanczos(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
+            e,opt=mf.lanczos(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                               deltaEta=landeltaEta)
         else:
             raise ValueError("DMRGengine.optimize: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
@@ -256,9 +256,9 @@ class DMRGengine(Container,object):
         return e,opt
     
                 
-    def __simulate__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+    def simulate(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
-        DMRGengine.__simulate__(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+        DMRGengine.simulate(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         performs a single site DMRG optimization
         Nmax: maximum number of sweeps
         Econv: desired convergence of energy
@@ -275,7 +275,7 @@ class DMRGengine(Container,object):
 
         """
         if solver not in ['AR','LAN','LOBPCG']:
-            raise ValueError("DMRGengine.__simulate__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+            raise ValueError("DMRGengine.simulate: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
 
         self._solver=solver
         self._Nmax=Nmax
@@ -307,16 +307,10 @@ class DMRGengine(Container,object):
         self._mps.resetZ()
         return e
 
-    def simulate(self,*args,**kwargs):
-        """
-        see __simulate__
-        """
-        return self.__simulate__(*args,**kwargs)
-
         
-    def __simulateTwoSite__(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+    def simulateTwoSite(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
-        DMRGengine.__simulateTwoSite__(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+        DMRGengine.simulateTwoSite(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         performs a two site DMRG optimization
         Nmax: maximum number of sweeps
         Econv: desired convergence of energy
@@ -333,7 +327,7 @@ class DMRGengine(Container,object):
 
         """
         if solver not in ['AR','LAN','LOBPCG']:
-            raise ValueError("DMRGengine.__simulateTwoSite__: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
+            raise ValueError("DMRGengine.simulateTwoSite: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
         self._solver=solver
         
         self._Nmax=Nmax
@@ -341,11 +335,11 @@ class DMRGengine(Container,object):
         converged=False
         energy=100000.0
         it=1
-        self._mps.__position__(0)        
+        self._mps.position(0)        
         while not converged:
             for n in range(0,self._mps._N-2):
-                self._mps.__position__(n+1)
-                temp1=ncon.ncon([self._mps.__tensor__(n),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                self._mps.position(n+1)
+                temp1=ncon.ncon([self._mps.tensor(n),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
                 Dl,dl,dr,Dr=temp1.shape
                 twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
@@ -378,8 +372,8 @@ class DMRGengine(Container,object):
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
 
             for n in range(self._mps._N-2,-1,-1):
-                self._mps.__position__(n+1)
-                temp1=ncon.ncon([self._mps.__tensor__(n),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                self._mps.position(n+1)
+                temp1=ncon.ncon([self._mps.tensor(n),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
                 Dl,dl,dr,Dr=temp1.shape
                 twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
@@ -411,7 +405,7 @@ class DMRGengine(Container,object):
                 self._mps._mat=np.diag(S)
                 self._R[self._mps._N-1-n]=mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
 
-            self._mps.__position__(0)
+            self._mps.position(0)
             self._R[self._mps._N-1-n]=mf.addLayer(self._R[self._mps._N-1-n-1],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
             if np.abs(e-energy)<Econv:
                 converged=True
@@ -427,12 +421,6 @@ class DMRGengine(Container,object):
         self._mps.resetZ()            
         return e
         #returns the center bond matrix and the gs energy
-    def simulateTwoSite(self,*args,**kwargs):
-        """
-        see __simulateTwoSite__
-        """
-        return self.__simulateTwoSite__(*args,**kwargs)
-
 
 class IDMRGengine(DMRGengine,object):
     """
@@ -456,7 +444,7 @@ class IDMRGengine(DMRGengine,object):
 
     def __update__(self,regauge=False):
         
-        self._mps.__position__(self._mps._N)
+        self._mps.position(self._mps._N)
         #update the left boundary
         for site in range(int(self._mps._N/2)):
             self._lb=mf.addLayer(self._lb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],1)
@@ -470,7 +458,7 @@ class IDMRGengine(DMRGengine,object):
                 D=self._mps._tensors[n].shape[0]
             mps.append(np.copy(self._mps._tensors[n]))
 
-        self._mps.__position__(int(self._mps._N/2))
+        self._mps.position(int(self._mps._N/2))
         lamC=np.copy(self._mps._mat)
         connector=np.linalg.pinv(lamC)
 
@@ -478,7 +466,7 @@ class IDMRGengine(DMRGengine,object):
         for site in range(self._mps._N-1,int(self._mps._N/2)-1,-1):
             self._rb=mf.addLayer(self._rb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],-1)
 
-        self._mps.__position__(0)
+        self._mps.position(0)
         lamL=np.copy(self._mps._mat)
         #cut and patch the left half of the mps
         for n in range(int(self._mps._N/2)):
@@ -491,7 +479,7 @@ class IDMRGengine(DMRGengine,object):
         self._mps._position=int(self._mps._N/2)
         self._mps._mat=lamR.dot(self._mps._connector).dot(lamL)
         self._mps._connector=connector
-        self._mps.__position__(0)
+        self._mps.position(0)
         
         #cut and patch the mpo
         mf.patchmpo(self._mpo,int(self._mps._N/2))
@@ -506,9 +494,9 @@ class IDMRGengine(DMRGengine,object):
         return D
 
     
-    def __simulate__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):            
+    def simulate(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):            
         """
-        IDMRGengine.__simulate__(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
+        IDMRGengine.simulate(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
         run a single site IDMRG simulation
 
         Nmax: number of outer iterations
@@ -528,7 +516,7 @@ class IDMRGengine(DMRGengine,object):
                      are recalculated in this case; do NOT use regaugestep==1
         """
         if regaugestep==1:
-            raise ValueError("IDMRGengine.__simulate__(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
+            raise ValueError("IDMRGengine.simulate(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
         
         it=0
         converged=False
@@ -537,7 +525,7 @@ class IDMRGengine(DMRGengine,object):
         skip=False
         while not converged:
             regauge=False
-            e=super(IDMRGengine,self).__simulate__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
+            e=super(IDMRGengine,self).simulate(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
@@ -567,16 +555,9 @@ class IDMRGengine(DMRGengine,object):
         it=it+1
 
         
-    def simulate(self,*args,**kwargs):
+    def simulateTwoSite(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):
         """
-        see __simulate__
-        """
-        self.__simulate__(*args,**kwargs)
-
-        
-    def __simulateTwoSite__(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):
-        """
-        IDMRGengine.__simulateTwoSite__(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
+        IDMRGengine.simulateTwoSite(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
         run a twos-site IDMRG simulation
 
         Nmax:        number of outer iterations
@@ -597,7 +578,7 @@ class IDMRGengine(DMRGengine,object):
 
         """
         if regaugestep==1:
-            raise ValueError("IDMRGengine.__simulateTwoSite__(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
+            raise ValueError("IDMRGengine.simulateTwoSite(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
         print ('# simulation parameters:')
         print ('# of idmrg iterations: {0}'.format(Nmax))
         print ('# of sweeps per unit cell: {0}'.format(NUC))
@@ -610,7 +591,7 @@ class IDMRGengine(DMRGengine,object):
         skip=False
         while not converged:
             regauge=False
-            e=super(IDMRGengine,self).__simulateTwoSite__(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
+            e=super(IDMRGengine,self).simulateTwoSite(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
                                           landelta=landelta,landeltaEta=landeltaEta)
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
@@ -639,12 +620,7 @@ class IDMRGengine(DMRGengine,object):
                 break
         it=it+1
         self._mps.resetZ()
-    def simulateTwoSite(self,*args,**kwargs):
-        """
-        see __simulateTwoSite__
-        """
-        self.__simulateTwoSite__(*args,**kwargs)
-
+        
         
 class HomogeneousIMPSengine(Container,object):
     """
@@ -731,6 +707,7 @@ class HomogeneousIMPSengine(Container,object):
 
     def mps(self):
         raise NotImplementedError("")
+    
     def truncateMPS(self):
         raise NotImplementedError("")
     
@@ -818,10 +795,7 @@ class HomogeneousIMPSengine(Container,object):
 
         return Elocleft,leftn,rightn,converged
     
-    def simulate(self,*args,**kwargs):
-        self.__simulate__(*args,**kwargs)
-        
-    def __simulate__(self,checkpoint=100):
+    def simulate(self,checkpoint=100):
         converged=False
         Dchanged=False
         while converged==False:
@@ -846,9 +820,7 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine,object):
     def __init__(self,Nmax,mps,mpo,dx,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):        
         super(HomogeneousDiscretizedBosonEngine,self).__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40)
         
-    def simulate(self,*args,**kwargs):
-        self.__simulate__(*args,**kwargs)
-    def __simulate__(self,dx,mu,checkpoint=100):
+    def simulate(self,dx,mu,checkpoint=100):
         converged=False
         Dchanged=False
         while converged==False:
@@ -975,7 +947,7 @@ class VUMPSengine(Container,object):
 
     
     def __doOptimStep__(self):
-        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False))
+        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False))
         if self._mps._position==1:
             C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mps._mat)
             self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))            
@@ -984,7 +956,7 @@ class VUMPSengine(Container,object):
             self._gradnorm=np.linalg.norm(AC_-ncon.ncon([C_,self._B],[[-1,1],[1,-2,-3]]))            
 
         if self._solver=='AR':
-            e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),self._artol_,numvecs=self._arnumvecs,numcv=self._arncv,numvecs_returned=self._arnumvecs)
+            e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),self._artol_,numvecs=self._arnumvecs,numcv=self._arncv,numvecs_returned=self._arnumvecs)
             e2,mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mps._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
             if self._arnumvecs>1:
                 self._gap=e1[1]-e1[0]
@@ -992,7 +964,7 @@ class VUMPSengine(Container,object):
             mat/=np.linalg.norm(mat)                
 
         elif self._solver=='LAN':
-            e1,mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
+            e1,mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
             e2,mat=mf.lanczosbond(self._lb,self._mpo[1],self._A,self._rb,self._mps._mat,'right',self._Ndiag,self._nmaxlan,self._arnumvecs,delta=self._landelta,deltaEta=self._artol)
             if self._arnumvecs>1:
                 if len(e1)>1:
@@ -1036,16 +1008,6 @@ class VUMPSengine(Container,object):
         """
         warnings.warn('VUMPS.simulate is deprecated; use optimize')
         self.optimize(*args,**kwargs)
-        
-    def __simulate__(self,*args,**kwargs):
-        """
-        see __simulate__
-
-        """
-        warnings.warn('VUMPS.simulate is deprecated; use optimize')
-        self.optimize(*args,**kwargs)
-
-
         
         
     def optimize(self,Nmax,epsilon=1E-10,lgmrestol=1E-10,Nmaxlgmres=40,\
@@ -1148,11 +1110,11 @@ class VUMPSengine(Container,object):
         
         """
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':
-            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         elif solver=='SEXPMV':                    
-            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt)
+            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
         return evTen
 
     def __evolveMatrix__(self,solver,dt,krylov_dim,rtol,atol):
@@ -1205,11 +1167,11 @@ class VUMPSengine(Container,object):
 
 
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':
-            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         elif solver=='SEXPMV':                    
-            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.__tensor__(0,clear=False),dt)
+            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
      
         #evTen=self.__evolveTensor__(solver,dt,krylov_dim,rtol,atol)
         L=mf.addLayer(self._lb,self._A,self._mpo[1],self._A,direction=1)        
@@ -1390,7 +1352,7 @@ class TimeEvolutionEngine(Container,object):
         
         self._filename=filename
         self._N=mps._N
-        self._mps.__position__(0)
+        self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
         self._L.insert(0,self._lb)
         self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
@@ -1434,7 +1396,7 @@ class TimeEvolutionEngine(Container,object):
         updates the TimeevolutionEngine by recalculating left and right environment blocks
         such that the mps can be evolved with the mpo
         """
-        self._mps.__position__(0)
+        self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
         self._L.insert(0,self._lb)
         self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
@@ -1453,7 +1415,7 @@ class TimeEvolutionEngine(Container,object):
                    threshold for truncation
         """
         for n in range(0,self._mps._N-1,2):
-            tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
+            tw_,D=self._mps.applyTwoSiteGate(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
             self._maxD=max(self._maxD,D)
             self._tw+=tw_
 
@@ -1475,19 +1437,13 @@ class TimeEvolutionEngine(Container,object):
         elif self._mps._N%2==1:
             lstart=self._mps._N-2
         for n in range(lstart,-1,-2):
-            tw_,D=self._mps.__applyTwoSiteGate__(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
+            tw_,D=self._mps.applyTwoSiteGate(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
             self._maxD=max(self._maxD,D)                
             self._tw+=tw_
 
-    def doTEBD(self,*args,**kwargs):
+    def doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cp=None,keep_cp=False):
         """
-        see __doTEBD__
-        """
-        return self.__doTEBD__(*args,**kwargs)
-    
-    def __doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cp=None,keep_cp=False):
-        """
-        TEBDengine.__doTEBD__(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
+        TEBDengine.doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         uses a second order trotter decomposition to evolve the state using TEBD
         Parameters:
         -------------------------------
@@ -1576,11 +1532,11 @@ class TimeEvolutionEngine(Container,object):
         
         """
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorsolve_ivp(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':
-            evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         elif solver=='SEXPMV':                    
-            evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.__tensor__(n,clear=True),dt)
+            evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),dt)
         return evTen
 
     def __evolveMatrix__(self,n,solver,dt,krylov_dim,rtol,atol):
@@ -1615,10 +1571,7 @@ class TimeEvolutionEngine(Container,object):
 
     
     
-    def doTDVP(self,*args,**kwargs):
-        return self.__doTDVP__(*args,**kwargs)
-
-    def __doTDVP__(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
+    def doTDVP(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
         """
         do real or imaginary time evolution for finite systems using single-site TDVP 
         Parameters:
@@ -1645,7 +1598,7 @@ class TimeEvolutionEngine(Container,object):
         """
         
         if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
-            raise ValueError("TDVPengine.__doTDVP__(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
+            raise ValueError("TDVPengine.doTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
 
         if solver in ['Radau','RK45','BDF','LSODA','RK23']:
             if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
@@ -1655,14 +1608,14 @@ class TimeEvolutionEngine(Container,object):
         self._solver=solver
         converged=False
         current='None'
-        self._mps.__position__(0)
+        self._mps.position(0)
         for step in range(numsteps):
             for n in range(self._mps._N):
                 if n==self._mps._N-1:
                     dt_=dt
                 else:
                     dt_=dt/2.0
-                self._mps.__position__(n+1)
+                self._mps.position(n+1)
                 #evolve tensor forward
                 evTen=self.__evolveTensor__(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
                 tensor,mat,Z=mf.prepareTensor(evTen,1)
@@ -1679,7 +1632,7 @@ class TimeEvolutionEngine(Container,object):
             for n in range(self._mps._N-2,-1,-1):
                 dt_=dt/2.0
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
-                self._mps.__position__(n+1)
+                self._mps.position(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
                 evMat=self.__evolveMatrix__(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                                    
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
@@ -1757,7 +1710,7 @@ class TimeEvolutionEngine(Container,object):
         self._solver=solver
         converged=False
         current='None'
-        self._mps.__position__(0)
+        self._mps.position(0)
         self._mps._D=Dmax
         
         for step in range(numsteps):
@@ -1766,9 +1719,9 @@ class TimeEvolutionEngine(Container,object):
                     dt_=dt
                 else:
                     dt_=dt/2.0
-                self._mps.__position__(n+1)
+                self._mps.position(n+1)
                 #build the twosite mps
-                temp1=ncon.ncon([self._mps.__tensor__(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                temp1=ncon.ncon([self._mps.tensor(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
                 Dl,dl,dr,Dr=temp1.shape
                 twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
@@ -1803,11 +1756,11 @@ class TimeEvolutionEngine(Container,object):
 
                 if n<len(self._mps)-2:
                     if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-                        evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
+                        evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
                     elif solver=='LAN':
-                        evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
+                        evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
                     elif solver=='SEXPMV':                    
-                        evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_)
+                        evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_)
                 
                     tensor,mat,Z=mf.prepareTensor(evTen,1)
                     self._mps[n+1]=tensor
@@ -1817,14 +1770,14 @@ class TimeEvolutionEngine(Container,object):
             for n in range(self._mps._N-3,-1,-1):
                 dt_=dt/2.0
                 #evolve the right tensor at positoin n+1 backwards. Note that the tensor at N-1 has already been fully evolved forward at this point.
-                self._mps.__position__(n+1)
+                self._mps.position(n+1)
                 self._R[self._mps._N-n-2]=mf.addLayer(self._R[self._mps._N-3-n],self._mps[n+2],self._mpo[n+2],self._mps[n+2],-1)
                 if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-                    evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
+                    evTen=mf.evolveTensorsolve_ivp(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_,method=solver,rtol=rtol,atol=atol)
                 elif solver=='LAN':
-                    evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
+                    evTen=mf.evolveTensorLan(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_,krylov_dimension=krylov_dim)
                 elif solver=='SEXPMV':                    
-                    evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.__tensor__(n+1,clear=True),-dt_)
+                    evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[self._mps._N-2-n],self._mps.tensor(n+1,clear=True),-dt_)
 
                 tensor,mat,Z=mf.prepareTensor(evTen,-1) 
                 self._mps[n+1]=tensor
@@ -1832,7 +1785,7 @@ class TimeEvolutionEngine(Container,object):
 
                 #now evolve the two-site tensor forward
                 #build the twosite mps
-                temp1=ncon.ncon([self._mps.__tensor__(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
+                temp1=ncon.ncon([self._mps.tensor(n,clear=True),self._mps[n+1]],[[-1,1,-2],[1,-4,-3]])
                 Dl,dl,dr,Dr=temp1.shape
                 twositemps=np.transpose(np.reshape(temp1,(Dl,dl*dr,Dr)),(0,2,1))                    
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])

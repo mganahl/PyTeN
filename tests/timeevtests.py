@@ -162,8 +162,8 @@ class TestTimeEvolution(unittest.TestCase):
 
         mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex,schmidt_thresh=1E-16)
         mps._D=D
-        mps.__position__(self.N)
-        mps.__position__(0)
+        mps.position(self.N)
+        mps.position(0)
         self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         self.timeevmpo=H.XXZ(Jz,Jxy,Bz*np.ones(self.N),True)                
         
@@ -175,12 +175,12 @@ class TestTimeEvolution(unittest.TestCase):
         
     def testTEBD(self):
         N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
     
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
+        self.dmrg._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+        self.dmrg._mps.position(self.N)
+        self.dmrg._mps.position(0)
         self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate        
         engine=en.TimeEvolutionEngine(self.dmrg._mps,self.timeevmpo,"insert_name_here")
     
@@ -208,12 +208,12 @@ class TestTimeEvolution(unittest.TestCase):
         
     def testTDVP_LAN(self):
         N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
     
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
+        self.dmrg._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+        self.dmrg._mps.position(self.N)
+        self.dmrg._mps.position(0)
         self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
         
         engine=en.TimeEvolutionEngine(self.dmrg._mps,self.timeevmpo,"TDVP_insert_name_here")        
@@ -241,12 +241,12 @@ class TestTimeEvolution(unittest.TestCase):
         
     def testTDVP_RK45(self):
         N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
     
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
+        self.dmrg._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+        self.dmrg._mps.position(self.N)
+        self.dmrg._mps.position(0)
         self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
         
         engine=en.TimeEvolutionEngine(self.dmrg._mps,self.timeevmpo,"TDVP_insert_name_here")        
@@ -275,12 +275,12 @@ class TestTimeEvolution(unittest.TestCase):
         
     def testTDVP_SEXPMV(self):
         N=self.N
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
     
-        self.dmrg._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-        self.dmrg._mps.__position__(self.N)
-        self.dmrg._mps.__position__(0)
+        self.dmrg._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+        self.dmrg._mps.position(self.N)
+        self.dmrg._mps.position(0)
         self.dmrg._mps.resetZ() #don't forget to normalize the state again after application of the gate
         
         engine=en.TimeEvolutionEngine(self.dmrg._mps,self.timeevmpo,"TDVP_insert_name_here")        
@@ -400,8 +400,8 @@ class TestPlot(unittest.TestCase):
 
         mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex,schmidt_thresh=1E-16)
         mps._D=D
-        mps.__position__(self.N)
-        mps.__position__(0)
+        mps.position(self.N)
+        mps.position(0)
         self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         self.timeevmpo=H.XXZ(Jz,Jxy,Bz*np.ones(self.N),True)                
         
@@ -415,9 +415,9 @@ class TestPlot(unittest.TestCase):
     def test_plot_LAN(self):
         
         def run_sim(dmrgcontainer,solver):
-            dmrgcontainer._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-            dmrgcontainer._mps.__position__(self.N)
-            dmrgcontainer._mps.__position__(0)
+            dmrgcontainer._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+            dmrgcontainer._mps.position(self.N)
+            dmrgcontainer._mps.position(0)
 
             engine1=en.TimeEvolutionEngine(dmrgcontainer._mps,self.timeevmpo,"insert_name_here")
             engine2=en.TimeEvolutionEngine(dmrgcontainer._mps.__copy__(),self.timeevmpo,"TDVP_insert_name_here")        
@@ -541,8 +541,8 @@ class TestPlot(unittest.TestCase):
 
         N=self.N
         
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
         for solver in ['LAN','RK45','SEXPMV','RK23']:
             run_sim(copy.deepcopy(self.dmrg),solver)
 
@@ -637,8 +637,8 @@ class TestTwoSitePlot(unittest.TestCase):
 
         mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex,schmidt_thresh=1E-16)
         mps._D=D
-        mps.__position__(self.N)
-        mps.__position__(0)
+        mps.position(self.N)
+        mps.position(0)
         self.mpo=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         self.timeevmpo=H.XXZ(Jz,Jxy,Bz*np.ones(self.N),True)                
         
@@ -652,9 +652,9 @@ class TestTwoSitePlot(unittest.TestCase):
     def test_plot_LAN(self):
         
         def run_sim(dmrgcontainer,solver):
-            dmrgcontainer._mps.__applyOneSiteGate__(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
-            dmrgcontainer._mps.__position__(self.N)
-            dmrgcontainer._mps.__position__(0)
+            dmrgcontainer._mps.applyOneSiteGate(np.asarray([[0.0,0.0],[1.0,0.0]]),int(self.N/2))
+            dmrgcontainer._mps.position(self.N)
+            dmrgcontainer._mps.position(0)
 
             engine1=en.TimeEvolutionEngine(dmrgcontainer._mps,self.timeevmpo,"insert_name_here")
             engine2=en.TimeEvolutionEngine(dmrgcontainer._mps.__copy__(),self.timeevmpo,"TDVP_insert_name_here")        
@@ -778,8 +778,8 @@ class TestTwoSitePlot(unittest.TestCase):
 
         N=self.N
         
-        self.dmrg.__simulateTwoSite__(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(4,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
         for solver in ['LAN','RK45','SEXPMV','RK23']:
             run_sim(copy.deepcopy(self.dmrg),solver)
 

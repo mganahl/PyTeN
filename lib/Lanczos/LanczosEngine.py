@@ -41,7 +41,7 @@ class LanczosEngine(object):
         assert(Ndiag>0)
 
         
-    def __simulate__(self,initialstate,reortho=False,verbose=False):
+    def simulate(self,initialstate,reortho=False,verbose=False):
         """
         do a lanczos simulation
         initialstate: that's the initial state
@@ -135,7 +135,7 @@ class LanczosTimeEvolution(LanczosEngine,object):
         verbose: verbosity flag
         """
         self._dtype=type(dt)        
-        self.__simulate__(state.astype(self._dtype),verbose=True,reortho=True)
+        self.simulate(state.astype(self._dtype),verbose=True,reortho=True)
         #take the expm of self._Heff
         U=sp.linalg.expm(dt*self._Heff)
         result=np.zeros(state.shape,dtype=self._dtype)

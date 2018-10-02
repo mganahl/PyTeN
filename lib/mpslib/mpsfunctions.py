@@ -45,15 +45,15 @@ def overlap(mps1,mps2):
         pos1=mps1._position
         pos2=mps2._position        
         if (mps1._N-mps1._position)>mps1._position:
-            mps1.__position__(0)
-            mps2.__position__(0)        
+            mps1.position(0)
+            mps2.position(0)        
         else:
-            mps1.__position__(mps1._N)
-            mps2.__position__(mps2._N)
+            mps1.position(mps1._N)
+            mps2.position(mps2._N)
     #if (mps2._N-mps2._position)>mps2._position:
-    #    mps2.__position__(0)
+    #    mps2.position(0)
     #else:
-    #    mps2.__position__(mps2._N)        
+    #    mps2.position(mps2._N)        
 
 
     if len(mps1)!=len(mps2):
@@ -72,8 +72,8 @@ def overlap(mps1,mps2):
         L=addELayer(L,mps1[n],mps2[n],direction=1)
         
     if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):        
-        mps1.__position__(pos1)
-        mps2.__position__(pos2)    
+        mps1.position(pos1)
+        mps2.position(pos2)    
     return np.trace(L[:,:,0])*mps1._Z*np.conj(mps2._Z)
 
 def check_normalization(tensor,which,thresh=1E-10):
@@ -353,7 +353,7 @@ def measure4pointCorrelation(mps,ops,P=None):
     assert(len(ops)==4)
     N=len(mps)
     s=0
-    mps.__position__(0)
+    mps.position(0)
     par=len(ops)%2    
     L0=np.zeros((mps[0].shape[0],mps[0].shape[0],1))
     L0[:,:,0]=np.copy(np.eye(mps[0].shape[0]))
@@ -1162,7 +1162,7 @@ def lanczos(L,mpo,R,mps0,tolerance=1e-6,Ndiag=10,nmax=500,numeig=1,delta=1E-8,de
     mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
     LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
-    e,v,con=lan.__simulate__(initialstate=np.reshape(mps0,chi1*chi2*d).astype(dtype),verbose=False)
+    e,v,con=lan.simulate(initialstate=np.reshape(mps0,chi1*chi2*d).astype(dtype),verbose=False)
     if numeig==1:
         return e[0],np.reshape(v[0],(chi1p,chi2p,dp))
     else:
@@ -1183,7 +1183,7 @@ def lanczosbond(L,mpo,mps,R,mat0,position,Ndiag=10,nmax=500,numeig=1,delta=1E-10
     mv=fct.partial(HAproductZeroSite,*[L,mpo,mps,R,position])
     LOP=LinearOperator((chi1*chi2,chi1*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
     lan=lanEn.LanczosEngine(mv,np.dot,np.zeros,Ndiag,nmax,numeig,delta,deltaEta)
-    e,v,con=lan.__simulate__(initialstate=np.reshape(mat0,chi1*chi2).astype(dtype),verbose=False)
+    e,v,con=lan.simulate(initialstate=np.reshape(mat0,chi1*chi2).astype(dtype),verbose=False)
 
     if numeig==1:
         return e[0],np.reshape(v[0],(chi1p,chi2p))
@@ -1816,7 +1816,7 @@ def MixedUnitcellTMeigs(Upper,Lower,direction,numeig,init=None,nmax=800,toleranc
 def getBlockHam(mps,lbold,rbold,mpo,index):
     lb=np.copy(lbold)
     rb=np.copy(rbold)
-    mps.__position__(index)
+    mps.position(index)
     A,lam,Z=prepareTensor(mps._tensors[index],1)
     for n in range(index):
         lb=addLayer(lb,mps._tensors[n],mpo[n],mps._tensors[n],1)
@@ -1888,12 +1888,12 @@ def getBoundaryHams(mps,mpo,regauge=False):
     ToDo: allow passing precision parameters to __regauge__
     """
     if regauge:
-        mps.__regauge__('symmetric')
+        mps.regauge('symmetric')
     else:
         if (len(mps)-mps.pos)<mps.pos:
-            mps.__position__(len(mps))
+            mps.position(len(mps))
         else:
-            mps.__position__(0)
+            mps.position(0)
             
     if mps.pos==0:
         D=np.shape(mps[0])[0]
@@ -1915,7 +1915,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
         f0r=np.zeros((D*D))
         f0r,hr=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000)
         
-        mps.__position__(mps._N)
+        mps.position(mps._N)
         if regauge:
             phasematrix=mps._mat.dot(mps._connector)
             mps[-1]=ncon.ncon([mps[-1],phasematrix],[[-1,1,-3],[1,-2]])
@@ -1963,7 +1963,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
         f0l=np.zeros((D*D))
         f0l,hl=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0l,ldens,rdens,direction=1,thresh=1E-10,imax=1000)
         lb=np.copy(f0l)
-        mps.__position__(0)
+        mps.position(0)
         if regauge:
             phasematrix=mps._connector.dot(mps._mat)
             mps[0]=ncon.ncon([phasematrix,mps[0]],[[-1,1],[1,-2,-3]])

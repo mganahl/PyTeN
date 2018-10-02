@@ -473,11 +473,11 @@ class MPSArithmeticTests(unittest.TestCase):
             sz=[np.diag([1,-1]) for n in range(self.N)]
             ov12=self.mps1.__dot__(self.mps2)
             ov21=np.conj(ov12)
-            ob11=(np.asarray(self.mps1.__measureList__(sz)))
-            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
-            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
-            ob22=(np.asarray(self.mps2.__measureList__(sz)))
-            ob33=(np.asarray(mps.__measureList__(sz)))
+            ob11=(np.asarray(self.mps1.measureList(sz)))
+            ob12=(np.asarray(self.mps1.measureMatrixElementList(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.measureMatrixElementList(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.measureList(sz)))
+            ob33=(np.asarray(mps.measureList(sz)))
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2+ov12*a1*a2+ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2+ob21*a2*a1+ob12*a1*a2
@@ -499,11 +499,11 @@ class MPSArithmeticTests(unittest.TestCase):
             sz=[np.diag([1,-1]) for n in range(self.N)]
             ov12=self.mps1.__dot__(self.mps2)
             ov21=np.conj(ov12)
-            ob11=(np.asarray(self.mps1.__measureList__(sz)))
-            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
-            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
-            ob22=(np.asarray(self.mps2.__measureList__(sz)))
-            ob33=(np.asarray(mps.__measureList__(sz)))
+            ob11=(np.asarray(self.mps1.measureList(sz)))
+            ob12=(np.asarray(self.mps1.measureMatrixElementList(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.measureMatrixElementList(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.measureList(sz)))
+            ob33=(np.asarray(mps.measureList(sz)))
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2+ov12*a1*a2+ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2+ob21*a2*a1+ob12*a1*a2
@@ -524,11 +524,11 @@ class MPSArithmeticTests(unittest.TestCase):
             sz=[np.diag([1,-1]) for n in range(self.N)]
             ov12=self.mps1.__dot__(self.mps2)
             ov21=np.conj(ov12)
-            ob11=(np.asarray(self.mps1.__measureList__(sz)))
-            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
-            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
-            ob22=(np.asarray(self.mps2.__measureList__(sz)))
-            ob33=(np.asarray(mps.__measureList__(sz)))
+            ob11=(np.asarray(self.mps1.measureList(sz)))
+            ob12=(np.asarray(self.mps1.measureMatrixElementList(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.measureMatrixElementList(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.measureList(sz)))
+            ob33=(np.asarray(mps.measureList(sz)))
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
@@ -550,11 +550,11 @@ class MPSArithmeticTests(unittest.TestCase):
             sz=[np.diag([1,-1]) for n in range(self.N)]
             ov12=self.mps1.__dot__(self.mps2)
             ov21=np.conj(ov12)
-            ob11=(np.asarray(self.mps1.__measureList__(sz)))
-            ob12=(np.asarray(self.mps1.__measureMatrixElementList__(self.mps2,sz)))
-            ob21=np.conj(ob12)#(np.asarray(self.mps2.__measureMatrixElementList__(self.mps1,sz)))
-            ob22=(np.asarray(self.mps2.__measureList__(sz)))
-            ob33=(np.asarray(mps.__measureList__(sz)))
+            ob11=(np.asarray(self.mps1.measureList(sz)))
+            ob12=(np.asarray(self.mps1.measureMatrixElementList(self.mps2,sz)))
+            ob21=np.conj(ob12)#(np.asarray(self.mps2.measureMatrixElementList(self.mps1,sz)))
+            ob22=(np.asarray(self.mps2.measureList(sz)))
+            ob33=(np.asarray(mps.measureList(sz)))
             ov33=mps.__dot__(mps)
             Z=a1**2+a2**2-ov12*a1*a2-ov21*a1*a2
             M=ob11*a1**2+ob22*a2**2-ob21*a2*a1-ob12*a1*a2
@@ -571,7 +571,7 @@ class MPSArithmeticTests(unittest.TestCase):
         mps.position(0)
         mps.position(len(mps))
         sz=[np.diag([1,-1]) for n in range(self.N)]
-        ob33=(np.asarray(mps.__measureList__(sz)))
+        ob33=(np.asarray(mps.measureList(sz)))
         self.assertTrue(np.linalg.norm(ob33)<1E-10)
             
 
@@ -588,7 +588,7 @@ class MPSTests(unittest.TestCase):
     def testRegaugeLeftFloat(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='left',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
+        self.mps.regauge(gauge='left',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
             self.assertTrue(self.mps[n].dtype==float)
@@ -597,7 +597,7 @@ class MPSTests(unittest.TestCase):
         #create a random MPS
     
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=complex,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='left',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
+        self.mps.regauge(gauge='left',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
             self.assertTrue(self.mps[n].dtype==complex)            
@@ -606,7 +606,7 @@ class MPSTests(unittest.TestCase):
         #create a random MPS
     
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='right',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
+        self.mps.regauge(gauge='right',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
         
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([1,2],[1,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
@@ -615,7 +615,7 @@ class MPSTests(unittest.TestCase):
     def testRegaugeRightComplex(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=complex,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='right',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
+        self.mps.regauge(gauge='right',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
     
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([1,2],[1,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
@@ -624,7 +624,7 @@ class MPSTests(unittest.TestCase):
     def testRegaugeSymmetricFloat(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)
         
         for n in range(len(self.mps)):
             #print(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1])))
@@ -634,7 +634,7 @@ class MPSTests(unittest.TestCase):
     def testRegaugeSymmetricComplex(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=complex,schmidt_thresh=1E-16,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)        
+        self.mps.regauge(gauge='symmetric',nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12)        
         
         for n in range(len(self.mps)):
             #print(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1])))
@@ -648,7 +648,7 @@ class MPSTests(unittest.TestCase):
         dtype=float
 
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=complex,shift=0.4,schmidt_thresh=1E-14,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
             #print(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1])))
@@ -663,7 +663,7 @@ class MPSTests(unittest.TestCase):
         m1=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
-        self.mps.__truncate__(schmidt_thresh=1E-4,D=None)
+        self.mps.truncate(schmidt_thresh=1E-4,D=None)
         lb=np.expand_dims(np.eye(self.mps[0].shape[0]),2)
         #note that lam is a diagonal matrix
         rb=np.expand_dims(self.mps._mat**2,2)
@@ -679,7 +679,7 @@ class MPSTests(unittest.TestCase):
         dtype=complex
 
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.1,dtype=complex,shift=0.35,schmidt_thresh=1E-14,r_thresh=1E-16)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         for n in range(len(self.mps)):
             self.assertTrue(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1]))<self.eps)
             #print(np.linalg.norm(np.tensordot(self.mps[n],np.conj(self.mps[n]),([0,2],[0,2]))-np.eye(self.mps[n].shape[1])))
@@ -694,7 +694,7 @@ class MPSTests(unittest.TestCase):
         m1=mf.measureLocal(self.mps,operators=Ops,lb=lb,rb=rb,ortho='left')
         shapes=list(map(np.shape,self.mps._tensors))
         #print(shapes)
-        self.mps.__truncate__(schmidt_thresh=1E-5,D=None)
+        self.mps.truncate(schmidt_thresh=1E-5,D=None)
         lb=np.expand_dims(np.eye(self.mps[0].shape[0]),2)
         #note that lam is a diagonal matrix
         rb=np.expand_dims(self.mps._mat**2,2)
@@ -710,15 +710,15 @@ class MPSTests(unittest.TestCase):
         Jz=np.ones(self.N)
         Jxy=np.ones(self.N)
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=True)
-        self.mps.__position__(self.N-1)
-        self.mps.__position__(0)
+        self.mps.position(self.N-1)
+        self.mps.position(0)
         mpoobc=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
         dmrg=en.DMRGengine(self.mps,mpoobc,'blabla',lb,rb)
         dmrg.__simulate__(20,1e-13,1e-10,50,verbose=0,cp=10)
-        dmrg._mps.__position__(self.N)
-        dmrg._mps.__position__(0)
+        dmrg._mps.position(self.N)
+        dmrg._mps.position(0)
         
         Sz=np.diag([0.5,-0.5])
         
@@ -732,9 +732,9 @@ class MPSTests(unittest.TestCase):
             meanSzSz.append(dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n])))        
             
         Dt=18
-        dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
-        dmrg._mps.__position__(self.N)
-        dmrg._mps.__position__(0)
+        dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+        dmrg._mps.position(self.N)
+        dmrg._mps.position(0)
 
         self.assertTrue(dmrg._mps.__D__()<=[Dt]*len(dmrg._mps))
         meanSzSztrunc=[]
@@ -800,7 +800,7 @@ class CanonizeTests(unittest.TestCase):
     def testCanonizePBCMPSFloatMPS(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=float)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         Gamma,Lambda=mf.canonizeMPS(self.mps)
         for n in range(len(Gamma)):
             A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
@@ -812,7 +812,7 @@ class CanonizeTests(unittest.TestCase):
     def testCanonizePBCMPSComplexMPS(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=complex)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         Gamma,Lambda=mf.canonizeMPS(self.mps)
         for n in range(len(Gamma)):
             A=np.tensordot(np.diag(Lambda[n]),Gamma[n],([1],[0]))
@@ -885,7 +885,7 @@ class CanonizeTestsMPS(unittest.TestCase):
     def testCanonizePBCMPSFloatMPS(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=float)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         self.mps.canonize()
         Gamma=self.mps._gamma
         Lambda=self.mps._lambda
@@ -907,7 +907,7 @@ class CanonizeTestsMPS(unittest.TestCase):
     def testCanonizePBCMPSComplexMPS(self):
         #create a random MPS
         self.mps=mpslib.MPS.random(self.N,self.D,self.d,obc=False,scaling=0.4,dtype=complex)
-        self.mps.__regauge__(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
+        self.mps.regauge(gauge='symmetric',nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12)
         self.mps.canonize()
         Gamma=self.mps._gamma
         Lambda=self.mps._lambda

@@ -58,8 +58,8 @@ class TestSIAM(unittest.TestCase):
         chi=10
         d=4
         mps=mpslib.MPS.random(N,chi,d,obc=True,dtype=dtype)
-        mps.__position__(N)
-        mps.__position__(0)
+        mps.position(N)
+        mps.position(0)
         mps._D=60
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
@@ -67,12 +67,12 @@ class TestSIAM(unittest.TestCase):
         self.dmrg=en.DMRGengine(mps,mpoobc,'testSIAM',lb,rb)
         self.eps=1E-5
     def testSIAMAR(self):
-        edmrg=self.dmrg.__simulateTwoSite__(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1)
-        edmrg=self.dmrg.__simulate__(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1)
+        edmrg=self.dmrg.simulateTwoSite(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1)
+        edmrg=self.dmrg.simulate(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1)
         self.assertTrue(abs(self.eexact-edmrg)/np.abs(edmrg)<self.eps)
     def testSIAMLAN(self):
-        edmrg=self.dmrg.__simulateTwoSite__(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1,solver='LAN')
-        edmrg=self.dmrg.__simulate__(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1,solver='LAN')
+        edmrg=self.dmrg.simulateTwoSite(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1,solver='LAN')
+        edmrg=self.dmrg.simulate(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1,solver='LAN')
         self.assertTrue(abs(self.eexact-edmrg)/np.abs(edmrg)<self.eps)
 
 class TestXXZFloat(unittest.TestCase):        
@@ -110,8 +110,8 @@ class TestXXZFloat(unittest.TestCase):
 
         mps=mpslib.MPS.random(self.N,10,d,obc=True)
         mps._D=D
-        mps.__position__(self.N)
-        mps.__position__(0)
+        mps.position(self.N)
+        mps.position(0)
         mpoobc=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
@@ -119,8 +119,8 @@ class TestXXZFloat(unittest.TestCase):
         self.eps=1E-5
 
     def testXXZAR(self):
-        self.dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1)    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1)
+        self.dmrg.simulateTwoSite(2,1e-10,1e-6,40,verbose=1)    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1)
 
         self.assertTrue((abs(edmrg-self.Eexact)/abs(self.Eexact))<self.eps)
 
@@ -130,24 +130,24 @@ class TestXXZFloat(unittest.TestCase):
         meanSz=np.zeros(self.N)
   
         for n in range(self.N):
-            meanSz[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSz[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSz[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSz[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
         
         Dt=20
-        self.dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+        self.dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
         meanSzSztrunc=np.zeros(self.N)
         meanSztrunc=np.zeros(self.N)
         for n in range(self.N):
-            meanSztrunc[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSztrunc[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSztrunc[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSztrunc[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
 
         print(np.linalg.norm(meanSztrunc-meanSz))
 
     def testXXZLAN(self):
-        self.dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(2,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
         self.assertTrue((abs(edmrg-self.Eexact)/abs(self.Eexact))<self.eps)
 
         Sz=np.diag([0.5,-0.5])
@@ -156,18 +156,18 @@ class TestXXZFloat(unittest.TestCase):
         meanSz=np.zeros(self.N)
   
         for n in range(self.N):
-            meanSz[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSz[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSz[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSz[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
         
         Dt=20
-        self.dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+        self.dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
         meanSzSztrunc=np.zeros(self.N)
         meanSztrunc=np.zeros(self.N)
         for n in range(self.N):
-            meanSztrunc[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSztrunc[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSztrunc[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSztrunc[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
 
         print(np.linalg.norm(meanSztrunc-meanSz))
 
@@ -207,8 +207,8 @@ class TestXXZComplex(unittest.TestCase):
 
         mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex)
         mps._D=D
-        mps.__position__(self.N)
-        mps.__position__(0)
+        mps.position(self.N)
+        mps.position(0)
         mpoobc=H.XXZ(Jz,Jxy,np.zeros(self.N),True)
         lb=np.ones((1,1,1))
         rb=np.ones((1,1,1))
@@ -216,8 +216,8 @@ class TestXXZComplex(unittest.TestCase):
         self.eps=1E-5
 
     def testXXZAR(self):
-        self.dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1)    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1)
+        self.dmrg.simulateTwoSite(2,1e-10,1e-6,40,verbose=1)    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1)
         self.assertTrue((abs(edmrg-self.Eexact)/abs(self.Eexact))<self.eps)
 
         Sz=np.diag([0.5,-0.5])
@@ -226,24 +226,24 @@ class TestXXZComplex(unittest.TestCase):
         meanSz=np.zeros(self.N).astype(complex)
   
         for n in range(self.N):
-            meanSz[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSz[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSz[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSz[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
         
         Dt=20
-        self.dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+        self.dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
         meanSzSztrunc=np.zeros(self.N).astype(complex)
         meanSztrunc=np.zeros(self.N).astype(complex)
         for n in range(self.N):
-            meanSztrunc[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSztrunc[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSztrunc[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSztrunc[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
 
         print(np.linalg.norm(meanSztrunc-meanSz))
 
     def testXXZLAN(self):
-        self.dmrg.__simulateTwoSite__(2,1e-10,1e-6,40,verbose=1,solver='LAN')    
-        edmrg=self.dmrg.__simulate__(2,1e-10,1e-10,30,verbose=1,solver='LAN')
+        self.dmrg.simulateTwoSite(2,1e-10,1e-6,40,verbose=1,solver='LAN')    
+        edmrg=self.dmrg.simulate(2,1e-10,1e-10,30,verbose=1,solver='LAN')
 
         self.assertTrue((abs(edmrg-self.Eexact)/abs(self.Eexact))<self.eps)
 
@@ -253,18 +253,18 @@ class TestXXZComplex(unittest.TestCase):
         meanSz=np.zeros(self.N).astype(complex)
   
         for n in range(self.N):
-            meanSz[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSz[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSz[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSz[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
         
         Dt=20
-        self.dmrg._mps.__truncate__(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
+        self.dmrg._mps.truncate(schmidt_thresh=1E-8,D=Dt,r_thresh=1E-14)
         meanSzSztrunc=np.zeros(self.N).astype(complex)
         meanSztrunc=np.zeros(self.N).astype(complex)
         for n in range(self.N):
-            meanSztrunc[n]=self.dmrg._mps.__measure__(Sz,n)
+            meanSztrunc[n]=self.dmrg._mps.measure(Sz,n)
         for n in range(self.N):
-            meanSzSztrunc[n]=self.dmrg._mps.__measure__([Sz,Sz],sorted([int(self.N/2),n]))
+            meanSzSztrunc[n]=self.dmrg._mps.measure([Sz,Sz],sorted([int(self.N/2),n]))
 
         print(np.linalg.norm(meanSztrunc-meanSz))
 
