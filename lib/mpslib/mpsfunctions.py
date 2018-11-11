@@ -2110,7 +2110,7 @@ def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datat
 
 
 
-def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-12,thresh=1E-8):
+def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-200,thresh=1E-8):
     """
     takes an mps (can either be a list of np.arrays or an object of type MPS from mps.py) and regauges it in place
     gauge can be either of {'left','right',symmetric'} (desired gauge of the output mps)
@@ -2502,7 +2502,7 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
         sys.exit('CanonizeMPS: mps has non-consistent boundary-bond-dimensions')
 
 
-def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-14,thresh=1E-8,trunc=1E-16,Dmax=100):
+def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-200,thresh=1E-8,trunc=1E-16,Dmax=100):
     """
     bring an mps tensor "tensor" (ndarray of shape (D,D,d) into gauge "gauge" (string)
     
