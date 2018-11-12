@@ -772,20 +772,30 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
 
 def prepareTensor(tensor,direction,fixphase=None):
     """
-    prepares an mps tensor using qr decomposition 
-    direction (int): if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
-    fixphase (str): {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
-    returns: out: a left or right isometric mps tensor
-             r  : an upper or lower triangular matrix
-             Z  : the norm of the tensor "tensor", i.e. tensor"="out.dot(r)*Z or tensor"="r.dot(out)*Z (depending on direction)
+    orthogonalizes an mps tensor using qr decomposition 
+
+    Parameters:
+    ----------------------------------
+    direction: int
+               direction in {1,'l','left'}: returns left orthogonal decomposition, 
+               direction in {-1,'r','right'}: returns right orthogonal decomposition, 
+    fixphase:  str
+              fixphase can be in {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+    Returns: 
+    -------------------------------------
+    (out,r,Z)
+    out: np.ndarray
+         a left or right isometric mps tensor
+    r:   np.ndarray
+         an upper or lower triangular matrix
+    Z:   float
+         the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
     """
     
-    assert(direction!=0),'do NOT use direction=0!'
-
     dtype=type(tensor[0,0,0])
 
     [l1,l2,d]=tensor.shape
-    if direction>0:
+    if direction in (1,'l','left'):
         temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
         q,r=np.linalg.qr(temp)
         #fix the phase freedom of the qr
@@ -806,7 +816,7 @@ def prepareTensor(tensor,direction,fixphase=None):
         [size1,size2]=q.shape
         out=np.transpose(np.reshape(q,(d,l1,size2)),(1,2,0))
     
-    if direction<0:
+    elif direction in (-1,'r','right'):
         temp=np.conjugate(np.transpose(np.reshape(tensor,(l1,d*l2),order='F'),(1,0)))
         q,r_=np.linalg.qr(temp)
         #fix the phase freedom of the qr        
@@ -828,7 +838,8 @@ def prepareTensor(tensor,direction,fixphase=None):
         #normalize the bond matrix
         Z=np.linalg.norm(r)
         r/=Z
-
+    else:
+        raise ValueError("unkown value {} for input parameter direction".format(direction))
     return out,r,Z
 
 #used in the lattice-cMPS context; ignore for the case of lattice MPS
@@ -2502,6 +2513,7 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
         sys.exit('CanonizeMPS: mps has non-consistent boundary-bond-dimensions')
 
 
+
 def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-200,thresh=1E-8,trunc=1E-16,Dmax=100):
     """
     bring an mps tensor "tensor" (ndarray of shape (D,D,d) into gauge "gauge" (string)
@@ -2582,6 +2594,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         return out,y
 
     if gauge=='right':
+        
         [chi1,chi,d]=np.shape(tensor)
 
         #find right eigenvalue
@@ -2615,6 +2628,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
 
 
     if gauge=="symmetric":
+        warnings.warn("calling regauge with gauge='symmetric' is deprecated; use canonizeIMPS instead")
         [chi1 ,chi2,d]=np.shape(tensor)
         [eta,v,numeig]=TMeigs(tensor,direction=1,numeig=numeig,init=initial,nmax=nmaxit,tolerance=tol,ncv=ncv)
 
@@ -2697,6 +2711,125 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
         #        gamma,lam,rest2=regauge(A,gauge='symmetric',initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-14,thresh=1E-8,trunc=1E-16,Dmax=len(lam))            
         return gamma,lam,np.sum(rest)
 
+    
+def canonize(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-200,thresh=1E-8,trunc=1E-16,Dmax=100):
+    """
+    canonize an infinite mps, i.e. bring it into Gamma-lambda form
+    
+    Parameters:
+    -----------------------------------------------------
+    tensor: ndarray of shape (D,D,d) 
+            the mps tensor
+    initial: np.ndarray of shape(D,D), or None
+             initial guess for dominant eigenvector of the mps transfer operators
+    nmaxit:   int
+              maximum number of iterations in sparse solver
+    tol:      float
+              desired tolerance of the eigenvectors
+    ncv:      int
+              number of krylov vectors used in the sparse eigensolver
+    pinv:     float
+              pseudo-inverse threshold
+    thresh:   float
+              output threshold parameter (has no effect on the return values and can be ignored)
+    numeig:   int
+              the nuymber of eigenvectors to be calculated by arpack; hyperparameter, use numeig>4 if you want a stable algorithm
+    trunc:    float
+              truncation threshold, if trunc<1E-15, no truncation is done
+    Dmax:     int 
+              the maximum bond dimension to be retained if trunc > 1E-15
+
+    Returns:
+    -----------------------------------------------------
+    (Gamma,lam,rest): 
+    Gamma: np.ndarrays of shape (D,D,d)
+    lam:   np.ndarray of shape (D,)
+    rest (float): the truncated weight
+
+    """
+    [chi1 ,chi2,d]=np.shape(tensor)
+    [eta,v,numeig]=TMeigs(tensor,direction=1,numeig=numeig,init=initial,nmax=nmaxit,tolerance=tol,ncv=ncv)
+
+    if np.abs(np.imag(eta))/np.abs(np.real(eta))>thresh:
+        print ('in regauge: warning: found eigenvalue eta with large imaginary part: {0}'.format(eta))
+
+    tensor=tensor/np.sqrt(np.real(eta))
+    l=np.reshape(v,(chi1,chi1))
+
+    l=l/np.trace(l)
+    l=(l+herm(l))/2.0
+
+    eigvals,u=np.linalg.eigh(l)
+    eigvals=np.abs(eigvals)
+    eigvals/=np.sum(eigvals)
+    eigvals[np.nonzero(eigvals<=pinv)]=0.0
+    eigvals/=np.sum(eigvals)
+    l=u.dot(np.diag(eigvals)).dot(herm(u))
+
+    inveigvals=np.zeros(len(eigvals))
+    inveigvals[np.nonzero(eigvals>pinv)]=1.0/eigvals[np.nonzero(eigvals>pinv)]
+    inveigvals[np.nonzero(eigvals<=pinv)]=0.0
+
+    y=np.transpose(u.dot(np.diag(np.sqrt(eigvals))).dot(herm(u)))
+    invy=np.transpose(herm(u)).dot(np.diag(np.sqrt(inveigvals))).dot(np.transpose(u))
+
+    
+    [eta,v,numeig]=TMeigs(tensor,direction=-1,numeig=numeig,init=initial,nmax=nmaxit,tolerance=tol,ncv=ncv)
+
+    if np.abs(np.imag(eta))/np.abs(np.real(eta))>thresh:
+        print ('in regauge: warning: found eigenvalue eta with large imaginary part: {0}'.format(eta))
+    r=np.reshape(v,(chi2,chi2))
+    r=r/np.trace(r)
+    r=(r+herm(r))/2.0        
+
+    eigvals,u=np.linalg.eigh(r)
+    eigvals=np.abs(eigvals)
+    eigvals/=np.sum(eigvals)
+    eigvals[np.nonzero(eigvals<pinv)]=0.0
+    eigvals/=np.sum(eigvals)
+
+    r=u.dot(np.diag(eigvals)).dot(herm(u))
+    
+    inveigvals=np.zeros(len(eigvals))
+    inveigvals[np.nonzero(eigvals>pinv)]=1.0/eigvals[np.nonzero(eigvals>pinv)]
+    inveigvals[np.nonzero(eigvals<=pinv)]=0.0
+
+    x=u.dot(np.diag(np.sqrt(eigvals))).dot(herm(u))
+    invx=u.dot(np.diag(np.sqrt(inveigvals))).dot(herm(u))
+    
+    [U,lam,Vdag]=svd(y.dot(x))
+    D=len(lam)
+    Z=np.linalg.norm(lam)
+
+    gamma=np.tensordot(Vdag.dot(invx),tensor,([1],[0]))
+    gamma=np.transpose(np.tensordot(gamma,invy.dot(U),([1],[0])),(0,2,1))
+    A=np.tensordot(np.diag(lam),gamma,([1],[0]))
+    lam=lam/Z
+    rest=[0.0]
+    if trunc>1E-15:
+        rest=lam[lam<=trunc]
+        lam=lam[lam>trunc]
+        rest=np.append(lam[min(len(lam),Dmax)::],rest)
+        lam=lam[0:min(len(lam),Dmax)]
+        U=U[:,0:len(lam)]
+        Vdag=Vdag[0:len(lam),:]
+        Z=np.linalg.norm(lam)
+        lam=lam/Z
+        
+    gamma=np.tensordot(Vdag.dot(invx),tensor,([1],[0]))
+    gamma=np.transpose(np.tensordot(gamma,invy.dot(U),([1],[0])),(0,2,1))
+    A=np.tensordot(np.diag(lam),gamma,([1],[0]))
+    Z=np.trace(np.tensordot(A,np.conj(A),([0,2],[0,2])))
+    gamma/=np.sqrt((Z/len(lam)))
+    A/=np.sqrt((Z/len(lam)))
+    #if len(lam)<D:
+    #    if (len(lam)==1):
+    #        print('state has been truncated to a pure product state')
+    #    else:
+    #        gamma,lam,rest2=regauge(A,gauge='symmetric',initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-14,thresh=1E-8,trunc=1E-16,Dmax=len(lam))            
+    return gamma,lam,np.sum(rest)
+    
+
 
 
 def load_mps():
@@ -2756,7 +2889,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
     C=np.eye(mps.shape[0])
     if gauge in (1,'left','l'):
         while True:
-            A,s,v,z=mf.prepareTensorSVD(tensor,direction=1,fixphase=True)
+            A,s,v,z=prepareTensorSVD(tensor,direction=1,fixphase=False)
             Z=np.linalg.norm(s-sold)
             if Z<precision:
                 s/=(np.sum(s)/len(s))
@@ -2776,7 +2909,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
             sold=s            
     elif gauge in (-1,'r','right'):
         while True:
-            u,s,B,z=mf.prepareTensorSVD(tensor,direction=-1,fixphase=True)
+            u,s,B,z=prepareTensorSVD(tensor,direction=-1,fixphase=False)
             Z=np.linalg.norm(s-sold)
             if Z<precision:
                 s/=(np.sum(s)/len(s))
@@ -2827,7 +2960,7 @@ def canonizeSingleLayer(mps,trunc=1E-16,Dmax=100,precision=1E-10,nmax=1000):
     A,y,FA,conv=regaugeSingleLayer(mps,gauge=1,precision=precision,nmax=nmax)
     invx=np.linalg.inv(x)
     invy=np.linalg.inv(y)
-    [U,lam,Vdag]=mf.svd(y.dot(x))
+    [U,lam,Vdag]=svd(y.dot(x))
     D=len(lam)
     Z=np.linalg.norm(lam)
 
