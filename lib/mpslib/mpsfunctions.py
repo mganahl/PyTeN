@@ -2865,7 +2865,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
                
     Returns:
     ---------------------------------------------------------------
-    (tensor,C,Caccum,conv) of type (np.ndarray,np.ndarray,np.ndarray,bool)
+    (tensor,C,F,conv)
     tensor: np.ndarray of shape=(D,D,d)
             if conv==True: left/right orthogonal mps
     C:      np.ndarray of shape (D,D)
@@ -2884,7 +2884,9 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
     """
     tensor=np.copy(mps)
     n=0
-    assert(mps.shape[0]==mps.shape[1])
+    if not (mps.shape[0]==mps.shape[1]):
+        raise ValueError("mps.shape[0] is unequal to mps.shape[1]")
+    
     sold=np.random.rand(tensor.shape[1])
     C=np.eye(mps.shape[0])
     if gauge in (1,'left','l'):
@@ -2938,6 +2940,7 @@ def canonizeSingleLayer(mps,trunc=1E-16,Dmax=100,precision=1E-10,nmax=1000):
                 the mps
     trunc:      float
                 truncation threshold; Schmidt values < trunc are discarded
+                if trunc<=1E-15, no truncation is applied
     Dmax:       int
                 maximally allowed bond dimension; overrides the bond dimension of trunc
     precision:  float
