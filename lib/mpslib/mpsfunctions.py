@@ -88,15 +88,23 @@ def overlap(mps1,mps2):
 def check_orthogonality(tensor,which,thresh=1E-10):
     """
     checks if tensor obeys left or right orthogonalization;
-    tensor: an mps tensor of dimensions (D,D,d)
-    which: 'l','left','r' or 'right'; the orthogonality to be checked
-    returns: a float giving the deviation from orthonormality
+    Parameters:
+    ---------------
+    tensor:  np.ndarray of shape (D1,D2,d)
+             an mps tensor
+    which:   int or str
+             the gauge to be checked against: which can be in (1,'l','left') or (-1,'r','right')
+             to check left or right orthogonality, respectively
+    
+    Returns: 
+    ----------------
+    a float giving the total deviation from orthonormality, i.e. ||(11|E-11|| or || E|11) -11||
     """
-    if which in ('l','left'):
+    if which in (1,'l','left'):
         Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([0,2],[0,2]))-np.eye(tensor.shape[1]))
         if Z>thresh:
             print('check_orthogonality: tensor is not left orthogonal with a residual of {0}'.format(Z) )
-    if which in ('r','right'):
+    if which in (-1,'r','right'):
         Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([1,2],[1,2]))-np.eye(tensor.shape[0]))
         if Z>thresh:
             print('check_orthogonality: tensor is not right orthogonal with a residual of {0}'.format(Z) )
@@ -133,12 +141,42 @@ def FinegrainDolfi(mps):
         mpsfine.append(np.copy(righttens))
     return mpsfine
 
-
-def svd(mat,full_matrices=False,r_thresh=1E-14):
+def svd(mat,full_matrices=False,compute_uv=True,r_thresh=1E-14):
     """
-    a simple wrapper around numpy svd, catches some weird LinAlgError
-    returns: exactly what you would expect!
-    r_thresh: don't worry about it
+    wrapper around numpy svd
+    catches a weird LinAlgError exception sometimes thrown by lapack (cause not entirely clear, but seems 
+    related to very small matrix entries)
+    if LinAlgError is raised, precondition with a QR decomposition (fixes the problem)
+
+
+    Parameters
+    ----------
+    mat:           array_like of shape (M,N)
+                   A real or complex array with ``a.ndim = 2``.
+    full_matrices: bool, optional
+                   If True (default), `u` and `vh` have the shapes ``(M, M)`` and
+                   (N, N)``, respectively.  Otherwise, the shapes are
+                   (M, K)`` and ``(K, N)``, respectively, where
+                   K = min(M, N)``.
+    compute_uv :   bool, optional
+                   Whether or not to compute `u` and `vh` in addition to `s`.  True
+                   by default.
+
+    Returns
+    -------
+    u : { (M, M), (M, K) } array
+        Unitary array(s). The shape depends
+        on the value of `full_matrices`. Only returned when
+        `compute_uv` is True.
+    s : (..., K) array
+        Vector(s) with the singular values, within each vector sorted in
+        descending order. The first ``a.ndim - 2`` dimensions have the same
+        size as those of the input `a`.
+    vh : { (..., N, N), (..., K, N) } array
+        Unitary array(s). The first ``a.ndim - 2`` dimensions have the same
+        size as those of the input `a`. The size of the last two dimensions
+        depends on the value of `full_matrices`. Only returned when
+        `compute_uv` is True.
     """
     try: 
         [u,s,v]=np.linalg.svd(mat,full_matrices=False)
@@ -147,8 +185,9 @@ def svd(mat,full_matrices=False,r_thresh=1E-14):
         r[np.abs(r)<r_thresh]=0.0
         u_,s,v=np.linalg.svd(r)
         u=q.dot(u_)
-        print('svd caught a LinAlgError')
+        print('caught a LinAlgError with dir>0')
     return u,s,v
+
 
 def qr(mat,signfix):
     """
@@ -168,9 +207,16 @@ def qr(mat,signfix):
     
 def directsum(m1,m2):
     """
-    directsum(m1,m2)
-    m1, m2: matrices
-    returns: the direct sum of two matrices
+    calculates the direct sum of two matrices
+    Parameters:
+    ----------------
+    m1: np.ndarray of shape (D1,D2)
+    m2: np.ndarray of shape (D3,D4)
+
+    Returns: 
+    ----------------
+    np.ndarray of shape (D1+D3,D2+D4)
+    the direct sum of two matrices
     """
 
     dtype=type(m1[0,0])
@@ -279,10 +325,20 @@ def applyMPO(mps,mpo,inplace=False):
 def contractionH(L,mps,mpo,R):
     """
     contraction routine for ground-state optimization
-    L (np.ndarray of shape(Dl,Dl',Ml)): left Hamiltonian environment
-    R (np.ndarray of shape(Dr,Dr',Mr)): right Hamiltonian environment
-    mps (np.ndarray of shape (Dl,Dr,d)): mps-tensor
-    mpo (np.ndarray of shape (Ml,Mr,d,d)): MPO tensor
+
+    Parameters:
+    ----------------------
+    L:   np.ndarray of shape (Dl,Dl',Ml) 
+         left Hamiltonian environment
+    mps: np.ndarray of shape (Dl,Dr,d)
+         mps-tensor
+    mpo: np.ndarray of shape (Ml,Mr,d,d)
+         MPO tensor
+    R:   np.ndarray of shape (Dr,Dr',Mr)
+         right Hamiltonian environment
+    Returns:
+    ----------------------
+    np.ndarray of shape (Dl',Dr',d)
     routine contracts input and returns it in an np.ndarray of shape (Dl',Dr',d)
     """
     
@@ -1534,12 +1590,20 @@ def gradient(L,mpo,R,mps0):
 def TransferOperator(direction,mps,vector):
     """
     computes the transfer matrix vector product 
-    mps: ndarray or MPS object of shape(D1,D2,d)
-    direction: int, direction > 0 does a left-side product; direction < 0 does a right side product;
-    vector:  ndarray of shape (D1,D1) (direction > 0) or (D2,D2)  (direction < 0), reshaped into vector format
-             the index convention is that for either left  (D1,D1) or right (D2,D2) ndarrays, the leg 0 is on the unconjugated side the transfer-matrix,
+    Parameters:
+    --------------------------
+    mps:       ndarray or MPS object of shape(D1,D2,d)
+    direction: int
+               direction > 0 does a left-side product; direction < 0 does a right side product;
+    vector:  ndarray 
+             for direction > 0: shape of vector can b (D1,D1) or (D1*D1) 
+             for direction < 0: shape of vector can b (D2,D2) or (D2*D2) 
+             the index convention is that for either left (D1,D1) or right (D2,D2) ndarrays, the index 0 is on the unconjugated side the transfer-matrix
              
-    returns: a vector obtained from the contracting the input vector with the transfer operator
+    Returns: 
+    -------------------------
+    np.ndarray of shape vector.shape
+    a vector obtained from the contracting the input vector with the transfer operator
     """
     if isinstance(mps,np.ndarray):
         A=mps
@@ -1553,11 +1617,16 @@ def TransferOperator(direction,mps,vector):
         raise TypeError("TransferOperator: got an unknown type for mps")
     if direction>0:
         x=np.reshape(vector,(D1,D1))
-        return np.reshape(np.tensordot(np.tensordot(x,A,([0],[0])),np.conj(A),([0,2],[0,2])),(D2*D2))
+        if len(vector.shape)==1:
+            return np.reshape(np.tensordot(np.tensordot(x,A,([0],[0])),np.conj(A),([0,2],[0,2])),D2*D2)
+        elif len(vector.shape)==2:
+            return np.tensordot(np.tensordot(x,A,([0],[0])),np.conj(A),([0,2],[0,2]))
     if direction<0:
         x=np.reshape(vector,(D2,D2))
-        return np.reshape(np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(A),([0,2],[1,2])),(D1*D1))
-    
+        if len(vector.shape)==1:
+            return np.reshape(np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(A),([0,2],[1,2])),D1*D1)
+        elif len(vector.shape)==2:        
+            return np.tensordot(np.tensordot(x,A,([0],[1])),np.conj(A),([0,2],[1,2]))
 def MixedTransferOperator(direction,mpsA,mpsB,vector):
 
     """
