@@ -18,7 +18,7 @@ herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
     D=100        #final bond dimension
     d=2         #local hilbert space dimension
-    N=101        #number of sites
+    N=21        #number of sites
     Jz=np.ones(N).astype(float) #Hamiltonian parameters
     Jxy=np.ones(N).astype(float)
 
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     #you don't have to pass an mpo here; the engine mererly assumes that
     #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
     #which should return an twosite gate
-    dmrg._mps.applyOneSiteGate(np.asarray([[0.0,1.],[0.0,0.0]]),50)
+    dmrg._mps.applyOneSiteGate(np.asarray([[0.0,1.],[0.0,0.0]]),10)
     dmrg._mps.position(N)
     dmrg._mps.position(0)
 
@@ -56,6 +56,7 @@ if __name__ == "__main__":
     #the object passed implements the memberfunction object.twoSiteGate(m,n,dt)
     #which should return an twosite gate
     engine=en.TimeEvolutionEngine(dmrg._mps,mpo,"insert_name_here")
+    print(engine.measureLocal)
     dt=-1j*0.05  #time step
     numsteps=20  #numnber of steps to be taken in between measurements
     Dmax=40      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
@@ -73,7 +74,7 @@ if __name__ == "__main__":
         L=engine.measureLocal(sz)
         #store result for later use
         SZ[n,:]=L
-        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
+        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh)
         #plot 
         plt.figure(1)
         plt.clf()

@@ -15,7 +15,7 @@ import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib
 import lib.utils.binaryoperations as bb
-import tests.HeisED.XXZED as ed
+import HeisED.XXZED as ed
 import scipy as sp
 import matplotlib.pyplot as plt
 import lib.Lanczos.LanczosEngine as lanEn

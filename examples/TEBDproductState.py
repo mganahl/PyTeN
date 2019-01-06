@@ -68,7 +68,7 @@ if __name__ == "__main__":
     tw=0  #accumulates the truncated weight (see below)
     for n in range(Nmax):
         #do numsteps TEBD steps 
-        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh,cnterset=it,tw=tw)
+        tw,it=engine.doTEBD(dt=dt,numsteps=numsteps,Dmax=Dmax,tr_thresh=thresh)
         #measure the operators 
         L=engine._mps.measureList(sz)
         #store result for later use

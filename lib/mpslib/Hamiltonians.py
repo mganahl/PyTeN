@@ -30,6 +30,9 @@ class MPO:
         #a list of mpo-tensors, to be initialized in the derived class
         self._mpo=copy.deepcopy(mpos)
         self._N=len(self._mpo)
+        if len(mpos)>0:
+            self._dtype=np.result_type(*mpos).type
+        
     @classmethod
     def fromMPO(cls,other):
         """
@@ -133,7 +136,7 @@ class MPO:
         """
         return the type of the MPO
         """
-        return self._dtype
+        return self._dtype#np.result_type(*self._mpo).type
     
     def save(self,filename):
         """
@@ -170,6 +173,7 @@ class TFI(MPO):
     """
     
     def __init__(self,Jx,Bz,obc=True,dtype=float):
+        super().__init__()
         self._obc=obc
         self._Jx=Jx
         self._Bz=Bz
@@ -177,7 +181,7 @@ class TFI(MPO):
         self._dtype=dtype
         if obc==True:
             self._mpo=[]
-            temp=np.zeros((1,3,2,2),self.dtype)
+            temp=np.zeros((1,3,2,2),self._dtype)
             #BSz
             temp[0,0,0,0]=-self._Bz[0]
             temp[0,0,1,1]= self._Bz[0]

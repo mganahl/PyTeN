@@ -95,6 +95,7 @@ class Container(object):
         a list of floats containing the expectation values
         """
         return self.mps.measureList(operators)
+    
     def truncateMPS(self,truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
         """
         Container.truncateMPS(truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
@@ -627,7 +628,7 @@ class HomogeneousIMPSengine(Container,object):
     HomogeneousIMPSengine
     container object for homogeneous MPS optimization using a gradient descent method
     """
-    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,pinv=1E-100,trunc=1E-16):
+    def __init__(self,Nmax,mps,mpo,filename,alpha,alphas,normgrads,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-10,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40,pinv=1E-100,trunc=1E-16):
         """
         HomogeneousIMPSengine.__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):
         initialize a homogeneous gradient optimization
@@ -656,7 +657,7 @@ class HomogeneousIMPSengine(Container,object):
         self._D=np.shape(mps)[0]
         self._d=np.shape(mps)[2]
         self._filename=filename
-        self._dtype=dtype
+        self._dtype=mps.dtype.type
         self._tol=tol
         self._lgmrestol=lgmrestol
         self._numeig=numeig
@@ -873,14 +874,14 @@ class VUMPSengine(Container,object):
         if len(mpo)>1:
             raise ValueError("VUMPSengine: got an mpo of len(mps)>1; VUMPSengine can only handle len(mpo)=1")
         
-        self._dtype=np.result_type(mps[0].dtype,mpo.dtype)
-
+        self._dtype=np.result_type(mps[0].dtype,mpo.dtype).type
         self._mps=copy.deepcopy(mps)
+        
         self._D=np.shape(mps[0])[0]
         self._filename=filename
         
-        self._kleft=np.random.rand(self._D,self._D)
-        self._kright=np.random.rand(self._D,self._D)
+        self._kleft=np.random.rand(self._D,self._D).astype(self._dtype)
+        self._kright=np.random.rand(self._D,self._D).astype(self._dtype)
         self._it=1
         [B1,B2,d1,d2]=np.shape(mpo[0])
 
@@ -892,15 +893,18 @@ class VUMPSengine(Container,object):
         mpor[:,0,:,:]=mpo[0][:,0,:,:]
         mpor[-1,0,:,:]/=2.0
         self._mpo=H.MPO.fromlist([mpol,mpo[0],mpor])
-        self._t0=0.0
+        self._t0=self._dtype(0.0)
+
         self._numeig=numeig
         self._tol=regaugetol        
         self._ncv=ncv
         self._mps.regauge('symmetric')
+
         self._A=np.copy(self._mps[0])
         self._B=ncon.ncon([np.diag(1.0/np.diag(self._mps._mat)),self._A,self._mps._mat],[[-1,1],[1,2,-3],[2,-2]])
-        self._r=np.eye(self._B.shape[0])
-        self._l=np.eye(self._A.shape[0])        
+        self._r=np.eye(self._B.shape[0]).astype(self._dtype)
+        self._l=np.eye(self._A.shape[0]).astype(self._dtype)
+        #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self._mps])
 
     def reset(self):
         """
@@ -912,7 +916,7 @@ class VUMPSengine(Container,object):
         self._r=np.eye(self._B.shape[0])
         self._l=np.eye(self._A.shape[0])        
         
-    def __prepareStep__(self):
+    def _prepareStep(self):
         [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=self._numeig,init=self._r,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
         [etal,vl,numeig]=mf.TMeigs(self._B,direction=1,numeig=self._numeig,init=self._l,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
         l=np.reshape(vl,(self._D,self._D))
@@ -923,22 +927,27 @@ class VUMPSengine(Container,object):
         self._l=(l+herm(l))/2.0
         self._r=(r+herm(r))/2.0            
 
-        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self._D))
-        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self._D))
 
-        self._lb=mf.initializeLayer(self._A,np.eye(self._D),self._A,self._mpo[0],1) 
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self._D).astype(self._dtype))
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self._D).astype(self._dtype))
+
+        self._lb=mf.initializeLayer(self._A,np.eye(self._D).astype(self._dtype),self._A,self._mpo[0],1)
+
+
         ihl=mf.addLayer(self._lb,self._A,self._mpo[2],self._A,1)[:,:,0]
         Elocleft=np.tensordot(ihl,self._r,([0,1],[0,1]))
-        self._rb=mf.initializeLayer(self._B,np.eye(self._D),self._B,self._mpo[2],-1)
+        self._rb=mf.initializeLayer(self._B,np.eye(self._D).astype(self._dtype),self._B,self._mpo[2],-1)
+
+
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self._D))
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self._D))
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self._D).astype(self._dtype))
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self._D).astype(self._dtype))
         
-        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self._D),ihlprojected,x0=np.reshape(self._kleft,self._D*self._D),tolerance=self._lgmrestol,\
+        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self._D).astype(self._dtype),ihlprojected,x0=np.reshape(self._kleft,self._D*self._D),tolerance=self._lgmrestol,\
                                            maxiteration=self._Nmaxlgmres,direction=1)
-        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self._D),self._r,ihrprojected,x0=np.reshape(self._kright,self._D*self._D),tolerance=self._lgmrestol,\
+        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self._D).astype(self._dtype),self._r,ihrprojected,x0=np.reshape(self._kright,self._D*self._D),tolerance=self._lgmrestol,\
                                             maxiteration=self._Nmaxlgmres,direction=-1)
         
         self._lb[:,:,0]+=np.copy(self._kleft)
@@ -946,7 +955,7 @@ class VUMPSengine(Container,object):
         return Elocleft,Elocright,leftn,rightn
 
     
-    def __doOptimStep__(self):
+    def _doOptimStep(self):
         AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False))
         if self._mps._position==1:
             C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mps._mat)
@@ -1009,7 +1018,6 @@ class VUMPSengine(Container,object):
         warnings.warn('VUMPS.simulate is deprecated; use optimize')
         self.optimize(*args,**kwargs)
         
-        
     def optimize(self,Nmax,epsilon=1E-10,lgmrestol=1E-10,Nmaxlgmres=40,\
                  artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,solver='AR',cp=None,keep_cp=False):
 
@@ -1057,8 +1065,8 @@ class VUMPSengine(Container,object):
                 self._artol_=1E-6
             else:
                 self._artol_=self._artol
-            Edens,Elocright,leftn,rightn=self.__prepareStep__()        
-            self.__doOptimStep__()
+            Edens,Elocright,leftn,rightn=self._prepareStep()        
+            self._doOptimStep()
             if self._it>=Nmax:
                 break
             if (cp!=None) and (cp>0) and (self._it%cp==0):
@@ -1071,6 +1079,7 @@ class VUMPSengine(Container,object):
                     current=self._filename+'_vumps_cp'+str(self._it)
                     self.save(current)
             self._it+=1
+
             if self._arnumvecs==1:
                 stdout.write("\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f" %(self._solver,self._it,np.real(Edens),self._D,self._gradnorm))
                 stdout.flush()
@@ -1089,7 +1098,7 @@ class VUMPSengine(Container,object):
 
 
 
-    def __evolveTensor__(self,solver,dt,krylov_dim,rtol,atol):
+    def _evolveTensor(self,solver,dt,krylov_dim,rtol,atol):
         """
         time-evolves the tensor at site n; 
         The caller has to ensure that self.L[n],self._R[self._mps._N-1-n] are consistent with the mps
@@ -1117,7 +1126,7 @@ class VUMPSengine(Container,object):
             evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
         return evTen
 
-    def __evolveMatrix__(self,solver,dt,krylov_dim,rtol,atol):
+    def _evolveMatrix(self,solver,dt,krylov_dim,rtol,atol):
         """
         time-evolves the center-matrix at bond n; 
         The caller has to ensure that self.L[n+1],self._R[self._mps._N-1-n] are consistent with the mps
@@ -1149,9 +1158,9 @@ class VUMPSengine(Container,object):
         return evMat
             
 
-    def __doEvoStep__(self,solver,dt,krylov_dim,rtol,atol):
+    def _doEvoStep(self,solver,dt,krylov_dim,rtol,atol):
         """
-        does a single time evolution step  evolution step 
+        does a single time evolution step 
         Parameters:
         -----------------------------------
         solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
@@ -1173,7 +1182,7 @@ class VUMPSengine(Container,object):
         elif solver=='SEXPMV':                    
             evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
      
-        #evTen=self.__evolveTensor__(solver,dt,krylov_dim,rtol,atol)
+        #evTen=self._evolveTensor(solver,dt,krylov_dim,rtol,atol)
         L=mf.addLayer(self._lb,self._A,self._mpo[1],self._A,direction=1)        
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
             evMat=mf.evolveMatrixsolve_ivp(L,self._rb,self._mps._mat,dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
@@ -1184,7 +1193,7 @@ class VUMPSengine(Container,object):
         evMat/=np.linalg.norm(evMat)
         
         D1,D2,d=evTen.shape        
-        #evMat=self.__evolveMatrix__(solver,dt,krylov_dim,rtol,atol)
+        #evMat=self._evolveMatrix(solver,dt,krylov_dim,rtol,atol)
         ACC_l=np.reshape(ncon.ncon([evTen,herm(evMat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
         CAC_r=np.reshape(ncon.ncon([herm(evMat),evTen],[[-1,1],[1,-2,-3]]),(D1,d*D2))
         Ul,Sl,Vl=mf.svd(ACC_l)
@@ -1198,7 +1207,7 @@ class VUMPSengine(Container,object):
 
     def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
         """
-        to real and imaginary time evolution for an infinite homogeneous systems using the TDVP
+        to real or imaginary time evolution for an infinite homogeneous systems using the TDVP
         currently only nearest neighbor Hamiltonians are supported
         Parameters:
         -------------------------------
@@ -1237,8 +1246,8 @@ class VUMPSengine(Container,object):
 
         current='None'
         while self._it <=numsteps:
-            Edens,Elocright,leftn,rightn=self.__prepareStep__()            
-            self.__doEvoStep__(solver,dt,krylov_dim,rtol,atol)
+            Edens,Elocright,leftn,rightn=self._prepareStep()            
+            self._doEvoStep(solver,dt,krylov_dim,rtol,atol)
             if verbose>=1:
                 self._t0+=np.abs(dt)
                 stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,self._it,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self._mps.D),np.abs(dt)))                
@@ -1259,7 +1268,10 @@ class VUMPSengine(Container,object):
         self._mps.position(0)
         self._mps.resetZ()        
         return self._t0
-        
+
+
+class ITEBD(Container,object):    
+    
 class TimeEvolutionEngine(Container,object):
     """
     TimeEvolutionEngine(Container):
@@ -1283,12 +1295,8 @@ class TimeEvolutionEngine(Container,object):
                        left and right environment boundary conditions
                        if None, obc are assumed
         """
-        
-        cls._gates=copy.deepcopy(gatecontainer)
-        cls._mps=copy.deepcopy(mps)
-        cls._mpo=copy.deepcopy(mpo)
-        cls._filename=filename        
-        return cls
+
+        return cls(mps,gatecontainer,filename)
 
     @classmethod
     def TDVP(cls,mps,mpo,filename,lb=None,rb=None):
@@ -1326,7 +1334,7 @@ class TimeEvolutionEngine(Container,object):
                        left and right environment boundary conditions
                        if None, obc are assumed
         """
-        
+        super().__init__()
         if (np.all(lb)!=None) and (np.all(rb)!=None):
             assert(mps[0].shape[0]==lb.shape[0])
             assert(mps[-1].shape[1]==rb.shape[0])
@@ -1511,7 +1519,7 @@ class TimeEvolutionEngine(Container,object):
 
 
 
-    def __evolveTensor__(self,n,solver,dt,krylov_dim,rtol,atol):
+    def _evolveTensor(self,n,solver,dt,krylov_dim,rtol,atol):
         """
         time-evolves the tensor at site n; 
         The caller has to ensure that self.L[n],self._R[self._mps._N-1-n] are consistent with the mps
@@ -1539,7 +1547,7 @@ class TimeEvolutionEngine(Container,object):
             evTen=mf.evolveTensorSexpmv(self._L[n],self._mpo[n],self._R[self._mps._N-1-n],self._mps.tensor(n,clear=True),dt)
         return evTen
 
-    def __evolveMatrix__(self,n,solver,dt,krylov_dim,rtol,atol):
+    def _evolveMatrix(self,n,solver,dt,krylov_dim,rtol,atol):
         """
         time-evolves the center-matrix at bond n; 
         The caller has to ensure that self.L[n+1],self._R[self._mps._N-1-n] are consistent with the mps
@@ -1617,14 +1625,14 @@ class TimeEvolutionEngine(Container,object):
                     dt_=dt/2.0
                 self._mps.position(n+1)
                 #evolve tensor forward
-                evTen=self.__evolveTensor__(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
+                evTen=self._evolveTensor(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
                 tensor,mat,Z=mf.prepareTensor(evTen,1)
                 self._mps[n]=tensor
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
                 self._mps._mat=mat
                 #evolve matrix backward                    
                 if n<(self._mps._N-1):
-                    evMat=self.__evolveMatrix__(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                    
+                    evMat=self._evolveMatrix(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                    
                     self._mps._mat=evMat
                 else:
                     self._mps._mat=mat
@@ -1634,11 +1642,11 @@ class TimeEvolutionEngine(Container,object):
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.position(n+1)
                 self._R[self._mps._N-n-1]=mf.addLayer(self._R[self._mps._N-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
-                evMat=self.__evolveMatrix__(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                                    
+                evMat=self._evolveMatrix(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                                    
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
             
                 #evolve tensor at bond n forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
-                evTen=self.__evolveTensor__(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
+                evTen=self._evolveTensor(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
                 
                 #split off a center matrix 
                 tensor,mat,Z=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)

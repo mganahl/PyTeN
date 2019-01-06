@@ -108,13 +108,16 @@ class MPS(object):
             self._obc=True
         else:
             self._obc=False
-        self._dtype=np.result_type(*tensors)
+
+
         self._schmidt_thresh=schmidt_thresh
         self._r_thresh=r_thresh
         self._tensors=[np.copy(tensors[n]) for n in range(len(tensors))]
+        self._dtype=self.dtype
         self._d=[shape[2] for shape in list(map(np.shape,self._tensors))]
-        self._mat=np.eye(np.shape(self._tensors[-1])[1])
+        self._mat=np.eye(np.shape(self._tensors[-1])[1]).astype(self.dtype)
         self._mat=self._mat/np.sqrt(np.trace(self._mat.dot(herm(self._mat))))
+
         self._connector=np.diag(1.0/np.diag(self._mat))
         self._position=self._N
         self._Z=-1e10
@@ -126,7 +129,7 @@ class MPS(object):
         """
         the dtype of the mps tensors
         """
-        return np.result_type(*self._tensors)
+        return np.result_type(*self._tensors).type
         #return self._dtype
     @property
     def obc(self):
@@ -167,12 +170,14 @@ class MPS(object):
                   internal parameter (ignore it)
 
         """
-        tensors=mf.MPSinitializer(np.random.random_sample,N,D,d,obc,dtype,scaling,shift)        
+        tensors=mf.MPSinitializer(np.random.random_sample,N,D,d,obc,dtype,scaling,shift)
         mps=cls(tensors,schmidt_thresh,r_thresh)
+
         mps._obc=obc
         mps.position(0)        
         mps.position(mps._N)
-        mps._Z=1.0
+        mps.Z=1.0
+
         return mps
 
 
@@ -287,7 +292,7 @@ class MPS(object):
         r_thresh: float 
                   internal parameter (ignore it)
         """
-        dtype=np.result_type(dtype,*localstate)
+        dtype=np.result_type(dtype,*localstate).type
         d=np.asarray([len(s) for s in localstate])
         if any([np.linalg.norm(t)<1E-10 for t in localstate]):
             inds=np.nonzero(np.asarray([np.linalg.norm(t)<1E-10 for t in localstate]))
@@ -470,7 +475,7 @@ class MPS(object):
             raise TypeError("in MPS.__mul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num
-        cpy._dtype=np.result_type(type(num),self.dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype).type
         return cpy
 
     def __imul__(self,num):
@@ -506,7 +511,7 @@ class MPS(object):
             raise TypeError("in MPS.__mul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z/=num
-        cpy._dtype=np.result_type(type(num),self.dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype).type
         return cpy
     
     
@@ -525,7 +530,7 @@ class MPS(object):
             raise TypeError("in MPS.__rmul__(self,num): num is not a number")
         cpy=self.__copy__()
         cpy._Z*=num        
-        cpy._dtype=np.result_type(type(num),self.dtype)
+        cpy._dtype=np.result_type(type(num),self.dtype).type
         return cpy
 
     def __add__(self,other):
@@ -663,6 +668,19 @@ class MPS(object):
         set Dmax to D
         """
         self._D=D
+
+
+    @property
+    def Z(self):
+        return self._Z
+    
+    @Z.setter
+    def Z(self,val):
+        """
+        set Z to val
+        """
+
+        self._Z=self._dtype(val)
     
     
     def SchmidtSpectrum(self,n):
@@ -1009,7 +1027,7 @@ class MPS(object):
         if self._position<self._N:
             self.absorbCenterMatrix(direction=1)
             self.absorbConnector(location='left') #self._connector is set to 11
-
+            
         if self._position==self._N:
             self.absorbCenterMatrix(direction=-1)
             self.absorbConnector('right')

@@ -29,6 +29,51 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 plt.ion()
+
+class TestUnitcellTMeigs(unittest.TestCase):
+    def setUp(self):
+        #initialize a CMPS by loading it from a file 
+        self.D=64
+        self.d=2
+        self.eps=1E-10
+
+    def test_UCTMeigs_left_complex(self):
+        tensor=(np.random.rand(self.D,self.D,self.d)-0.5)+1j*(np.random.rand(self.D,self.D,self.d)-0.5)
+        eta,v,numeig=mf.UnitcellTMeigs([tensor],direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
+        out1=mf.UnitcellTransferOperator(direction=1,mps=[tensor],vector=v)
+        l=np.reshape(v,(self.D,self.D))
+        out2=mf.UnitcellTransferOperator(direction=1,mps=[tensor],vector=np.reshape(l,(self.D**2)))
+        self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
+        self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
+        
+    def test_UCTMeigs_left_float(self):
+        tensor=np.random.rand(self.D,self.D,self.d)-0.5
+        eta,v,numeig=mf.UnitcellTMeigs([tensor],direction=1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
+        out1=mf.UnitcellTransferOperator(direction=1,mps=[tensor],vector=v)
+        l=np.reshape(v,(self.D,self.D))
+        out2=mf.UnitcellTransferOperator(direction=1,mps=[tensor],vector=np.reshape(l,(self.D**2)))
+        self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
+        self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
+
+    def test_UCTMeigs_right_complex(self):
+        tensor=(np.random.rand(self.D,self.D,self.d)-0.5)+1j*(np.random.rand(self.D,self.D,self.d)-0.5)
+        eta,v,numeig=mf.UnitcellTMeigs([tensor],direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
+        out1=mf.UnitcellTransferOperator(direction=-1,mps=[tensor],vector=v)
+        l=np.reshape(v,(self.D,self.D))
+        out2=mf.UnitcellTransferOperator(direction=-1,mps=[tensor],vector=np.reshape(l,(self.D**2)))
+        self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
+        self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
+        
+    def test_UCTMeigs_right_float(self):
+        tensor=np.random.rand(self.D,self.D,self.d)-0.5
+        eta,v,numeig=mf.UnitcellTMeigs([tensor],direction=-1,numeig=1,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR')
+        out1=mf.UnitcellTransferOperator(direction=-1,mps=[tensor],vector=v)
+        l=np.reshape(v,(self.D,self.D))
+        out2=mf.UnitcellTransferOperator(direction=-1,mps=[tensor],vector=np.reshape(l,(self.D**2)))
+        self.assertTrue(np.linalg.norm(out1-eta*v)/self.D**2<self.eps)
+        self.assertTrue(np.linalg.norm(out2-eta*v)/self.D**2<self.eps)
+
+
 class TestTMeigs(unittest.TestCase):
     def setUp(self):
         #initialize a CMPS by loading it from a file 
@@ -930,6 +975,7 @@ class CanonizeTestsMPS(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    suite0 = unittest.TestLoader().loadTestsFromTestCase(TestUnitcellTMeigs)
     suite1 = unittest.TestLoader().loadTestsFromTestCase(TestTMeigs)
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestRegauge)
     suite3 = unittest.TestLoader().loadTestsFromTestCase(TestRENORMBLOCKHAMGMRES)
@@ -938,7 +984,8 @@ if __name__ == "__main__":
     suite6 = unittest.TestLoader().loadTestsFromTestCase(MPSTests)    
     suite7 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTests)
     suite8 = unittest.TestLoader().loadTestsFromTestCase(MPSArithmeticTests)
-    suite9 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTestsMPS)    
+    suite9 = unittest.TestLoader().loadTestsFromTestCase(CanonizeTestsMPS)
+    unittest.TextTestRunner(verbosity=2).run(suite0)    
     unittest.TextTestRunner(verbosity=2).run(suite1)
     unittest.TextTestRunner(verbosity=2).run(suite2)
     unittest.TextTestRunner(verbosity=2).run(suite3)

@@ -22,7 +22,7 @@ herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
-    parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
+    parser.add_argument('--dtype', help='type of the matrix (float64)',type=str,default='float64')
     parser.add_argument('--D', help='MPS bond dimension (32)',type=int,default=32)
     parser.add_argument('--cp', help='do checkpointing at specified steps (0, no checkpointing)',type=int,default=0)
     parser.add_argument('--solver', help='saolver type;  us lan or ar (ar)',type=str,default='ar')        
@@ -64,19 +64,25 @@ if __name__ == "__main__":
     
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
-    mpo=H.TFI(Jx,B,False)
+    mpo=H.TFI(Jx,B,False,dtype=args.dtype)
     
-    if args.dtype=='complex':
-        dtype=complex
-    elif args.dtype=='float':
-        dtype=float        
+    if args.dtype=='complex128':
+        dtype=np.complex128
+    elif args.dtype=='complex64':
+        dtype=np.complex64
+    elif args.dtype=='complex32':
+        dtype=np.complex32
+    elif args.dtype=='float64':
+        dtype=np.float64
+    elif args.dtype=='float32':
+        dtype=np.float32
+    elif args.dtype=='float16':
+        dtype=np.float16
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
-    
     mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
     mps.regauge(gauge='right')
-
     if args.load==None:
         os.chdir(filename)        
         iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)        
