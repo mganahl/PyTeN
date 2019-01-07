@@ -26,11 +26,10 @@ herm=lambda x:np.conj(np.transpose(x))
 
 class Container(object):
 
-    def __init__(self,mps,mpo):
+    def __init__(self):
         """
         Base class for simulation objects;
         """
-        pass
     def save(self,filename):
         """
         dumps a simulation into a pickle file named "filename"
@@ -1279,8 +1278,6 @@ class VUMPSengine(Container,object):
         return self._t0
 
 
-#class ITEBD(Container,object):    
-    
 class TimeEvolutionEngine(Container,object):
     """
     TimeEvolutionEngine(Container):
@@ -1335,7 +1332,8 @@ class TimeEvolutionEngine(Container,object):
         --------------------------------------------------------
         mps:           MPS object
                        the initial state 
-        mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m), or a nearest neighbor MPO
+        mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m), 
+                       or a nearest neighbor MPO
                        The Hamiltonian/generator of time evolution
         filename:      str
                        the filename under which cp results will be stored (not yet implemented)
