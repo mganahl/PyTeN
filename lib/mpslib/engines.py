@@ -26,10 +26,14 @@ herm=lambda x:np.conj(np.transpose(x))
 
 class Container(object):
 
-    def __init__(self):
+    def __init__(self,mps,mpo):
         """
         Base class for simulation objects;
         """
+        self._mps=mps
+        self._mpo=mpo
+        
+        
         pass
     
     def save(self,filename):
