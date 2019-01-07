@@ -26,12 +26,11 @@ herm=lambda x:np.conj(np.transpose(x))
 
 class Container(object):
 
-    def __init__(self):
+    def __init__(self,mps,mpo):
         """
         Base class for simulation objects;
         """
         pass
-    
     def save(self,filename):
         """
         dumps a simulation into a pickle file named "filename"
@@ -68,15 +67,21 @@ class Container(object):
                 out=pickle.load(f)
             
             return out
-
+        
+    @property
+    def dtype(self):
+        raise NotImplementedError('dtype not implemented on Container')
+    
     @property
     def mps(self):
         """
         Container.mps:
-        return the underlying MPS object
+        return the MPS object
         """
-        return self._mps
-
+        if hasattr(self,'_mps'):
+            return self._mps
+        else:
+            raise AttributeError('self._mps not defined in Container')
     
     def measureLocal(self,operators):
         """
@@ -208,6 +213,9 @@ class DMRGengine(Container,object):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
+        super(Container,self).__init__()
+        self._dtype=np.result_type(mps.dtype,mpo.dtype).type
+        
         if (np.all(lb)!=None) and (np.all(rb)!=None):
             assert(mps[0].shape[0]==lb.shape[0])
             assert(mps[-1].shape[1]==rb.shape[0])
@@ -224,7 +232,7 @@ class DMRGengine(Container,object):
             
             self._lb=np.ones((1,1,1))
             self._rb=np.ones((1,1,1))
-        
+
         self._mps=mps
         self._mpo=mpo
         self._filename=filename
@@ -443,7 +451,7 @@ class IDMRGengine(DMRGengine,object):
         super(IDMRGengine,self).__init__(mps,mpo,filename,lb,rb)
     #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
 
-    def __update__(self,regauge=False):
+    def _update(self,regauge=False):
         
         self._mps.position(self._mps._N)
         #update the left boundary
@@ -530,7 +538,7 @@ class IDMRGengine(DMRGengine,object):
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
-            D=self.__update__(regauge)
+            D=self._update(regauge)
             if verbose>0:
                 if regauge==False:
                     if skip==False:
@@ -597,7 +605,7 @@ class IDMRGengine(DMRGengine,object):
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
-            D=self.__update__(regauge)
+            D=self._update(regauge)
             if verbose>0:
                 if regauge==False:
                     if skip==False:
@@ -651,7 +659,7 @@ class HomogeneousIMPSengine(Container,object):
         numeig (int): number of eigenvectors to be calculated in the sparse eigensolver
         Nmaxlgmres (int): max steps of the lgmres routine used to calculate the infinite environments
         """
-
+        super(Container,self).__init__()
         self._Nmax=Nmax
         self._mps=np.copy(mps)
         self._D=np.shape(mps)[0]
@@ -869,6 +877,7 @@ class VUMPSengine(Container,object):
                         number of krylov vectors used in sparse transfer-matrix eigendecomposition
         numeig:         number of eigenvectors to be returned bei eigs when computing the left and right reduced steady state density matrices
         """
+        super(Container,self).__init__()
         if len(mps)>1:
             raise ValueError("VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
         if len(mpo)>1:
@@ -1334,7 +1343,7 @@ class TimeEvolutionEngine(Container,object):
                        left and right environment boundary conditions
                        if None, obc are assumed
         """
-        super().__init__()
+        super(Container,self).__init__()
         if (np.all(lb)!=None) and (np.all(rb)!=None):
             assert(mps[0].shape[0]==lb.shape[0])
             assert(mps[-1].shape[1]==rb.shape[0])

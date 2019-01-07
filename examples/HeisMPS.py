@@ -39,6 +39,8 @@ if __name__ == "__main__":
 
     #initialize a DMRGEngine with an mps and an mpo
     dmrg=en.DMRGengine(mps,mpo,'blabla')
+    print(dmrg.dtype)
+    input()
     print(dmrg.__doc__)
     print(dmrg.simulate.__doc__)
     
