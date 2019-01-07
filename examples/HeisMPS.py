@@ -18,9 +18,9 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 plt.ion()
 if __name__ == "__main__":
-    D=60        #final bond dimension
+    D=32        #final bond dimension
     d=2         #local hilbert space dimension
-    N=100        #number of sites
+    N=8        #number of sites
     Jz=np.ones(N) #Hamiltonian parameters
     Jxy=np.ones(N)
 
@@ -28,8 +28,8 @@ if __name__ == "__main__":
     print(mpslib.MPS.random.__doc__)
     mps._D=D     #set the mps final bond-dimension parameter to D; mps._D is the maximally allowed dimension of the mps
     #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-    mps.__position__(N)
-    mps.__position__(0)
+    mps.position(N)
+    mps.position(0)
 
     #initialize an MPO (MPOs are defined in lib.mpslib.Hamiltonians)
     #the MPO class in Hamiltonians implements a routine MPO.twoSiteGate(m,n,dt), which 
@@ -40,9 +40,9 @@ if __name__ == "__main__":
     #initialize a DMRGEngine with an mps and an mpo
     dmrg=en.DMRGengine(mps,mpo,'blabla')
     print(dmrg.__doc__)
-    print(dmrg.__simulate__.__doc__)
+    print(dmrg.simulate.__doc__)
     
-    print(dmrg.__simulateTwoSite__.__doc__)
+    print(dmrg.simulateTwoSite.__doc__)
     
     #start with a two site simulation with the state with bond dimension D'=10; the bond-dimension will
     #grow until it reaches mps._D
@@ -55,12 +55,12 @@ if __name__ == "__main__":
     Sz=[np.diag([0.5,-0.5]) for n in range(N)]
     
     #measure the local spin-density
-    meanSz=dmrg._mps.__measureList__(Sz)
+    meanSz=dmrg._mps.measureList(Sz)
 
     #measure the Sz-Sz correlations
     meanSzSz=[]        
     for n in range(N):
-        meanSzSz.append(dmrg._mps.__measure__([Sz[0],Sz[0]],sorted([int(N/2),n])))        
+        meanSzSz.append(dmrg._mps.measure([Sz[0],Sz[0]],sorted([int(N/2),n])))        
 
 
     #now truncate the state to Dt=20
