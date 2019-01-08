@@ -63,8 +63,15 @@ if __name__ == "__main__":
     filename=args.filename+'D{0}_Jx{1}_B{2}'.format(args.D,args.Jz,args.Bz)
     mps.regauge(gauge='right')
     iMPS=en.VUMPSengine(mps,mpo,args.filename)
-    iMPS.__simulate__(Nmax=args.imax,epsilon=args.epsilon,tol=args.regaugetol,lgmrestol=args.lgmrestol,ncv=args.ncv,numeig=args.numeig,Nmaxlgmres=args.Nmaxlgmres,artol=args.artol,arnumvecs=1,\
-                      arncv=args.arncv,svd=args.svd,checkpoint=args.cp,solver=args.solver.upper())
+    iMPS.optimize(Nmax=args.imax,epsilon=args.epsilon,
+                  regaugetol=args.regaugetol,
+                  ncv=args.ncv,
+                  numeig=args.numeig,
+                  lgmrestol=args.lgmrestol,
+                  Nmaxlgmres=args.Nmaxlgmres,
+                  artol=args.artol,arnumvecs=1,
+                  arncv=args.arncv,svd=args.svd,cp=args.cp,
+                  solver=args.solver.upper(),keep_cp=False)
 
     [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
     print()

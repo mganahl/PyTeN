@@ -2019,7 +2019,7 @@ def computeDensity(dens0,mps,direction,dtype=np.dtype(float)):
         return dens
 
 
-def getBoundaryHams(mps,mpo,regauge=False):
+def getBoundaryHams(mps,mpo,regauge=False,numeig=6):
     """
     calculates the environment of an infinite MPS
     mps: an infinite system mps
@@ -2042,7 +2042,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
             mps[0]=ncon.ncon([phasematrix,mps[0]],[[-1,1],[1,-2,-3]])
             mps._mat=mps._mat.dot(herm(phasematrix))
         temp=mps.tensors            
-        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
+        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=numeig,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         lbound=np.reshape(lss,(D,D))
         lbound=fixPhase(np.reshape(lss,(D,D)))
         lbound=(lbound+herm(lbound))/2.0
@@ -2062,7 +2062,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
             mps._mat=herm(phasematrix).dot(mps._mat)
         temp=mps.tensors
         
-        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
+        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=numeig,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         rbound=np.reshape(rss,(D,D))
         rbound=fixPhase(np.reshape(rss,(D,D)))
         rbound=(rbound+herm(rbound))/2.0
@@ -2089,7 +2089,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
             mps._mat=herm(phasematrix).dot(mps._mat)
 
         temp=mps.tensors
-        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=1,init=np.reshape(np.eye(D),(D*D))/(D*1.0),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
+        eta,rss,numeig=UnitcellTMeigs(temp,direction=-1,numeig=numeig,init=np.reshape(np.eye(D),(D*D))/(D*1.0),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         rbound=np.reshape(rss,(D,D))
         rbound=fixPhase(np.reshape(rss,(D,D)))
         rbound=(rbound+herm(rbound))/2.0
@@ -2110,7 +2110,7 @@ def getBoundaryHams(mps,mpo,regauge=False):
             mps._mat=mps._mat.dot(herm(phasematrix))
             
         temp=mps.tensors
-        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=1,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
+        eta,lss,numeig=UnitcellTMeigs(temp,direction=1,numeig=numeig,init=np.reshape(np.eye(D),(D*D)),nmax=10000,tolerance=1E-16,which='LR')#is type preserving, or raises an expception if it can't be
         lbound=np.reshape(lss,(D,D))
     
         lbound=fixPhase(np.reshape(lss,(D,D)))
@@ -2136,7 +2136,7 @@ def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,directi
     if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
         dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,*ldens,*rdens).type
     elif isinstance(mps,list):
-        dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,*ldens,*rdens).type
+        dtype=np.result_type(*mps,mpopbc.dtype,boundary.dtype,*ldens,*rdens).type
     else:
         raise TypeError("computeUCsteadyStateHamiltonianGMRES: unknow type for mps")
 
@@ -2199,7 +2199,7 @@ def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datat
 
 
 
-def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-200,thresh=1E-8):
+def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-200,thresh=1E-8,numeig=6):
     """
     takes an mps (can either be a list of np.arrays or an object of type MPS from mps.py) and regauges it in place
     gauge can be either of {'left','right',symmetric'} (desired gauge of the output mps)
@@ -2263,7 +2263,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
     else:
         initr=np.reshape(rdens,D2r*D2r)
     if gauge in ('left','l',1):
-        [eta,vl,numeig]=UnitcellTMeigs(mps,direction=1,numeig=1,init=initl,nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
+        [eta,vl,numeig]=UnitcellTMeigs(mps,direction=1,numeig=numeig,init=initl,nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
         sqrteta=np.real(eta)**(1./(2.*N))
         for site in range(N):
             mps[site]=mps[site]/sqrteta
@@ -2302,7 +2302,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         return np.eye(mps[N-1].shape[1]).astype(dtype)/np.sqrt(mps[N-1].shape[1])
     if gauge in ('right','r',-1):
 
-        [eta,vr,numeig]=UnitcellTMeigs(mps,direction=-1,numeig=1,init=initr,nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
+        [eta,vr,numeig]=UnitcellTMeigs(mps,direction=-1,numeig=numeig,init=initr,nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
         sqrteta=np.real(eta)**(1./(2.*N))
         for site in range(N):
             mps[site]=mps[site]/sqrteta
@@ -2346,7 +2346,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
 
     if gauge in ('symmetric','s',0):
 
-        [eta,vr,numeig]=UnitcellTMeigs(mps,direction=-1,numeig=1,init=np.reshape(np.eye(D1l),D1l*D1l),nmax=nmaxit,tolerance=tol,\
+        [eta,vr,numeig]=UnitcellTMeigs(mps,direction=-1,numeig=numeig,init=np.reshape(np.eye(D1l),D1l*D1l),nmax=nmaxit,tolerance=tol,\
                                        ncv=ncv,which='LM')
         
         sqrteta=np.real(eta)**(1./(2.*N))
@@ -2375,7 +2375,7 @@ def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=100
         x=u.dot(np.diag(np.sqrt(eigvals))).dot(herm(u))
         invx=u.dot(np.diag(np.sqrt(inveigvals))).dot(herm(u))
 
-        [eta,vl,numeig]=UnitcellTMeigs(mps,direction=1,numeig=1,init=np.reshape(np.eye(D1l),D1l*D1l),nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
+        [eta,vl,numeig]=UnitcellTMeigs(mps,direction=1,numeig=numeig,init=np.reshape(np.eye(D1l),D1l*D1l),nmax=nmaxit,tolerance=tol,ncv=ncv,which='LM')
         sqrteta=np.real(eta)**(1./(2.*N))
         for site in range(N):
             mps[site]=mps[site]/sqrteta
@@ -2494,14 +2494,14 @@ def truncateMPS(mps,D):
     return lams
 
 
-def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
+def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14,numeig=6):
     
     """
-    canonizes an mps, i.e. it returns the Gamma and lambda matrices in a list; routine can handle
+    canonizes an mps, i.e. it returns the Gamma and lambda matrices in a list
 
     Parameters 
     ------------------------------------
-    mps: list of np.ndarrays of shape (D_i,D_i,d_i) or MPS object 
+    mps: list of np.ndarrays of shape (D_i,D_{i+1},d_i) or MPS object 
          the mps can have obc or pbc boundaries; in the latter case,
          the state has to be regauged into symmetric form prior to calling canonizeMPS
     
@@ -2509,7 +2509,9 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
                threshold for truncation of the MPS
     r_thresh:  float
                internal parameter for capturing exceptions (ignore it)
-    
+    numeig:    int
+               hyper parameter: number of eigenvectors to be calculated in eigs 
+               (only relevant for infinite systems)
     Returns: 
     ------------------------------------
     Gamma: list of np.ndarrays of shape (Di,Di,di)
@@ -2572,7 +2574,7 @@ def canonizeMPS(mps,tr_thresh=1E-16,r_thresh=1E-14):
             #D=max(Gamma.__D__())
             #regauge and truncate the state; note that "lam" is not diagonal now, 
             #and does not correpsond to the sq-root of reduced density matrix
-            lam=regaugeIMPS(Gamma,gauge='symmetric',D=D,truncate=tr_thresh)
+            lam=regaugeIMPS(Gamma,gauge='symmetric',D=D,truncate=tr_thresh,numeig=numeig)
 
         Gamma[-1]=np.transpose(np.tensordot(Gamma[-1],lam,([1],[0])),(0,2,1))
         Lam=[None]*(len(Gamma)+1)
@@ -2632,7 +2634,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
 
     """
     
-    dtype=tensor.dtype
+    dtype=tensor.dtype.type
     if gauge in ('left','l',1):
         [chi,chi2,d]=np.shape(tensor)
         lam=np.eye(chi)

@@ -26,7 +26,7 @@ herm=lambda x:np.conj(np.transpose(x))
 
 class Container(object):
 
-    def __init__(self,mps,mpo,filename):
+    def __init__(self,mps,mpo,filename,lb=None,rb=None):
         """
         Base class for simulation objects;
         mps:      MPS object
@@ -35,14 +35,36 @@ class Container(object):
                   Hamiltonian in MPO format
         filename: str
                   the name of the simulation
-
+        lb:       np.ndarray of shape (D,D,M), or None
+                  the left environment; 
+                  lb has to have shape (mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0])
+                  if None, obc are assumed, and lb=np.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]))
+        rb:       np.ndarray of shape (D,D,M), or None
+                  the right environment
+                  rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
+                  if None, obc are assumed, and rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
+        self._filename=filename        
         self._mps=mps
         self._mpo=mpo
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
         
-        self._filename=filename
+        #TODO: make checks for verbose
+        if (np.all(lb)!=None) and (np.all(rb)!=None):
+            assert(mps[0].shape[0]==lb.shape[0])
+            assert(mps[-1].shape[1]==rb.shape[0])
+            assert(mpo[0].shape[0]==lb.shape[2])
+            assert(mpo[-1].shape[1]==rb.shape[2])
+            #if not np.issubdtype(lb.dtype.type,self.dtype):
+            #    raise TypeError('Container.__init__: lb.dtype={0} is not a subdtype of self.dtype={1}'.format(lb.dtype.type,self.dtype))
+            #if not np.issubdtype(rb.dtype,self.dtype):
+            #    raise TypeError('Container.__init__: rb.dtype={0} is not a subdtype of self.dtype={1}'.format(rb.dtype,self.dtype))
+            self._lb=lb
+            self._rb=rb
+        else:
+            self._lb=np.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
+            self._rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
         
     def __len__(self):
         """
@@ -194,11 +216,12 @@ class Container(object):
         Container.update():
         make the Container internally consistent after e.g. changing the mps object.
         The mps.pos attribute after update() is mps.pos=0 (i.e. mps.position(0) is called)
-        The left and right Hamiltonian environments  are recalculated using msp, with self._L (left environment)
-        being a list of length len(mps)+1 with the only non-empty element being the first one:
-        self._L[0]=self._lb. self._lb is the left bundary condition of the simulation
+        The left and right Hamiltonian bulk-environments are recalculated using self._mps, 
+        with self._L (left environments) being a list of length len(mps)+1 with the only non-empty 
+        element being the first one: self._L[0]=self._lb, where self._lb is unchanged. 
+        self._lb is the left bundary condition of the simulation
         self._R is a list of length len(mps)+1 holding all right-environment for all bipartitions
-        of the chain.
+        of the chain (again with self._R[0]=self._rb unchanged).
 
         returns: self
         """
@@ -210,14 +233,14 @@ class Container(object):
         return self
         
     
-class DMRGengine(Container,object):
+class DMRGengine(Container):
     """
     DMRGengine
     simulation container for density matrix renormalization group optimization
 
     """
     #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1,1,1)) for obc simulation
-    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+    def __init__(self,mps,mpo,filename='DMRG',lb=None,rb=None):
         """
         initialize an MPS object
         mps:      MPS object
@@ -232,24 +255,7 @@ class DMRGengine(Container,object):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-        if (np.all(lb)!=None) and (np.all(rb)!=None):
-            assert(mps[0].shape[0]==lb.shape[0])
-            assert(mps[-1].shape[1]==rb.shape[0])
-            assert(mpo[0].shape[0]==lb.shape[2])
-            assert(mpo[-1].shape[1]==rb.shape[2])
-            self._lb=np.copy(lb)
-            self._rb=np.copy(rb)
-            
-        else:
-            assert(mpo[0].shape[0]==1)
-            assert(mpo[-1].shape[1]==1)
-            assert(mps[0].shape[0]==1)
-            assert(mps[-1].shape[1]==1)            
-            
-            self._lb=np.ones((1,1,1))
-            self._rb=np.ones((1,1,1))
-            
-        super(DMRGengine,self).__init__(mps,mpo,filename)
+        super(DMRGengine,self).__init__(mps,mpo,filename,lb,rb)
         self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
         self._L.insert(0,np.copy(self._lb))
@@ -299,7 +305,7 @@ class DMRGengine(Container,object):
         if solver not in ['AR','LAN','LOBPCG']:
             raise ValueError("DMRGengine.simulate: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
 
-        self._solver=solver
+        solver=solver
         self._Nmax=Nmax
         converged=False
         energy=100000.0
@@ -308,11 +314,11 @@ class DMRGengine(Container,object):
         while not converged:
             for n in range(len(self._mps)-1):
                 self.position(n)
-                e,opt=self.optimize(n,tol,ncv,numvecs,self._solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)
+                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)
                 self.mps[n]=opt
             for n in range(len(self._mps)-1,0,-1):
                 self.position(n+1)                
-                e,opt=self.optimize(n,tol,ncv,numvecs,self._solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)                
+                e,opt=self.optimize(n,tol,ncv,numvecs,solver,Ndiag,nmaxlan,landelta,landeltaEta,verbose)                
                 self.mps[n]=opt
                     
             if np.abs(e-energy)<Econv:
@@ -350,7 +356,7 @@ class DMRGengine(Container,object):
         """
         if solver not in ['AR','LAN','LOBPCG']:
             raise ValueError("DMRGengine.simulateTwoSite: unknown solver type {0}: use {'AR','LAN','LOBPCG'}".format(solver))
-        self._solver=solver
+        solver=solver
         
         self._Nmax=Nmax
 
@@ -367,11 +373,11 @@ class DMRGengine(Container,object):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
-                if self._solver=='LOBPCG':
+                if solver=='LOBPCG':
                     e,opt=mf.lobpcg(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
-                if self._solver=='AR':
+                if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol,numvecs,ncv)
-                if self._solver=='LAN':
+                if solver=='LAN':
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
@@ -385,7 +391,7 @@ class DMRGengine(Container,object):
                 U=U[:,0:Dnew]
                 V=V[0:Dnew,:]
                 if verbose>0:
-                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,n,len(self),np.real(e),np.imag(e),Dnew))
+                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,len(self),np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
                 self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
@@ -401,11 +407,11 @@ class DMRGengine(Container,object):
                 temp2=ncon.ncon([self._mpo[n],self._mpo[n+1]],[[-1,1,-3,-5],[1,-2,-4,-6]])
                 Ml,Mr,dlin,drin,dlout,drout=temp2.shape                
                 twositempo=np.reshape(temp2,(Ml,Mr,dlin*drin,dlout*drout))
-                if self._solver=='LOBPCG':
+                if solver=='LOBPCG':
                     e,opt=mf.lobpcg(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol)#mps._mat set to 11 during call of __tensor__()
-                if self._solver=='AR':
+                if solver=='AR':
                     e,opt=mf.eigsh(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol,numvecs,ncv)
-                if self._solver=='LAN':
+                if solver=='LAN':
                     e,opt=mf.lanczos(self._L[n],twositempo,self._R[len(self._mps)-1-n-1],twositemps,tol,Ndiag=Ndiag,nmax=nmaxlan,numeig=1,delta=landelta,\
                                       deltaEta=landeltaEta)
 
@@ -419,7 +425,7 @@ class DMRGengine(Container,object):
                 U=U[:,0:Dnew]
                 V=V[0:Dnew,:]
                 if verbose>0:
-                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,n,len(self),np.real(e),np.imag(e),Dnew))
+                    stdout.write("\rTS-DMRG using %s solver: it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,it,Nmax,n,len(self),np.real(e),np.imag(e),Dnew))
                     stdout.flush()                    
 
                 self._mps[n]=np.transpose(np.reshape(U,(Dl,dl,Dnew)),(0,2,1))
@@ -444,12 +450,12 @@ class DMRGengine(Container,object):
         return e
         #returns the center bond matrix and the gs energy
 
-class IDMRGengine(DMRGengine,object):
+class IDMRGengine(DMRGengine):
     """
     IDMRGengine
     container object for performing an IDMRG optimization of the ground-state of a Hamiltonian
     """
-    def __init__(self,mps,mpo,filename):
+    def __init__(self,mps,mpo,filename='IDMRG'):
         """
         initialize an IDMRG object
         mps:      MPS object
@@ -460,12 +466,14 @@ class IDMRGengine(DMRGengine,object):
                   the name of the simulation
         """
         
-        lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(mps,mpo)                            
+        lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(mps,mpo,numeig=1)                            
         super(IDMRGengine,self).__init__(mps,mpo,filename,lb,rb)
     #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
 
-    def __update__(self,regauge=False):
-        
+    def update(self,regauge=False):
+        """
+        overrides self.update method of the Container class
+        """
         self._mps.position(len(self._mps))
         #update the left boundary
         for site in range(int(len(self._mps)/2)):
@@ -551,15 +559,15 @@ class IDMRGengine(DMRGengine,object):
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
-            D=self.__update__(regauge)
+            D=self.update(regauge)
             if verbose>0:
                 if regauge==False:
                     if skip==False:
-                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,np.real((e-eold)/(len(self._mps))),np.imag((e-eold)/(len(self._mps))),D))
+                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real((e-eold)/(len(self._mps))),np.imag((e-eold)/(len(self._mps))),D))
                     if skip==True:
                         skip=False
                 if regauge==True:
-                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(self._solver,it,Nmax,np.real(self._hl/len(self)),np.imag(self._hl/len(self)),D))
+                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real(self._hl/len(self)),np.imag(self._hl/len(self)),D))
                 stdout.flush()  
                 if verbose>1:
                     print('')
@@ -618,7 +626,7 @@ class IDMRGengine(DMRGengine,object):
             if regaugestep>0 and it%regaugestep==0 and it>0:
                 regauge=True
                 skip=True
-            D=self.__update__(regauge)
+            D=self.update(regauge)
             if verbose>0:
                 if regauge==False:
                     if skip==False:
@@ -644,7 +652,7 @@ class IDMRGengine(DMRGengine,object):
         self._mps.resetZ()
         
         
-class HomogeneousIMPSengine(Container,object):
+class HomogeneousIMPSengine(Container):
     """
     HomogeneousIMPSengine
     container object for homogeneous MPS optimization using a gradient descent method
@@ -736,7 +744,8 @@ class HomogeneousIMPSengine(Container,object):
     
     def __doGradStep__(self):
         converged=False
-        self._gamma,self._lam,trunc=mf.regauge(self._mps,gauge='symmetric',initial=np.reshape(np.diag(self._lam**2),self._D*self._D),\
+        self._gamma,self._lam,trunc=mf.regauge(self._mps,gauge='symmetric',initial=np.reshape(np.diag(self._lam**2),
+                                                                                              self._D*self._D),
                                                nmaxit=10000,tol=self._tol,ncv=self._ncv,numeig=self._numeig,trunc=self._trunc,Dmax=self._D,pinv=self._pinv)
         if len(self._lam)!=self._D:
             Dchanged=True
@@ -838,7 +847,7 @@ class HomogeneousIMPSengine(Container,object):
 """
 a derived class for discretized Boson simulations; teh only difference to HomogeneousIMPS is the calculation of certain observables
 """
-class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine,object):
+class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine):
     def __init__(self,Nmax,mps,mpo,dx,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40):        
         super(HomogeneousDiscretizedBosonEngine,self).__init__(Nmax,mps,mpo,filename,alpha,alphas,normgrads,dtype,factor=2.0,itreset=10,normtol=0.1,epsilon=1E-10,tol=1E-4,lgmrestol=1E-10,ncv=30,numeig=3,Nmaxlgmres=40)
         
@@ -866,13 +875,13 @@ class HomogeneousDiscretizedBosonEngine(HomogeneousIMPSengine,object):
         
 
 
-class VUMPSengine(Container,object):
+class VUMPSengine(Container):
     """
 
     VUMPSengine
     container object for mps ground-state optimization  using the VUMPS algorithm and time evolution using the TDVP 
     """
-    def __init__(self,mps,mpo,filename,regaugetol=1E-10,ncv=40,numeig=6):
+    def __init__(self,mps,mpo,filename,tol=1E-12,ncv=40,pinv=1E-200,numeig=6):
         """
         initialize a VUMPS simulation object
 
@@ -884,8 +893,6 @@ class VUMPSengine(Container,object):
                         Hamiltonian in MPO format
         filename:       str
                         the name of the simulation
-        regaugetol:     float
-                        precision of the left and right reduced steady-density matrices
         ncv:            int
                         number of krylov vectors used in sparse transfer-matrix eigendecomposition
         numeig:         number of eigenvectors to be returned bei eigs when computing the left and right reduced steady state density matrices
@@ -894,38 +901,29 @@ class VUMPSengine(Container,object):
             raise ValueError("VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
         if len(mpo)>1:
             raise ValueError("VUMPSengine: got an mpo of len(mps)>1; VUMPSengine can only handle len(mpo)=1")
-        
-        self._dtype=np.result_type(mps[0].dtype,mpo.dtype).type
-        self._mps=copy.deepcopy(mps)
-        
-        self._D=np.shape(mps[0])[0]
-        self._filename=filename
-        
-        self._kleft=np.random.rand(self._D,self._D).astype(self._dtype)
-        self._kright=np.random.rand(self._D,self._D).astype(self._dtype)
+
+        super(VUMPSengine,self).__init__(mps,mpo,filename,lb=None,rb=None)#initializes lb and rb
+        self._kleft=np.random.rand(self.mps.D[0],self.mps.D[0]).astype(self.dtype)
+        self._kright=np.random.rand(self.mps.D[-1],self.mps.D[-1]).astype(self.dtype)
         self._it=1
         [B1,B2,d1,d2]=np.shape(mpo[0])
 
-        mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
-        mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
-
+        #initialize the mpo again
+        mpol=np.zeros((1,B2,d1,d2),dtype=self.dtype)
+        mpor=np.zeros((B1,1,d1,d2),dtype=self.dtype)
         mpol[0,:,:,:]=mpo[0][-1,:,:,:]
         mpol[0,0,:,:]/=2.0
         mpor[:,0,:,:]=mpo[0][:,0,:,:]
         mpor[-1,0,:,:]/=2.0
         self._mpo=H.MPO.fromlist([mpol,mpo[0],mpor])
-        self._t0=self._dtype(0.0)
+        self._t0=self.dtype(0.0)
+        self.mps.regauge('symmetric')#,tol=tol,ncv=ncv,pinv=pinv,numeig=numeig)
 
-        self._numeig=numeig
-        self._tol=regaugetol        
-        self._ncv=ncv
-        self._mps.regauge('symmetric')
-
-        self._A=np.copy(self._mps[0])
-        self._B=ncon.ncon([np.diag(1.0/np.diag(self._mps._mat)),self._A,self._mps._mat],[[-1,1],[1,2,-3],[2,-2]])
-        self._r=np.eye(self._B.shape[0]).astype(self._dtype)
-        self._l=np.eye(self._A.shape[0]).astype(self._dtype)
-        #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self._mps])
+        self._A=np.copy(self.mps[0])
+        self._B=ncon.ncon([np.diag(1.0/np.diag(self.mps._mat)),self._A,self.mps._mat],[[-1,1],[1,2,-3],[2,-2]])
+        self._r=np.eye(self._B.shape[0]).astype(self.dtype)
+        self._l=np.eye(self._A.shape[0]).astype(self.dtype)
+        #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self.mps])
 
     def reset(self):
         """
@@ -937,11 +935,11 @@ class VUMPSengine(Container,object):
         self._r=np.eye(self._B.shape[0])
         self._l=np.eye(self._A.shape[0])        
         
-    def _prepareStep(self):
-        [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=self._numeig,init=self._r,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
-        [etal,vl,numeig]=mf.TMeigs(self._B,direction=1,numeig=self._numeig,init=self._l,nmax=10000,tolerance=self._tol,ncv=self._ncv,which='LR')
-        l=np.reshape(vl,(self._D,self._D))
-        r=np.reshape(vr,(self._D,self._D))
+    def _prepareStep(self,tol=1E-12,ncv=30,numeig=1,lgmrestol=1E-10,Nmaxlgmres=40):
+        [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=numeig,init=self._r,nmax=10000,tolerance=tol,ncv=ncv,which='LR')
+        [etal,vl,numeig]=mf.TMeigs(self._B,direction=1,numeig=numeig,init=self._l,nmax=10000,tolerance=tol,ncv=ncv,which='LR')
+        l=np.reshape(vl,(self.mps.D[0],self.mps.D[0]))
+        r=np.reshape(vr,(self.mps.D[-1],self.mps.D[-1]))
         l=l/np.trace(l)
         r=r/np.trace(r)
         
@@ -949,54 +947,54 @@ class VUMPSengine(Container,object):
         self._r=(r+herm(r))/2.0            
 
 
-        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self._D).astype(self._dtype))
-        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self._D).astype(self._dtype))
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0]).astype(self.dtype))
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1]).astype(self.dtype))
 
-        self._lb=mf.initializeLayer(self._A,np.eye(self._D).astype(self._dtype),self._A,self._mpo[0],1)
+        self._lb=mf.initializeLayer(self._A,np.eye(self.mps.D[0]).astype(self.dtype),self._A,self._mpo[0],1)
 
 
         ihl=mf.addLayer(self._lb,self._A,self._mpo[2],self._A,1)[:,:,0]
         Elocleft=np.tensordot(ihl,self._r,([0,1],[0,1]))
-        self._rb=mf.initializeLayer(self._B,np.eye(self._D).astype(self._dtype),self._B,self._mpo[2],-1)
+        self._rb=mf.initializeLayer(self._B,np.eye(self.mps.D[-1]).astype(self.dtype),self._B,self._mpo[2],-1)
 
 
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self._D).astype(self._dtype))
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self._D).astype(self._dtype))
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0]).astype(self.dtype))
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1]).astype(self.dtype))
         
-        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self._D).astype(self._dtype),ihlprojected,x0=np.reshape(self._kleft,self._D*self._D),tolerance=self._lgmrestol,\
-                                           maxiteration=self._Nmaxlgmres,direction=1)
-        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self._D).astype(self._dtype),self._r,ihrprojected,x0=np.reshape(self._kright,self._D*self._D),tolerance=self._lgmrestol,\
-                                            maxiteration=self._Nmaxlgmres,direction=-1)
+        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
+                                           maxiteration=Nmaxlgmres,direction=1)
+        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self.mps.D[-1]).astype(self.dtype),self._r,ihrprojected,x0=np.reshape(self._kright,self.mps.D[-1]*self.mps.D[-1]),tolerance=lgmrestol,\
+                                            maxiteration=Nmaxlgmres,direction=-1)
         
         self._lb[:,:,0]+=np.copy(self._kleft)
         self._rb[:,:,-1]+=np.copy(self._kright)
         return Elocleft,Elocright,leftn,rightn
 
     
-    def _doOptimStep(self):
-        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False))
-        if self._mps._position==1:
-            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self._mps._mat)
+    def _doOptimStep(self,svd=False,artol=1E-5,arnumvecs=1,arncv=20,Ndiag=10,nmaxlan=500,landelta=1E-8,solver='AR'):
+        AC_=mf.HAproductSingleSiteMPS(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False))
+        if self.mps._position==1:
+            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._A,self._rb,position='right',mat=self.mps._mat)
             self._gradnorm=np.linalg.norm(AC_-ncon.ncon([self._A,C_],[[-1,1,-3],[1,-2]]))            
-        if self._mps._position==0:
-            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._B,self._rb,position='left',mat=self._mps._mat)
+        if self.mps._position==0:
+            C_=mf.HAproductZeroSiteMat(self._lb,self._mpo[1],self._B,self._rb,position='left',mat=self.mps._mat)
             self._gradnorm=np.linalg.norm(AC_-ncon.ncon([C_,self._B],[[-1,1],[1,-2,-3]]))            
 
-        if self._solver=='AR':
-            e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),self._artol_,numvecs=self._arnumvecs,numcv=self._arncv,numvecs_returned=self._arnumvecs)
-            e2,mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self._mps._mat,position='right',tolerance=self._artol_,numvecs=self._arnumvecs,numcv=self._arncv)
-            if self._arnumvecs>1:
+        if solver.upper()=='AR':
+            e1,mps=mf.eigsh(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),artol,numvecs=arnumvecs,numcv=arncv,numvecs_returned=arnumvecs)
+            e2,mat=mf.eigshbond(self._lb,self._mpo[1],self._A,self._rb,self.mps._mat,position='right',tolerance=artol,numvecs=arnumvecs,numcv=arncv)
+            if arnumvecs>1:
                 self._gap=e1[1]-e1[0]
                 mps=mps[0]                
             mat/=np.linalg.norm(mat)                
 
-        elif self._solver=='LAN':
-            e1,mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),self._artol,self._Ndiag,self._nmaxlan,self._arnumvecs,self._landelta,deltaEta=self._artol)
-            e2,mat=mf.lanczosbond(self._lb,self._mpo[1],self._A,self._rb,self._mps._mat,'right',self._Ndiag,self._nmaxlan,self._arnumvecs,delta=self._landelta,deltaEta=self._artol)
-            if self._arnumvecs>1:
+        elif solver.upper()=='LAN':
+            e1,mps=mf.lanczos(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),artol,Ndiag,nmaxlan,arnumvecs,landelta,deltaEta=artol)
+            e2,mat=mf.lanczosbond(self._lb,self._mpo[1],self._A,self._rb,self.mps._mat,'right',Ndiag,nmaxlan,arnumvecs,delta=landelta,deltaEta=artol)
+            if arnumvecs>1:
                 if len(e1)>1:
                     self._gap=e1[1]-e1[0]
                 mat=mat[0]
@@ -1005,7 +1003,7 @@ class VUMPSengine(Container,object):
         else:
             raise ValueError("in VUMPSengine: unknown solver type; use 'AR' or 'LAN'")
         D1,D2,d=mps.shape
-        if self._svd:
+        if svd:
             ACC_l=np.reshape(ncon.ncon([mps,herm(mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
             CAC_r=np.reshape(ncon.ncon([herm(mat),mps],[[-1,1],[1,-2,-3]]),(D1,d*D2))
             Ul,Sl,Vl=mf.svd(ACC_l)
@@ -1026,10 +1024,10 @@ class VUMPSengine(Container,object):
             self._A=np.transpose(np.reshape(UAC_l.dot(herm(UC_l)),(D1,d,D2)),(0,2,1))
             self._B=np.reshape(herm(UC_r).dot(UAC_r),(D1,D2,d))
             
-        self._mps[0]=np.copy(self._A)
-        self._mps._mat=np.copy(mat)
-        self._mps._connector=np.linalg.pinv(mat)
-        self._mps._position=1
+        self.mps[0]=np.copy(self._A)
+        self.mps._mat=np.copy(mat)
+        self.mps._connector=np.linalg.pinv(mat)
+        self.mps._position=1
         
     def simulate(self,*args,**kwargs):
         """
@@ -1039,8 +1037,10 @@ class VUMPSengine(Container,object):
         warnings.warn('VUMPS.simulate is deprecated; use optimize')
         self.optimize(*args,**kwargs)
         
-    def optimize(self,Nmax,epsilon=1E-10,lgmrestol=1E-10,Nmaxlgmres=40,\
-                 artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,landelta=1E-8,solver='AR',cp=None,keep_cp=False):
+    def optimize(self,Nmax=1000,epsilon=1E-10,regaugetol=1E-10,ncv=30,numeig=1,
+                 lgmrestol=1E-10,Nmaxlgmres=40,\
+                 artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,
+                 landelta=1E-8,solver='AR',cp=None,keep_cp=False):
 
         """
         do a VUMPS ground-state optimization
@@ -1051,6 +1051,13 @@ class VUMPSengine(Container,object):
                          number of iterations
         epsilon:         float
                          desired convergence
+        regaugetol:      float
+                         precision of the left and right dominant eigenvectors of the transfer operator
+        ncv:             int
+                         number of krylov vectors used for diagonalizeing transfer operator
+        numeig:          int 
+                         number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
+                         operator (hyperparameter)
         lgmrestol:       float
                          precision of the left and right renormalized environments
         Nmaxlgmres:      int
@@ -1067,27 +1074,19 @@ class VUMPSengine(Container,object):
                          if > 0, simulation is checkpointed every "cp" steps
         """
         converged=False
+        
 
-        self._svd=svd
-        self._artol=artol
-        self._arnumvecs=arnumvecs
-        self._arncv=arncv
-        self._lgmrestol=lgmrestol
-      
-        self._epsilon=epsilon
-        self._Nmaxlgmres=Nmaxlgmres
-        self._Ndiag=Ndiag
-        self._nmaxlan=nmaxlan
-        self._landelta=landelta
-        self._solver=solver
         current='None'
         while converged==False:
             if self._it<10:
-                self._artol_=1E-6
+                artol_=1E-6
             else:
-                self._artol_=self._artol
-            Edens,Elocright,leftn,rightn=self._prepareStep()        
-            self._doOptimStep()
+                artol_=artol
+            Edens,Elocright,leftn,rightn=self._prepareStep(tol=regaugetol,ncv=ncv,numeig=numeig,
+                                                           lgmrestol=lgmrestol,Nmaxlgmres=Nmaxlgmres)
+            
+            self._doOptimStep(svd=svd,artol=artol_,arnumvecs=arnumvecs,arncv=arncv,Ndiag=Ndiag,nmaxlan=nmaxlan,
+                              landelta=landelta,solver=solver)
             if self._it>=Nmax:
                 break
             if (cp!=None) and (cp>0) and (self._it%cp==0):
@@ -1100,23 +1099,22 @@ class VUMPSengine(Container,object):
                     current=self._filename+'_vumps_cp'+str(self._it)
                     self.save(current)
             self._it+=1
-
-            if self._arnumvecs==1:
-                stdout.write("\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f" %(self._solver,self._it,np.real(Edens),self._D,self._gradnorm))
+            if arnumvecs==1:
+                stdout.write("\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f" %(solver,self._it,np.real(Edens),np.max(self.mps.D),self._gradnorm))
                 stdout.flush()
-            if self._arnumvecs>1:
-                stdout.write("\rusing %s solver: it %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f" %(self._solver,self._it,np.real(Edens),np.real(self._gap),self._D,self._gradnorm))
+            if arnumvecs>1:
+                stdout.write("\rusing %s solver: it %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f" %(solver,self._it,np.real(Edens),np.real(self._gap),np.max(self.mps.D),self._gradnorm))
                 stdout.flush()
-            if self._gradnorm<self._epsilon:
+            if self._gradnorm<epsilon:
                 converged=True
         print
         print()
+
         if self._it>=Nmax and (converged==False):
             print ('simulation reached maximum number of steps ({1}) and stopped at precision of {0}'.format(self._gradnorm,Nmax))
         if converged==True:
-            print ('simulation converged to {0} in {1} steps'.format(self._epsilon,Nmax))
+            print ('simulation converged to {0} in {1} steps'.format(epsilon,self._it))
         print
-
 
 
     def _evolveTensor(self,solver,dt,krylov_dim,rtol,atol):
@@ -1140,11 +1138,11 @@ class VUMPSengine(Container,object):
         
         """
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':
-            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         elif solver=='SEXPMV':                    
-            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
+            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt)
         return evTen
 
     def _evolveMatrix(self,solver,dt,krylov_dim,rtol,atol):
@@ -1170,11 +1168,11 @@ class VUMPSengine(Container,object):
         
         L=mf.addLayer(self._lb,self._A,self._mpo[1],self._A,direction=1)        
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evMat=mf.evolveMatrixsolve_ivp(L,self._rb,self._mps._mat,dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evMat=mf.evolveMatrixsolve_ivp(L,self._rb,self.mps._mat,dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':                        
-            evMat=mf. evolveMatrixLan(L,self._rb,self._mps._mat,dt,krylov_dimension=krylov_dim)
+            evMat=mf. evolveMatrixLan(L,self._rb,self.mps._mat,dt,krylov_dimension=krylov_dim)
         elif solver=='SEXPMV':                                            
-            evMat=mf.evolveMatrixSexpmv(L,self._rb,self._mps._mat,dt)                                            
+            evMat=mf.evolveMatrixSexpmv(L,self._rb,self.mps._mat,dt)                                            
         evMat/=np.linalg.norm(evMat)
         return evMat
             
@@ -1197,20 +1195,20 @@ class VUMPSengine(Container,object):
 
 
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorsolve_ivp(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':
-            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
+            evTen=mf.evolveTensorLan(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         elif solver=='SEXPMV':                    
-            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self._mps.tensor(0,clear=False),dt)
+            evTen=mf.evolveTensorSexpmv(self._lb,self._mpo[1],self._rb,self.mps.tensor(0,clear=False),dt)
      
         #evTen=self._evolveTensor(solver,dt,krylov_dim,rtol,atol)
         L=mf.addLayer(self._lb,self._A,self._mpo[1],self._A,direction=1)        
         if solver in ['Radau','RK45','RK23','BDF','LSODA','RK23']:
-            evMat=mf.evolveMatrixsolve_ivp(L,self._rb,self._mps._mat,dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
+            evMat=mf.evolveMatrixsolve_ivp(L,self._rb,self.mps._mat,dt,method=solver,rtol=rtol,atol=atol) #clear=True resets self._mat to identity
         elif solver=='LAN':                        
-            evMat=mf. evolveMatrixLan(L,self._rb,self._mps._mat,dt,krylov_dimension=krylov_dim)
+            evMat=mf. evolveMatrixLan(L,self._rb,self.mps._mat,dt,krylov_dimension=krylov_dim)
         elif solver=='SEXPMV':                                            
-            evMat=mf.evolveMatrixSexpmv(L,self._rb,self._mps._mat,dt)                                            
+            evMat=mf.evolveMatrixSexpmv(L,self._rb,self.mps._mat,dt)                                            
         evMat/=np.linalg.norm(evMat)
         
         D1,D2,d=evTen.shape        
@@ -1221,13 +1219,15 @@ class VUMPSengine(Container,object):
         Ur,Sr,Vr=mf.svd(CAC_r)
         self._A=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
         self._B=np.reshape(Ur.dot(Vr),(D1,D2,d))
-        self._mps[0]=np.copy(self._B)
-        self._mps._mat=np.copy(evMat)
-        self._mps._connector=np.linalg.pinv(evMat)
-        self._mps._position=0
+        self.mps[0]=np.copy(self._B)
+        self.mps._mat=np.copy(evMat)
+        self.mps._connector=np.linalg.pinv(evMat)
+        self.mps._position=0
 
     def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
+
         """
+        !!!!!!!!!!!!!!!!!!!!!!         This has not yet been tested    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         to real or imaginary time evolution for an infinite homogeneous systems using the TDVP
         currently only nearest neighbor Hamiltonians are supported
         Parameters:
@@ -1254,9 +1254,6 @@ class VUMPSengine(Container,object):
                         verbosity flag; larger value produces more output, use 0 for no output
         """
 
-        self._lgmrestol=lgmrestol
-        self._Nmaxlgmres=Nmaxlgmres
-        
         if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
             raise ValueError("VUMPSengine.doTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
 
@@ -1271,8 +1268,10 @@ class VUMPSengine(Container,object):
             self._doEvoStep(solver,dt,krylov_dim,rtol,atol)
             if verbose>=1:
                 self._t0+=np.abs(dt)
-                stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,self._it,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self._mps.D),np.abs(dt)))                
+                stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,self._it,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self.mps.D),np.abs(dt)))
+
                 stdout.flush()
+                print(self.dtype)
             if verbose>=2:                
                 print('')
             if (cp!=None) and (self._it>0) and (self._it%cp==0):
@@ -1286,27 +1285,22 @@ class VUMPSengine(Container,object):
                     self.save(current)
 
             self._it+=1
-        self._mps.position(0)
-        self._mps.resetZ()        
+        self.mps.position(0)
+        self.mps.resetZ()        
         return self._t0
 
 
-class iTEBD(Container,object):
-    def __init__(self,mps,mpo,filename):
-        super(iTEBD,self).__init__(mps,mpo,filename)
-    def doStep(self):
-        self._mps.canonize()#generates gamma-lambda decomposition
         
     
     
-class TimeEvolutionEngine(Container,object):
+class TimeEvolutionEngine(Container):
     """
     TimeEvolutionEngine(Container):
     container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
     """
 
     @classmethod
-    def TEBD(cls,mps,gatecontainer,filename):
+    def TEBD(cls,mps,gatecontainer,filename='TEBD'):
         """
         TimeEvolutionEngine.TEBD(mps,mpo,filename):
         initialize a TEBD simulation for finite systems. this is an engine for real or imaginary time evolution using TEBD
@@ -1326,7 +1320,7 @@ class TimeEvolutionEngine(Container,object):
         return cls(mps,gatecontainer,filename)
 
     @classmethod
-    def TDVP(cls,mps,mpo,filename,lb=None,rb=None):
+    def TDVP(cls,mps,mpo,filename='TDVP',lb=None,rb=None):
         """
         TimeEvolutionEngine.TDVP(mps,mpo,filename):
         initialize a TDVP simulation for finite systems; this is an engine for real or imaginary time evolution using TDVP
@@ -1380,7 +1374,7 @@ class TimeEvolutionEngine(Container,object):
             self._rb=np.ones((1,1,1))
             
         super(TimeEvolutionEngine,self).__init__(mps,mpo,filename)        
-        self._gates=mpo
+        self.gates=self.mpo
         self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
         self._L.insert(0,self._lb)
@@ -1389,7 +1383,6 @@ class TimeEvolutionEngine(Container,object):
         self._t0=0.0
         self._it=0
         self._tw=0
-        self._maxD=max(self._mps.D)
         
     @property
     def iteration(self):
@@ -1444,8 +1437,7 @@ class TimeEvolutionEngine(Container,object):
                    threshold for truncation
         """
         for n in range(0,len(self._mps)-1,2):
-            tw_,D=self._mps.applyTwoSiteGate(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
-            self._maxD=max(self._maxD,D)
+            tw_,D=self._mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
             self._tw+=tw_
 
     def applyOdd(self,tau,Dmax,tr_thresh):
@@ -1466,11 +1458,10 @@ class TimeEvolutionEngine(Container,object):
         elif len(self._mps)%2==1:
             lstart=len(self._mps)-2
         for n in range(lstart,-1,-2):
-            tw_,D=self._mps.applyTwoSiteGate(gate=self._gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
-            self._maxD=max(self._maxD,D)                
+            tw_,D=self._mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(n,n+1,tau),site=n,Dmax=Dmax,thresh=tr_thresh)
             self._tw+=tw_
 
-    def doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cp=None,keep_cp=False):
+    def doTEBD(self,dt,numsteps,Dmax,tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
         """
         TEBDengine.doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         uses a second order trotter decomposition to evolve the state using TEBD
@@ -1646,14 +1637,14 @@ class TimeEvolutionEngine(Container,object):
                     dt_=dt/2.0
                 self._mps.position(n+1)
                 #evolve tensor forward
-                evTen=self._evolveTensor(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
+                evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
                 tensor,mat,Z=mf.prepareTensor(evTen,1)
                 self._mps[n]=tensor
                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
                 self._mps._mat=mat
                 #evolve matrix backward                    
                 if n<(len(self._mps)-1):
-                    evMat=self._evolveMatrix(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                    
+                    evMat=self._evolveMatrix(n,solver=solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                    
                     self._mps._mat=evMat
                 else:
                     self._mps._mat=mat
@@ -1663,11 +1654,11 @@ class TimeEvolutionEngine(Container,object):
                 #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
                 self._mps.position(n+1)
                 self._R[len(self._mps)-n-1]=mf.addLayer(self._R[len(self._mps)-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
-                evMat=self._evolveMatrix(n,solver=self._solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                                    
+                evMat=self._evolveMatrix(n,solver=solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                                                    
                 self._mps._mat=evMat        #set evolved matrix as new center-matrix
             
                 #evolve tensor at bond n forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
-                evTen=self._evolveTensor(n,solver=self._solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
+                evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
                 
                 #split off a center matrix 
                 tensor,mat,Z=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
@@ -1677,7 +1668,7 @@ class TimeEvolutionEngine(Container,object):
                 self._mps._position=n
             if verbose>=1:
                 self._t0+=np.abs(dt)
-                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i, |dt|=%1.5f"%(self._solver,self._t0,np.max(self._mps.D),np.abs(dt)))
+                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i, |dt|=%1.5f"%(solver,self._t0,np.max(self._mps.D),np.abs(dt)))
                 stdout.flush()
             if verbose>=2:                
                 print('')
@@ -1736,7 +1727,7 @@ class TimeEvolutionEngine(Container,object):
                 warnings.warn('{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'.format(solver),stacklevel=2)
                 solver='LAN'
 
-        self._solver=solver
+        solver=solver
         converged=False
         current='None'
         self._mps.position(0)
@@ -1847,7 +1838,7 @@ class TimeEvolutionEngine(Container,object):
                 
             if verbose>=1:
                 self._t0+=np.abs(dt)
-                stdout.write("\rTwo-site TDVP engine using %s solver: t=%4.4f, truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self._solver,self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
+                stdout.write("\rTwo-site TDVP engine using %s solver: t=%4.4f, truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(solver,self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
                 stdout.flush()
             if verbose>=2:                
                 print('')
@@ -1865,13 +1856,117 @@ class TimeEvolutionEngine(Container,object):
         self._mps.position(0)
         self._mps.resetZ()        
         return self._tw,self._t0    
-        #returns the center bond matrix and the gs energy
 
+    
+class ITEBD(TimeEvolutionEngine):
+    def __init__(self,mps,mpo,filename='ITEBD'):
+        if len(mps)!=2:
+            raise ValueError('ITEBD: len(mps)!=2: only two-site unitcells are supported')
+        if len(mpo)!=2:
+            raise ValueError('ITEBD: len(mpo)!=2: only two-site unitcells are supported')
 
+        super(ITEBD,self).__init__(mps,mpo,filename,lb=None,rb=None)
+        self._it=0
+        self._time=0
+        
+    def applyGates(self,dt,Dmax,tr_thresh=1E-10):
+        """
+        uses a first order trotter decomposition to evolve the state using ITEBD
+        Parameters:
+        -------------------------------
+        dt:        float
+                   step size (scalar)
+        Dmax:      int
+                   maximum bond dimension to be kept
+        recanonize:bool
+                   recanonize the MPS after gate applications
+        regaugetol: float  
+                    desired accuracy when regauging
+        ncv:        int
+                    number of krylov vectors in eigs
+        pinv:       float 
+                    pseudoinverse cutoff
+        numeig:     int
+                    number of eigenvector-eigenvalue pairs to be calculated in eigs (hyperparameter)
+        tr_thresh: float
+                   truncation threshold 
+        Returns:
+        -----------------------
+        tw:  float 
+             the truncated weight of the evolution step
+        """
+        tw=0.0
+        self.mps.absorbConnector('left')
+        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
+        tw+=tw_
+        #swap the mps and mpo tensors
+        self.mps[0],self.mps[1]=self.mps[1],self.mps[0] 
+        self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]       
+        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
+        tw+=tw_
+        #swap back 
+        self.mps[0],self.mps[1]=self.mps[1],self.mps[0]
+        self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]
 
+          
+        return tw
 
+    
+    def doITEBD(self,dt,numsteps,Dmax,recanonize=True,regaugetol=1E-10,ncv=30,pinv=1E-200,numeig=1,
+               tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
+        """
+        ITEBD.doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
+        uses a second order trotter decomposition to evolve the state using TEBD
+        Parameters:
+        -------------------------------
+        dt:        float
+                   step size (scalar)
+        numsteps:  int
+                   total number of evolution steps
+        Dmax:      int
+                   maximum bond dimension to be kept
+        tr_thresh: float
+                   truncation threshold 
+        verbose:   int
+                   verbosity flag; put to 0 for no output
+        cp:        int or None
+                   checkpointing flag: checkpoint every cp steps
+        keep_cp:   bool
+                   if True, keep all checkpointed files, if False, only keep the last one
 
+        Returns:
+        a tuple containing the truncated weight and the simulated time
+        """
+        current='None'
+        for step in range(numsteps):
+            #odd step updates:
+            self._tw+=self.applyGates(dt=dt,Dmax=Dmax,tr_thresh=tr_thresh)
+            if recanonize:
+                self.mps.canonize(nmaxit=1000,tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
+                self.mps.absorbConnector('left')
+            
+            if verbose>=1:
+                self._t0+=np.abs(dt)
+                stdout.write("\rITEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
+                stdout.flush()
+            if verbose>=2:
+                print('')
+            #if this is a cp step, save between two half-steps
+            if (cp!=None) and (self._it>0) and (self._it%cp==0):
+                #if the cp step does not coincide with the last step, do a half step, save, and do another half step
+                if not keep_cp:
+                    if os.path.exists(current+'.pickle'):
+                        os.remove(current+'.pickle')
+                    current=self._filename+'_itebd_cp'+str(self._it)
+                    self.save(current)
+                else:
+                    current=self._filename+'_itebd_cp'+str(self._it)
+                    self.save(current)
 
+            self._it=+=1
+            self._mps.resetZ()
+        return self._tw,self._t0
+        
 
 
         
@@ -1906,7 +2001,7 @@ def grambond(Neff,vec):
 
 
 
-class PeriodicMPSengine(Container,object):
+class PeriodicMPSengine(Container):
     def __init__(self,mps,mpo,N,filename):
         """
         initialize a VUMPS simulation object

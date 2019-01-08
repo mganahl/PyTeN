@@ -15,7 +15,7 @@ import lib.mpslib.engines as en
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.mps as mpslib
 import datetime
-comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
+comm=lambda x,y:np.do(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
@@ -85,14 +85,31 @@ if __name__ == "__main__":
     mps.regauge(gauge='right')
     if args.load==None:
         os.chdir(filename)        
-        iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)        
-        iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
-                      arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
+        iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)
+        iMPS.optimize(Nmax=args.imax,epsilon=args.epsilon,
+                      regaugetol=args.regaugetol,
+                      ncv=args.ncv,
+                      numeig=args.numeig,
+                      lgmrestol=args.lgmrestol,
+                      Nmaxlgmres=args.Nmaxlgmres,
+                      artol=args.artol,arnumvecs=args.arnumvecs,
+                      arncv=args.arncv,svd=args.svd,cp=args.cp,
+                      solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
     else:
         iMPS=en.VUMPSengine.load(args.load)
-        os.chdir(filename)        
-        iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
-                      arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False)
+        os.chdir(filename)
+        iMPS.optimize(Nmax=args.imax,epsilon=args.epsilon,
+                      regaugetol=args.regaugetol,
+                      ncv=args.ncv,
+                      numeig=args.numeig,
+                      lgmrestol=args.lgmrestol,
+                      Nmaxlgmres=args.Nmaxlgmres,
+                      artol=args.artol,arnumvecs=args.arnumvecs,
+                      arncv=args.arncv,svd=args.svd,cp=args.cp,
+                      solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
+        
+        # iMPS.optimize(args.imax,args.epsilon,args.lgmrestol,args.Nmaxlgmres,artol=args.artol,arnumvecs=args.arnumvecs,\
+        #               arncv=args.arncv,svd=args.svd,cp=args.cp,solver=args.solver.upper(),keep_cp=False)
         
     [Gamma,lam,r]=mf.regauge(iMPS._A,gauge='symmetric',tol=args.regaugetol)
     print('Schmidt values, normalization')

@@ -89,7 +89,7 @@ class MPS(object):
     
     for generating an mps, use the decorators random, zeros, ones, fromList or productState (see below)
     """
-    def __init__(self,tensors,schmidt_thresh=1E-16,r_thresh=1E-14):
+    def __init__(self,tensors,schmidt_thresh=1E-16,r_thresh=1E-14,Dmax=None):
         """
         initialize an unnormalized MPS from a list of tensors
         Parameters
@@ -100,10 +100,16 @@ class MPS(object):
                         truncation limit of the mps
         r_thresh: float 
                   internal parameter (ignore it)
-
+        Dmax:     int or None
+                  the maximally allowed bond dimension
+                  if ```None```, the maximal bond dimension of ```tensors``` is used as Dmax
         """
-        self._N=len(tensors)
-        self._D=max(list(map(lambda x: max(np.shape(x)),tensors)))
+        #self._N=len(tensors)
+        if Dmax==None:
+            self._D=max(list(map(lambda x: max(np.shape(x)),tensors)))
+        else:
+            self._D=Dmax
+            
         if (tensors[0].shape[0]==1) and (tensors[-1].shape[1]==1):
             self._obc=True
         else:
@@ -113,16 +119,20 @@ class MPS(object):
         self._schmidt_thresh=schmidt_thresh
         self._r_thresh=r_thresh
         self._tensors=[np.copy(tensors[n]) for n in range(len(tensors))]
-        self._d=[shape[2] for shape in list(map(np.shape,self._tensors))]
+        self._d=[a.shape[2] for a in self]
         self._mat=np.eye(np.shape(self._tensors[-1])[1]).astype(self.dtype)
         self._mat=self._mat/np.sqrt(np.trace(self._mat.dot(herm(self._mat))))
 
         self._connector=np.diag(1.0/np.diag(self._mat))
-        self._position=self._N
+        self._position=self.N
         self._Z=-1e10
         self._gamma=[]
         self._lambda=[]
 
+    @property
+    def N(self):
+        return len(self._tensors)
+    
     @property
     def dtype(self):
         """
@@ -173,11 +183,10 @@ class MPS(object):
 
         mps._obc=obc
         mps.position(0)        
-        mps.position(mps._N)
+        mps.position(mps.N)
         mps.Z=1.0
 
         return mps
-
 
     @classmethod
     def zeros(cls,N,D,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
@@ -203,13 +212,12 @@ class MPS(object):
                   internal parameter (ignore it)
 
         """
-        
-        
+
         tensors=mf.MPSinitializer(np.zeros,N,D,d,obc,dtype,scale=1.0,shift=0.0)
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
         mps.position(0)        
-        mps.position(mps._N)
+        mps.position(mps.N)
         mps._Z=1.0        
         return mps
 
@@ -241,7 +249,7 @@ class MPS(object):
         mps=cls(tensors,schmidt_thresh,r_thresh)
         mps._obc=obc
         mps.position(0)        
-        mps.position(mps._N)
+        mps.position(mps.N)
         mps._Z=1.0                
         return mps
 
@@ -268,7 +276,7 @@ class MPS(object):
             mps._mat=np.copy(mat)
 
         mps.position(0)        
-        mps.position(mps._N)
+        mps.position(mps.N)
         mps._Z=1.0                
         return mps
         
@@ -319,7 +327,6 @@ class MPS(object):
         cop=MPS(self._tensors)
         cop._D=self._D
         cop._tensors=copy.deepcopy(self._tensors)
-        cop._d=copy.deepcopy(self._d)
         cop._mat=copy.deepcopy(self._mat)
         cop._connector=copy.deepcopy(self._connector)
         cop._position=self._position
@@ -331,7 +338,9 @@ class MPS(object):
         cop._Z=self._Z
         return cop
 
-
+    def __str__():
+        return self._tensors.__str__()
+    
     def __getitem__(self,n):
         if isinstance(n,int):
             assert((n<len(self)) and (abs(n)<=len(self)))
@@ -572,8 +581,8 @@ class MPS(object):
             raise ValueError('mps.absorbConnector(self,location): wrong value for "location"; use "location"="left" or "right"')
 
         if location=='right':
-            self._tensors[self._N-1]=np.transpose(np.tensordot(self._tensors[self._N-1],self._connector,([1],[0])),(0,2,1))
-            D=np.shape(self._tensors[self._N-1])[1]
+            self._tensors[self.N-1]=np.transpose(np.tensordot(self._tensors[self.N-1],self._connector,([1],[0])),(0,2,1))
+            D=np.shape(self._tensors[self.N-1])[1]
             self._connector=np.eye(D)
 
         if location=='left':
@@ -590,7 +599,7 @@ class MPS(object):
         """
         
         assert(direction!=0)
-        if (self._position==self._N) and (direction>0):
+        if (self._position==self.N) and (direction>0):
                 direction=-1
                 warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=N and direction>0; cannot contract bond-matrix to the right because there is no right tensor')
         elif (self._position==0) and (direction<0):
@@ -718,7 +727,7 @@ class MPS(object):
         r_thresh: float
                   internal parameter, has no relevance 
         """
-        assert(bond<=self._N)
+        assert(bond<=self.N)
         assert(bond>=0)
         """
         set the values for the schmidt_thresh-threshold, D-threshold and r_thresh-threshold
@@ -935,7 +944,7 @@ class MPS(object):
 
 
 
-    def truncate(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12,r_thresh=1E-14):
+    def truncate(self,schmidt_thresh,D=None,returned_gauge=None,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-200,r_thresh=1E-14):
         """ 
         a dedicated routine for truncating an mps (for obc, this can also be done using self.position(self,pos))
         For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
@@ -951,20 +960,20 @@ class MPS(object):
         else:
             if self._obc==True:
                 self.position(0)
-                self.position(self._N)
+                self.position(self.N)
                 #print (schmidt_thresh,D)
                 self.position(0,schmidt_thresh=schmidt_thresh,D=D,r_thresh=r_thresh)
             if self._obc==False:
-                if self._position<self._N:
+                if self._position<self.N:
                     self.absorbCenterMatrix(direction=1)
                     self.absorbConnector(location='left') #self._connector is set to 11
-                if self._position==self._N:
+                if self._position==self.N:
                     self.absorbCenterMatrix(direction=-1)
                     self.absorbConnector('right')
 
                 self._mat=mf.regaugeIMPS(self._tensors,gauge='symmetric',ldens=None,rdens=None,truncate=schmidt_thresh,D=D,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=1E-8)
                 self._connector=np.diag(1.0/np.diag(self._mat)) #note that regaugeIMPS returns in any case a diagonal matrix
-                self._position=self._N
+                self._position=self.N
 
                 if returned_gauge!=None:
                     self.regauge(returned_gauge)                    
@@ -975,7 +984,6 @@ class MPS(object):
         returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
         if clear=True, self._mat is replaced with a normalized identity matrix
         """
-        
         assert((site==self._position) or (site==(self._position-1)))
         if (site==self._position):
             out=np.tensordot(self._mat,self._tensors[site],([1],[0]))
@@ -992,19 +1000,36 @@ class MPS(object):
             return out
         
         
-    def canonize(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-12):
-
+    def canonize(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-200,numeig=6):
         """
-        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in the mps._gamma and mps._lambda member lists;
-        len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; for obc, these are just [1.0]
-        funtions has no return argument
+        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in
+        mps._gamma and mps._lambda member lists;
+        len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; 
+        for obc, these are just [1.0]
+        The mps is left in a left orthogonal state
+
+        Parameters:
+        ------------------------------
+        nmaxit:      int
+                     maximum iteration number of sparse solver
+        tol:         float
+                     desired precision of eigenvalues/eigenvectors returned by sparse solver
+        ncv:         int
+                     number of krylov vectors used in sparse sovler
+        pinv:        float
+                     pseudo inverse cutoff
+        numeig:      number of eigenvalue-eigenvector pairs to be calculated in sparse solver (hyperparameter)
+
+        Returns:
+        -------------------------
+        None
         """
         if self._obc==False:
-            self.regauge(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv)
+            self.regauge(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,numeig=numeig)
         self._gamma,self._lambda=mf.canonizeMPS(self)
         
 
-    def regauge(self,gauge,nmaxit=100000,tol=1E-12,ncv=40,pinv=1E-12):
+    def regauge(self,gauge,nmaxit=100000,tol=1E-12,ncv=40,pinv=1E-200,numeig=6):
         """
         regauge brings state in either left, right or symmetric orthonormal form
         the state should be a finite unitcell state on an infinite lattice
@@ -1021,23 +1046,23 @@ class MPS(object):
             print ('in MPS.regauge(self,gauge,nmaxit=100000,tol=1E-10,ncv=20): state is OBC; regauging only applies to PBC states.')
             return 
         #merge self._mat into the mps tensor
-        if self._position<self._N:
+        if self._position<self.N:
             self.absorbCenterMatrix(direction=1)
             self.absorbConnector(location='left') #self._connector is set to 11
             
-        if self._position==self._N:
+        if self._position==self.N:
             self.absorbCenterMatrix(direction=-1)
             self.absorbConnector('right')
 
-        self._mat=mf.regaugeIMPS(self._tensors,gauge=gauge,ldens=None,rdens=None,truncate=self._schmidt_thresh,D=self._D,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=1E-8)
+        self._mat=mf.regaugeIMPS(self._tensors,gauge=gauge,ldens=None,rdens=None,truncate=self._schmidt_thresh,
+                                 D=self._D,nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,thresh=1E-8,numeig=numeig)
         self._connector=np.diag(1.0/np.diag(self._mat)) #note that regaugeIMPS returns in any case a diagonal matrix
 
         if (gauge=='left') or (gauge=='symmetric'):
-            self._position=self._N
+            self._position=self.N
         if gauge=='right':
             self._position=0
         return 
-
 
 
     def ortho(self,site,direction):
@@ -1053,7 +1078,7 @@ class MPS(object):
         checks if the orthonormalization of the mps is OK
         prints out some stuff
         """
-        assert(site<self._N)
+        assert(site<self.N)
         if direction>0:
             print ('deviation from left orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1]))))
             #print np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))
@@ -1099,15 +1124,29 @@ class MPS(object):
 
     def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
         """
-        MPS.applyTwoSiteGate(gate,site,Dmax=None,thresh=1E-16):
-        
-        applies a two-site gate to amps and does an optional truncation with truncation threshold "thresh"
-        gate: matrix with support on two physical sites
-        site: the left-hand site of the support of gate
-        Dmax: the maximally allowed bond dimension; bond dimension will never be larger than "Dmax", irrespecitive of "thresh"
-        
+        applies a two-site gate to the mps at site ```site```, 
+        and does a truncation with truncation threshold "thresh"
         the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
-        returns tw, D: the truncated weight tw and the current bond dimension D on bond=site+1
+
+
+        Parameters:
+        --------------------------
+        gate:   np.ndarray of shape (dout1,dout2,din1,din2)
+                the gate to be applied to the mps.
+        site:   int
+                the left-hand site of the support of ```gate```
+        Dmax:   int
+                the maximally allowed bond dimension
+                bond dimension will never be larger than ```Dmax```, irrespecitive of ```thresh```
+        thresh: float  
+                truncation threshold; all schmidt values < ```thresh`` are discarded
+        Returns:
+        tuple (tw,D):
+        tw: float
+            the truncated weight
+        D:  int
+            the current bond dimension D on bond=site+1
+        
         """
         assert(len(gate.shape)==4)
         assert(site<len(self)-1)
@@ -1198,21 +1237,12 @@ class MPS(object):
         unpickles an MPS object from a file "filename".pickle
         and stores the result in self
         """
-        
-        with open(filename+'.pickle', 'rb') as f:
-            mps=pickle.load(f)
-        self._N=mps._N
-        self._D=mps._N
-        self._obc=mps._obc
-        self._schmidt_thresh=mps._schmidt_thresh
-        self._r_thresh=mps._r_thresh
-        self._tensors=mps._tensors
-        self._d=mps._d
-        self._mat=mps._mat
-        self._connector=mps._connector
-        self._position=mps._position
-        self._Z=mps._Z
-        self._gamma=mps._gamma
-        self._lambda=mps._lambda
-        
-        
+        with open(filename, 'rb') as f:
+            cls=pickle.load(f)
+        #delete all attributes of self which are not present in cls
+        todelete=[attr for attr in vars(self) if not hasattr(cls,attr)]
+        for attr in todelete:
+            delattr(self,attr)
+            
+        for attr in cls.__dict__.keys():
+            setattr(self,attr,getattr(cls,attr))
