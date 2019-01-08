@@ -113,7 +113,6 @@ class MPS(object):
         self._schmidt_thresh=schmidt_thresh
         self._r_thresh=r_thresh
         self._tensors=[np.copy(tensors[n]) for n in range(len(tensors))]
-        self._dtype=self.dtype
         self._d=[shape[2] for shape in list(map(np.shape,self._tensors))]
         self._mat=np.eye(np.shape(self._tensors[-1])[1]).astype(self.dtype)
         self._mat=self._mat/np.sqrt(np.trace(self._mat.dot(herm(self._mat))))
@@ -130,7 +129,6 @@ class MPS(object):
         the dtype of the mps tensors
         """
         return np.result_type(*self._tensors).type
-        #return self._dtype
     @property
     def obc(self):
         return self._obc
@@ -328,7 +326,6 @@ class MPS(object):
         cop._gamma=copy.deepcopy(self._gamma)
         cop._lambda=copy.deepcopy(self._lambda)
         cop._obc-self._obc
-        cop._dtype=self._dtype
         cop._schmidt_thresh=self._schmidt_thresh
         cop._r_thresh=self._r_thresh
         cop._Z=self._Z
@@ -680,7 +677,7 @@ class MPS(object):
         set Z to val
         """
 
-        self._Z=self._dtype(val)
+        self._Z=self.dtype(val)
     
     
     def SchmidtSpectrum(self,n):
@@ -1207,7 +1204,6 @@ class MPS(object):
         self._N=mps._N
         self._D=mps._N
         self._obc=mps._obc
-        self._dtype=mps.dtype
         self._schmidt_thresh=mps._schmidt_thresh
         self._r_thresh=mps._r_thresh
         self._tensors=mps._tensors

@@ -235,12 +235,11 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
     if len(mps1)!=len(mps2):
         raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
     
-    dtype=int
-
-    for n in range(len(mps1)):
-        dtype=np.result_type(dtype,mps1[n].dtype)
-        dtype=np.result_type(dtype,mps2[n].dtype)
-    
+    #dtype=int
+    # for n in range(len(mps1)):
+    #     dtype=np.result_type(dtype,mps1[n].dtype)
+    #     dtype=np.result_type(dtype,mps2[n].dtype)
+    dtype=np.result_type(*mps1,*mps2).type
     if obc==True:
 
         mps=[]
@@ -483,12 +482,11 @@ def measureLocal(mps,operators,lb,rb,ortho):
     """
 
     if isinstance(mps,list):
-        temp=[m.dtype for m in mps]+[o.dtype for o in operators]+[lb,rb]
-        dtype=np.result_type(*temp)
+        #temp=[m.dtype for m in mps]+[o.dtype for o in operators]+[lb,rb]
+        dtype=np.result_type(*mps,*operators,lb,rb).type
         
     elif isinstance(mps,MPSL.MPS):
-        temp=[mps.dtype]+[o.dtype for o in operators]+[lb,rb]        
-        dtype=np.result_type(*temp)
+        dtype=np.result_type(mps.dtype,*operators,lb,rb).type
     N=len(mps)
     if len(mps)!=len(operators):
         raise ValueError("measureLocal: len(operators) does not match len(mps)")
@@ -554,7 +552,7 @@ def matrixElementLocal(mps1,mps2,operators,lb,rb):
     lb:        left boundary of the mps (for obc, lb=np.ones((1,1,1))
     rb:        right boundary of the mps (for obc, rb=np.ones((1,1,1))
     """
-    dtype=np.result_type(mps1[0].dtype,mps2[0].dtype)
+    dtype=np.result_type(*mps1,*mps2).type
     N=len(mps1)
     if len(mps1)!=len(mps2):
         raise ValueError("matrixElementLocal: mps1 and mps2 have different lengths")
@@ -1861,9 +1859,7 @@ def UnitcellTMeigs(mps,direction,numeig=6,init=None,nmax=800,tolerance=1e-12,ncv
 
 
     if isinstance(mps,MPSL.MPS):
-        dtype=np.result_type(*mps._tensors).type
-        if not np.issubdtype(dtype,mps.dtype):
-            raise TypeError("UnitcellTMeigs: result-type={0} and mps.dtype={1} are different".format(dtype,mps.dtype))
+        dtype=mps.dtype
     elif isinstance(mps,list):
         dtype=np.result_type(*mps).type
 
@@ -1993,9 +1989,9 @@ def computeDensity(dens0,mps,direction,dtype=np.dtype(float)):
     returns dens: a list of density matrices on each bond (including the left and right bonds to the left and right of the mps, len(dens)=len(mps)+1)
     """
     if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
-        dtype=np.result_type(dens0.dtype,mps.dtype).type
+        dtype=np.result_type(dens0,mps.dtype).type
     elif isinstance(mps,list):
-        dtype=np.result_type(dens0.dtype,mps[0].dtype).type
+        dtype=np.result_type(dens0,*mps).type
     else:
         raise TypeError("computeDensity: unknow type for mps")
     
@@ -2138,9 +2134,9 @@ def getBoundaryHams(mps,mpo,regauge=False):
 def computeUCsteadyStateHamiltonianGMRES(mps,mpopbc,boundary,ldens,rdens,direction,thresh,imax):
 
     if isinstance(mps,MPSL.MPS) or isinstance(mps,np.ndarray):
-        dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,ldens[0].dtype,rdens[0].dtype).type
+        dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,*ldens,*rdens).type
     elif isinstance(mps,list):
-        dtype=np.result_type(mps[0].dtype,mpopbc.dtype,boundary.dtype,ldens[0].dtype,rdens[0].dtype).type
+        dtype=np.result_type(mps.dtype,mpopbc.dtype,boundary.dtype,*ldens,*rdens).type
     else:
         raise TypeError("computeUCsteadyStateHamiltonianGMRES: unknow type for mps")
 
@@ -2636,7 +2632,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
 
     """
     
-    dtype=np.result_type(tensor.dtype).type
+    dtype=tensor.dtype
     if gauge in ('left','l',1):
         [chi,chi2,d]=np.shape(tensor)
         lam=np.eye(chi)

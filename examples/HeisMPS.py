@@ -18,9 +18,9 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 plt.ion()
 if __name__ == "__main__":
-    D=32        #final bond dimension
+    D=64       #final bond dimension
     d=2         #local hilbert space dimension
-    N=8        #number of sites
+    N=100        #number of sites
     Jz=np.ones(N) #Hamiltonian parameters
     Jxy=np.ones(N)
 

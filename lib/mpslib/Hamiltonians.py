@@ -26,12 +26,9 @@ class MPO:
     2,3 are the physical incoming and outgoing indices, respectively. The conjugates side of the MPS is on the bottom (at index 2)
     """
 
-    def __init__(self,mpos=[]):
+    def __init__(self,mpo=[]):
         #a list of mpo-tensors, to be initialized in the derived class
-        self._mpo=copy.deepcopy(mpos)
-        self._N=len(self._mpo)
-        if len(mpos)>0:
-            self._dtype=np.result_type(*mpos).type
+        self._mpo=mpo
         
     @classmethod
     def fromMPO(cls,other):
@@ -57,10 +54,6 @@ class MPO:
         
         """
         return cls(mpolist)
-        #a list of mpo-tensors, to be initialized in the derived class
-        #cls._mpo=copy.deepcopy(mpolist)
-        #cls._N=len(mpolist)
-        #return cls
         
     def twoSiteGate(self,m,n,tau):
         """
@@ -93,11 +86,12 @@ class MPO:
         assert(mpo1.shape[0]==mpo2.shape[0])
         d1=mpo1.shape[1]
         d2=mpo2.shape[1]        
-        if nl!=0 and nr!=(self._N-1):
+        if nl!=0 and nr!=(len(self)-1):
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
             for s in range(1,mpo1.shape[0]-1):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-            h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)                
+            h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
+            #the following is a check that sometimes is useful
             #A=np.random.rand(4,4)
             #B=np.random.rand(4,4)
             #bla=np.reshape(np.kron(A,B),(4,4,4,4))
@@ -111,11 +105,11 @@ class MPO:
             #                #print('-------')
             #input()
                 
-        elif nl!=0 and nr==(self._N-1):
+        elif nl!=0 and nr==(len(self)-1):
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
             for s in range(1,mpo1.shape[0]):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-        elif nl==0 and nr!=(self._N-1):
+        elif nl==0 and nr!=(len(self)-1):
             h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
             for s in range(1,mpo1.shape[0]-1):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
@@ -131,12 +125,13 @@ class MPO:
         self._mpo[n]=tensor
     def __len__(self):
         return len(self._mpo)
+    
     @property
     def dtype(self):
         """
         return the type of the MPO
         """
-        return self._dtype#np.result_type(*self._mpo).type
+        return np.result_type(*self._mpo).type        
     
     def save(self,filename):
         """
@@ -173,15 +168,13 @@ class TFI(MPO):
     """
     
     def __init__(self,Jx,Bz,obc=True,dtype=float):
-        super().__init__()
         self._obc=obc
         self._Jx=Jx
         self._Bz=Bz
-        self._N=len(Bz)
-        self._dtype=dtype
+        N=len(Bz)
         if obc==True:
-            self._mpo=[]
-            temp=np.zeros((1,3,2,2),self._dtype)
+            mpo=[]
+            temp=np.zeros((1,3,2,2),dtype)
             #BSz
             temp[0,0,0,0]=-self._Bz[0]
             temp[0,0,1,1]= self._Bz[0]
@@ -193,9 +186,9 @@ class TFI(MPO):
             #11
             temp[0,2,0,0]=1.0
             temp[0,2,1,1]=1.0
-            self._mpo.append(np.copy(temp))
-            for n in range(1,self._N-1):
-                temp=np.zeros((3,3,2,2),self.dtype)
+            mpo.append(np.copy(temp))
+            for n in range(1,N-1):
+                temp=np.zeros((3,3,2,2),dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -212,9 +205,9 @@ class TFI(MPO):
                 temp[2,2,0,0]=1.0
                 temp[2,2,1,1]=1.0
         
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
         
-            temp=np.zeros((3,1,2,2),self.dtype)
+            temp=np.zeros((3,1,2,2),dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -225,13 +218,13 @@ class TFI(MPO):
             temp[2,0,0,0]=-Bz[-1]
             temp[2,0,1,1]= Bz[-1]
             
-            self._mpo.append(np.copy(temp))
-                    
+            mpo.append(np.copy(temp))
+            super(TFI,self).__init__(mpo)                    
         if obc==False:
             assert(len(Bz)==len(Jx))
-            self._mpo=[]
-            for n in range(0,self._N):
-                temp=np.zeros((3,3,2,2),self.dtype)
+            mpo=[]
+            for n in range(0,N):
+                temp=np.zeros((3,3,2,2),dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -247,9 +240,10 @@ class TFI(MPO):
                 #11
                 temp[2,2,0,0]=1.0
                 temp[2,2,1,1]=1.0
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
                 
-
+            super(TFI,self).__init__(mpo)
+        
 class BranchingHamiltonian(MPO):
     """
     Jess's Hamiltonian, everyone loves it!
@@ -259,8 +253,7 @@ class BranchingHamiltonian(MPO):
         self._J=J
         self._w=w
         self._chi=chi
-        self._dtype=complex
-        self._N=len(chi)
+        N=len(chi)
 
         sigma_x=np.asarray([[0,1],[1,0]]).astype(complex)
         sigma_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
@@ -273,11 +266,11 @@ class BranchingHamiltonian(MPO):
         tau_y=np.kron(np.eye(2),sigma_y)
         tau_z=np.kron(np.eye(2),sigma_z)
         if obc==True:
-            if len(J)!=(self._N-1):
+            if len(J)!=(N-1):
                 raise ValueError("in JessHamiltonian: for obc=True, len(J) has to be N-1")
             
-            self._mpo=[]
-            temp=np.zeros((1,8,4,4),self.dtype)
+            mpo=[]
+            temp=np.zeros((1,8,4,4),complex)
             temp[0,0,:,:]=self._w[0]*(sig_z+tau_z)+self._chi[0]*np.kron(sigma_x,sigma_x)            
             temp[0,1,:,:]=self._J[0]*sig_x
             temp[0,2,:,:]=self._J[0]*sig_y
@@ -287,9 +280,9 @@ class BranchingHamiltonian(MPO):
             temp[0,6,:,:]=self._J[0]*tau_z                
             temp[0,7,:,:]=np.eye(4)
             
-            self._mpo.append(np.copy(temp))
-            for n in range(1,self._N-1):
-                temp=np.zeros((8,8,4,4),self.dtype)
+            mpo.append(np.copy(temp))
+            for n in range(1,N-1):
+                temp=np.zeros((8,8,4,4),complex)
                 temp[0,0,:,:]=np.eye(4)
                 temp[1,0,:,:]=sig_x
                 temp[2,0,:,:]=sig_y
@@ -306,9 +299,9 @@ class BranchingHamiltonian(MPO):
                 temp[7,5,:,:]=self._J[n]*tau_y
                 temp[7,6,:,:]=self._J[n]*tau_z                
                 temp[7,7,:,:]=np.eye(4)
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
 
-            temp=np.zeros((8,1,4,4),self.dtype)                
+            temp=np.zeros((8,1,4,4),complex)                
             temp[0,0,:,:]=np.eye(4)
             temp[1,0,:,:]=sig_x
             temp[2,0,:,:]=sig_y
@@ -317,14 +310,15 @@ class BranchingHamiltonian(MPO):
             temp[5,0,:,:]=tau_y
             temp[6,0,:,:]=tau_z
             temp[7,0,:,:]=self._w[-1]*(sig_z+tau_z)+self._chi[-1]*np.kron(sigma_x,sigma_x)
-            self._mpo.append(np.copy(temp))
-
-        if obc==False:
-            if len(J)<self._N:
+            mpo.append(np.copy(temp))
+            super(BranchingHamiltonian,self).__init__(mpo)
+            
+        elif obc==False:
+            if len(J)<N:
                 raise ValueError("in JessHamiltonian: for obc=False, len(J) has to be N")
-            self._mpo=[]
-            for n in range(self._N):
-                temp=np.zeros((8,8,4,4),self.dtype)
+            mpo=[]
+            for n in range(N):
+                temp=np.zeros((8,8,4,4),complex)
                 temp[0,0,:,:]=np.eye(4)
                 temp[1,0,:,:]=sig_x
                 temp[2,0,:,:]=sig_y
@@ -342,8 +336,8 @@ class BranchingHamiltonian(MPO):
                 temp[7,5,:,:]=self._J[n]*tau_y
                 temp[7,6,:,:]=self._J[n]*tau_z                
                 temp[7,7,:,:]=np.eye(4)
-                self._mpo.append(np.copy(temp))
-
+                mpo.append(np.copy(temp))
+            super(BranchingHamiltonian,self).__init__(mpo)                
 
         
 class XXZ(MPO):
@@ -354,12 +348,11 @@ class XXZ(MPO):
         self._obc=obc
         self._Jz=Jz
         self._Jxy=Jxy
-        self._dtype=dtype
         self._Bz=Bz
-        self._N=len(Bz)
+        N=len(Bz)
         if obc==True:
-            self._mpo=[]
-            temp=np.zeros((1,5,2,2),self.dtype)
+            mpo=[]
+            temp=np.zeros((1,5,2,2),dtype)
             #BSz
             temp[0,0,0,0]=-0.5*Bz[0]
             temp[0,0,1,1]= 0.5*Bz[0]
@@ -376,9 +369,9 @@ class XXZ(MPO):
             #11
             temp[0,4,0,0]=1.0
             temp[0,4,1,1]=1.0
-            self._mpo.append(np.copy(temp))
-            for n in range(1,self._N-1):
-                temp=np.zeros((5,5,2,2),self.dtype)
+            mpo.append(np.copy(temp))
+            for n in range(1,N-1):
+                temp=np.zeros((5,5,2,2),dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -405,9 +398,9 @@ class XXZ(MPO):
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
         
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
         
-            temp=np.zeros((5,1,2,2),self.dtype)
+            temp=np.zeros((5,1,2,2),dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -422,15 +415,16 @@ class XXZ(MPO):
             temp[4,0,0,0]=-0.5*Bz[-1]
             temp[4,0,1,1]= 0.5*Bz[-1]
             
-            self._mpo.append(np.copy(temp))
-            #return mpo
+            mpo.append(np.copy(temp))
+            super(XXZ,self).__init__(mpo)            
+
         if obc==False:
             assert(len(Jz)==len(Jxy))
             assert(len(Bz)==len(Jz))
-            self._mpo=[]
-            for n in range(0,self._N):
+            mpo=[]
+            for n in range(0,N):
 
-                temp=np.zeros((5,5,2,2),self.dtype)
+                temp=np.zeros((5,5,2,2),dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -457,8 +451,8 @@ class XXZ(MPO):
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
 
-                self._mpo.append(np.copy(temp))
-
+                mpo.append(np.copy(temp))
+            super(XXZ,self).__init__(mpo)
 
 class XXZIsing(MPO):
     """
@@ -468,26 +462,25 @@ class XXZIsing(MPO):
         self._obc=obc
         self._J=J
         self._w=w
-        self._dtype=complex
-        self._N=len(w)
+        N=len(w)
         sig_x=np.asarray([[0,1],[1,0]]).astype(complex)
         sig_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
         sig_z=np.diag([1,-1]).astype(complex)
         if obc==True:
-            if len(J)!=(self._N-1):
+            if len(J)!=(N-1):
                 raise ValueError("in JessHamiltonian: for obc=True, len(J) has to be N-1")
             
-            self._mpo=[]
-            temp=np.zeros((1,5,2,2),self.dtype)
+            mpo=[]
+            temp=np.zeros((1,5,2,2),complex)
             temp[0,0,:,:]=self._w[0]*sig_z
             temp[0,1,:,:]=self._J[0]*sig_x
             temp[0,2,:,:]=self._J[0]*sig_y
             temp[0,3,:,:]=self._J[0]*sig_z                
             temp[0,4,:,:]=np.eye(2)
             
-            self._mpo.append(np.copy(temp))
-            for n in range(1,self._N-1):
-                temp=np.zeros((5,5,2,2),self.dtype)
+            mpo.append(np.copy(temp))
+            for n in range(1,N-1):
+                temp=np.zeros((5,5,2,2),complex)
                 temp[0,0,:,:]=np.eye(2)
                 temp[1,0,:,:]=sig_x
                 temp[2,0,:,:]=sig_y
@@ -497,16 +490,16 @@ class XXZIsing(MPO):
                 temp[4,2,:,:]=self._J[n]*sig_y
                 temp[4,3,:,:]=self._J[n]*sig_z                
                 temp[4,4,:,:]=np.eye(2)
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
 
-            temp=np.zeros((5,1,2,2),self.dtype)                
+            temp=np.zeros((5,1,2,2),complex)                
             temp[0,0,:,:]=np.eye(2)
             temp[1,0,:,:]=sig_x
             temp[2,0,:,:]=sig_y
             temp[3,0,:,:]=sig_z                
             temp[4,0,:,:]=self._w[-1]*sig_z
-            self._mpo.append(np.copy(temp))
-
+            mpo.append(np.copy(temp))
+            super(XXZIsing,self).__init__(mpo)
             
 class XXZflipped(MPO):
 
@@ -517,12 +510,11 @@ class XXZflipped(MPO):
     def __init__(self,Delta,J,obc=True,dtype=float):
         self._Delta=Delta
         self._J=J
-        self._dtype=dtype
         self._obc=obc
-        self._mpo=[]
+        mpo=[]
         if obc==True:
-            self._N=len(Delta)+1
-            temp=np.zeros((1,5,2,2)).astype(self.dtype)
+            N=len(Delta)+1
+            temp=np.zeros((1,5,2,2)).astype(dtype)
             #Sx
             temp[0,1,0,1]=J[0]
             temp[0,1,1,0]=J[0]
@@ -536,9 +528,9 @@ class XXZflipped(MPO):
             #11
             temp[0,4,0,0]=1.0
             temp[0,4,1,1]=1.0
-            self._mpo.append(np.copy(temp))
-            for site in range(1,self._N-1):
-                temp=np.zeros((5,5,2,2)).astype(self.dtype)
+            mpo.append(np.copy(temp))
+            for site in range(1,N-1):
+                temp=np.zeros((5,5,2,2)).astype(dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -567,9 +559,9 @@ class XXZflipped(MPO):
                 #11
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
-                self._mpo.append(np.copy(temp))
+                mpo.append(np.copy(temp))
             
-            temp=np.zeros((5,1,2,2)).astype(self.dtype)
+            temp=np.zeros((5,1,2,2)).astype(dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
@@ -584,12 +576,12 @@ class XXZflipped(MPO):
             temp[3,0,1,1]=+1.0
 
 
-            self._mpo.append(np.copy(temp))
-
+            mpo.append(np.copy(temp))
+            super(XXZflipped,self).__init__(mpo)
         if obc==False:
-            self._N=len(Delta)
-            for site in range(self._N):
-                temp=np.zeros((5,5,2,2)).astype(self.dtype)
+            N=len(Delta)
+            for site in range(N):
+                temp=np.zeros((5,5,2,2)).astype(dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
@@ -617,8 +609,8 @@ class XXZflipped(MPO):
                 #11
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
-                self._mpo.append(np.copy(temp))
-
+                mpo.append(np.copy(temp))
+            super(XXZflipped,self).__init__(mpo)
 
 
                 
@@ -631,14 +623,13 @@ class SpinlessFermions(MPO):
         assert(len(interaction)==len(hopping))
         assert(len(interaction)==len(chempot)-1)        
         
-        self._mpo=[]
+        mpo=[]
         self._interaction=interaction
         self._hoping=hopping
         self._chempot=chempot
         self._obc=obc
-        self._dtype=dtype
         
-        self._N=len(chempot)
+        N=len(chempot)
         c=np.zeros((2,2)).astype(dtype)
         c[0,1]=1.0
         P=np.diag([1.0,-1.0]).astype(dtype)
@@ -650,9 +641,9 @@ class SpinlessFermions(MPO):
             tensor[0,2,:,:]=(+1.0)*hopping[0]*c.dot(P)
             tensor[0,3,:,:]=interaction[0]*herm(c).dot(c)
             tensor[0,4,:,:]=np.eye(2)
-            self._mpo.append(np.copy(tensor))
+            mpo.append(np.copy(tensor))
         
-            for n in range(1,self._N-1):        
+            for n in range(1,N-1):        
                 tensor=np.zeros((5,5,2,2)).astype(dtype)
                 tensor[0,0,:,:]=np.eye(2)
                 tensor[1,0,:,:]=c
@@ -665,17 +656,17 @@ class SpinlessFermions(MPO):
                 tensor[4,3,:,:]=interaction[n]*herm(c).dot(c)
                 tensor[4,4,:,:]=np.eye(2)
                 
-                self._mpo.append(np.copy(tensor))
+                mpo.append(np.copy(tensor))
             tensor=np.zeros((5,1,2,2)).astype(dtype)
             tensor[0,0,:,:]=np.eye(2)
             tensor[1,0,:,:]=c
             tensor[2,0,:,:]=herm(c)
             tensor[3,0,:,:]=herm(c).dot(c)
-            tensor[4,0,:,:]=chempot[self._N-1]*herm(c).dot(c)
-            self._mpo.append(np.copy(tensor))        
-        
+            tensor[4,0,:,:]=chempot[N-1]*herm(c).dot(c)
+            mpo.append(np.copy(tensor))        
+            super(SpinlessFermions,self).__init__(mpo)
         if obc==False:
-            for n in range(self._N):
+            for n in range(N):
                 tensor=np.zeros((5,5,2,2)).astype(dtype)
                 tensor[0,0,:,:]=np.eye(2)
                 tensor[1,0,:,:]=c.dot(P)
@@ -687,7 +678,8 @@ class SpinlessFermions(MPO):
                 tensor[4,2,:,:]=(+1.0)*hopping[n]*c
                 tensor[4,3,:,:]=interaction[n]*herm(c).dot(c)
                 tensor[4,4,:,:]=np.eye(2)
-                self._mpo.append(np.copy(tensor))
+                mpo.append(np.copy(tensor))
+            super(SpinlessFermions,self).__init__(mpo)                
 
 
 class HubbardChain(MPO):
@@ -702,34 +694,32 @@ class HubbardChain(MPO):
         self._mu_up=mu_up
         self._mu_down=mu_down
         self._obc=obc
-        self._dtype=dtype
+        N=len(U)
         
-        self._N=len(U)
+        assert(len(mu_up)==N)
+        assert(len(mu_down)==N)
+        assert(len(t_up)==N-1)
+        assert(len(t_down)==N-1)
         
-        assert(len(mu_up)==self._N)
-        assert(len(mu_down)==self._N)
-        assert(len(t_up)==self._N-1)
-        assert(len(t_down)==self._N-1)
-        
-        self._mpo=[]
-        c=np.zeros((2,2),dtype=self.dtype)
+        mpo=[]
+        c=np.zeros((2,2),dtype=dtype)
         c[0,1]=1.0
         c_down=np.kron(c,np.eye(2))    
-        c_up=np.kron(np.diag([1.0,-1.0]).astype(self.dtype),c)
-        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(self.dtype)
+        c_up=np.kron(np.diag([1.0,-1.0]).astype(dtype),c)
+        P=np.diag([1.0,-1.0,-1.0,1.0]).astype(dtype)
         
         if obc==True:
-            tensor=np.zeros((1,6,4,4)).astype(self.dtype)
+            tensor=np.zeros((1,6,4,4)).astype(dtype)
             tensor[0,0,:,:]=mu_up[0]*herm(c_up).dot(c_up)+mu_down[0]*herm(c_down).dot(c_down)+U[0]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))
             tensor[0,1,:,:]=(-1.0)*t_up[0]*herm(c_up).dot(P)
             tensor[0,2,:,:]=(+1.0)*t_up[0]*c_up.dot(P)
             tensor[0,3,:,:]=(-1.0)*t_down[0]*herm(c_down).dot(P)
             tensor[0,4,:,:]=(+1.0)*t_down[0]*c_down.dot(P)
             tensor[0,5,:,:]=np.eye(4)
-            self._mpo.append(np.copy(tensor))
+            mpo.append(np.copy(tensor))
         
-            for n in range(1,self._N-1):        
-                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
+            for n in range(1,N-1):        
+                tensor=np.zeros((6,6,4,4)).astype(dtype)
                 tensor[0,0,:,:]=np.eye(4)
                 tensor[1,0,:,:]=c_up
                 tensor[2,0,:,:]=herm(c_up)
@@ -744,20 +734,20 @@ class HubbardChain(MPO):
                 tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
                 tensor[5,5,:,:]=np.eye(4)
                 
-                self._mpo.append(np.copy(tensor))
+                mpo.append(np.copy(tensor))
         
-            tensor=np.zeros((6,1,4,4)).astype(self.dtype)
+            tensor=np.zeros((6,1,4,4)).astype(dtype)
             tensor[0,0,:,:]=np.eye(4)
             tensor[1,0,:,:]=c_up
             tensor[2,0,:,:]=herm(c_up)
             tensor[3,0,:,:]=c_down
             tensor[4,0,:,:]=herm(c_down)
-            tensor[5,0,:,:]=mu_up[self._N-1]*herm(c_up).dot(c_up)+mu_down[self._N-1]*herm(c_down).dot(c_down)+U[self._N-1]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))            
-            self._mpo.append(np.copy(tensor))        
-        
+            tensor[5,0,:,:]=mu_up[N-1]*herm(c_up).dot(c_up)+mu_down[N-1]*herm(c_down).dot(c_down)+U[N-1]*herm(c_up).dot(c_up).dot(herm(c_down).dot(c_down))            
+            mpo.append(np.copy(tensor))        
+            super(HubbardChain,self).__init__(mpo)                        
         if obc==False:
-            for n in range(self._N):
-                tensor=np.zeros((6,6,4,4)).astype(self.dtype)
+            for n in range(N):
+                tensor=np.zeros((6,6,4,4)).astype(dtype)
                 tensor[0,0,:,:]=np.eye(4)
                 tensor[1,0,:,:]=c_up
                 tensor[2,0,:,:]=herm(c_up)
@@ -772,9 +762,14 @@ class HubbardChain(MPO):
                 tensor[5,4,:,:]=(+1.0)*t_down[n]*c_down.dot(P)
                 tensor[5,5,:,:]=np.eye(4)
         
-                self._mpo.append(np.copy(tensor))
-        
+                mpo.append(np.copy(tensor))
+            super(HubbardChain,self).__init__(mpo)                
 
+
+
+#######################################################################################################################
+#                                       The following MPOs are not derived from MPO due to backwards incompatibility;
+#                                        I havent' yet had the time to fix this                                        
 def PhiFourmpo(mu,nu,g,N,dx,cutoff,obc=False):
 
     """
