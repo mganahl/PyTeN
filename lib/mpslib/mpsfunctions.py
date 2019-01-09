@@ -1697,7 +1697,7 @@ def GeneralizedMatrixVectorProduct(direction,A,B,vector):
     warnings.warn('GeneralizedMatrixVectorProduct(direction,A,B,vector) is deprecated; used MixedTransferOperator instead')
     return MixedTransferOperator(direction=direction,mpsA=B,mpsB=A,vector=vector)
 
-def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
+def TMeigs(tensor,direction,numeig=6,init=None,nmax=6000,tolerance=1e-10,ncv=100,which='LR'):
     """
     sparse computation of the dominant left or right eigenvector of the transfer matrix, using the TransferOperator function to
     to do the matrix-vector multiplication
@@ -1728,6 +1728,9 @@ def TMeigs(tensor,direction,numeig,init=None,nmax=6000,tolerance=1e-10,ncv=100,w
         raise ValueError(" in TMeigs: ancillary dimensions of the MPS tensor have to be the same on either side")
     mv=fct.partial(TransferOperator,*[direction,tensor])
     LOP=LinearOperator((chi1*chi1,chi2*chi2),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    if numeig>=LOP.shape[0]-1:
+        warnings.warn('TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
+        numeig=LOP.shape[0]-2
 
     try:
         eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
@@ -1868,7 +1871,12 @@ def UnitcellTMeigs(mps,direction,numeig=6,init=None,nmax=800,tolerance=1e-12,ncv
     if D1l!=D2r:
         raise ValueError(" in UnitcellTMeigs: ancillary dimensions of the MPS tensor have to be the same on left and right side")
     mv=fct.partial(UnitcellTransferOperator,*[direction,mps])
+
     LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    if numeig>=LOP.shape[0]-1:
+        warnings.warn('UnitcellTMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
+        numeig=LOP.shape[0]-2
+
     eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=tolerance,ncv=ncv)
     m=np.argmax(np.real(eta))
 
@@ -2792,7 +2800,7 @@ def regauge(tensor,gauge,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pi
     
 def canonize(tensor,initial=None,nmaxit=100000,tol=1E-10,ncv=50,numeig=6,pinv=1E-200,thresh=1E-8,trunc=1E-16,Dmax=100):
     """
-    canonize an infinite mps, i.e. bring it into Gamma-lambda form
+    canonize an infinite, translational invariant mps, i.e. bring it into Gamma-lambda form
     
     Parameters:
     -----------------------------------------------------
@@ -3012,7 +3020,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
             
 def canonizeSingleLayer(mps,trunc=1E-16,Dmax=100,precision=1E-10,nmax=1000):
     """
-    canonizes an infinite mps using a single layer procedure
+    canonizes an infinite, translational invariant mps using a single layer procedure
     this method achieves twice the accuracy obtained using the double layer method
     Parameters:
     ----------------------

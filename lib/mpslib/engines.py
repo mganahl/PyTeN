@@ -94,7 +94,7 @@ class Container(object):
             pickle.dump(self,f)
             
     @classmethod
-    def load(self,filename):
+    def read(self,filename):
         """
         reads a simulation from a pickle file "filename".pickle
         and returns a container object
@@ -105,7 +105,23 @@ class Container(object):
         """
         with open(filename, 'rb') as f:
             out=pickle.load(f)
-        
+        return out
+    
+    def load(self,filename):
+        """
+        Container.load(filename):
+        unpickles a Container object from a file "filename".pickle
+        and stores the result in self
+        """
+        with open(filename, 'rb') as f:
+            cls=pickle.load(f)
+        #delete all attributes of self which are not present in cls
+        todelete=[attr for attr in vars(self) if not hasattr(cls,attr)]
+        for attr in todelete:
+            delattr(self,attr)
+            
+        for attr in cls.__dict__.keys():
+            setattr(self,attr,getattr(cls,attr))
 
     @property
     def mps(self):
@@ -1077,6 +1093,10 @@ class VUMPSengine(Container):
                          if True, do an svd instead of polar decomposition for gauge matching
         cp:              int>0, or None
                          if > 0, simulation is checkpointed every "cp" steps
+
+        Returns:
+        -------------------------
+        None
         """
         converged=False
         
@@ -1284,7 +1304,6 @@ class VUMPSengine(Container):
                 stdout.write("\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f" %(solver,self._it,numsteps,self._t0,np.abs(dt)*numsteps,np.real(Edens),max(self.mps.D),np.abs(dt)))
 
                 stdout.flush()
-                print(self.dtype)
             if verbose>=2:                
                 print('')
             if (cp!=None) and (self._it>0) and (self._it%cp==0):
@@ -1865,7 +1884,7 @@ class ITEBDengine(TimeEvolutionEngine):
         super(ITEBDengine,self).__init__(mps,mpo,filename,lb=None,rb=None)
         self._it=0
         self._time=0
-        
+
     def applyGates(self,dt,Dmax,tr_thresh=1E-10):
         """
         uses a first order trotter decomposition to evolve the state using ITEBD
@@ -1894,61 +1913,82 @@ class ITEBDengine(TimeEvolutionEngine):
         """
         tw=0.0
         self.mps.absorbConnector('left')
-        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
+        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt,obc=False),site=0,Dmax=Dmax,thresh=tr_thresh)
+        #obc has to be False here. The local part of the MPO must be divided by two, since there is no boundary
         tw+=tw_
         #swap the mps and mpo tensors
         self.mps.cutandpatch(1)
         self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]
-        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
+        tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt,obc=False),site=0,Dmax=Dmax,thresh=tr_thresh)
         tw+=tw_
         #swap back
+        
         self.mps.cutandpatch(1)
         self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]
-          
         return tw
-
-    def doITEBD(self,dt,numsteps,Dmax,recanonize=True,regaugetol=1E-10,ncv=30,pinv=1E-200,numeig=1,
+    
+    def doITEBD(self,dt,numsteps,Dmax,recanonizestep=1,regaugetol=1E-10,ncv=30,pinv=1E-200,numeig=1,
                tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
         """
         ITEBD.doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         uses a second order trotter decomposition to evolve the state using TEBD
         Parameters:
         -------------------------------
-        dt:        float
-                   step size (scalar)
-        numsteps:  int
-                   total number of evolution steps
-        Dmax:      int
-                   maximum bond dimension to be kept
-        tr_thresh: float
-                   truncation threshold 
-        verbose:   int
-                   verbosity flag; put to 0 for no output
-        cp:        int or None
-                   checkpointing flag: checkpoint every cp steps
-        keep_cp:   bool
-                   if True, keep all checkpointed files, if False, only keep the last one
+        dt:             float
+                        step size (scalar)
+        numsteps:       int
+                        total number of evolution steps
+        Dmax:           int
+                        maximum bond dimension to be kept
+        recanonizestep: int
+                        recanonize the mps every ```recanonizestep``` steps
+        tr_thresh:      float
+                        truncation threshold 
+        verbose:        int
+                        verbosity flag; put to 0 for no output
+        cp:             int or None
+                        checkpointing flag: checkpoint every cp steps
+        keep_cp:        bool
+                        if True, keep all checkpointed files, if False, only keep the last one
 
         Returns:
-        a tuple containing the truncated weight and the simulated time
+        ---------------------------------
+        (E,tw,t0)
+        E:    float or complex
+              the current energy density, averaged over two unitcells
+        tw:   float
+              accumulated truncated weight
+        t0:   float or complex
+              total simulation time 
         """
         
         current='None'
+        E=None
         for step in range(numsteps):
             #odd step updates:
             self._tw+=self.applyGates(dt=dt,Dmax=Dmax,tr_thresh=tr_thresh)
-            if recanonize:
+            if recanonizestep>0 and step%recanonizestep==0:            
                 self.mps.canonize(nmaxit=1000,tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
-                self.mps.absorbConnector('left')
+                mpsl=np.tensordot(np.diag(self.mps.lambdas[0]),self.mps.gammas[0],([1],[0]))
+                mpsr=np.tensordot(np.diag(self.mps.lambdas[1]),self.mps.gammas[1],([1],[0]))                
+                h=self.mpo.getTwoSiteHamiltonian(0,1,False)
+                E1=ncon.ncon([mpsl,mpsr,np.conj(mpsl),np.conj(mpsr),
+                              np.diag(self.mps.lambdas[2]**2.0),h],
+                             [[1,6,3],[6,9,7],[1,4,2],[4,8,5],[8,9],[3,7,2,5]])
+                E2=ncon.ncon([mpsr,mpsl,np.conj(mpsr),np.conj(mpsl),
+                              np.diag(self.mps.lambdas[1]**2.0),h],
+                             [[1,6,3],[6,9,7],[1,4,2],[4,8,5],[8,9],[3,7,2,5]])
+                E=(E1+E2)/2.0
                 
             if verbose>=1:
                 self._t0+=np.abs(dt)
-                stdout.write("\rITEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
+                stdout.write("\rITEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f, Energy =%2.6f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt),E))
                 stdout.flush()
             if verbose>=2:
                 print('')
             #if this is a cp step, save between two half-steps
             if (cp!=None) and (self._it>0) and (self._it%cp==0):
+                
                 #if the cp step does not coincide with the last step, do a half step, save, and do another half step
                 if not keep_cp:
                     if os.path.exists(current+'.pickle'):
@@ -1958,10 +1998,22 @@ class ITEBDengine(TimeEvolutionEngine):
                 else:
                     current=self._filename+'_itebd_cp'+str(self._it)
                     self.save(current)
-
             self._it+=1
             self._mps.resetZ()
-        return self._tw,self._t0
+        self.mps.canonize(nmaxit=1000,tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
+        mpsl=np.tensordot(np.diag(self.mps.lambdas[0]),self.mps.gammas[0],([1],[0]))
+        mpsr=np.tensordot(np.diag(self.mps.lambdas[1]),self.mps.gammas[1],([1],[0]))                
+        h=self.mpo.getTwoSiteHamiltonian(0,1,False)
+        E1=ncon.ncon([mpsl,mpsr,np.conj(mpsl),np.conj(mpsr),
+                      np.diag(self.mps.lambdas[2]**2.0),h],
+                     [[1,6,3],[6,9,7],[1,4,2],[4,8,5],[8,9],[3,7,2,5]])
+        E2=ncon.ncon([mpsr,mpsl,np.conj(mpsr),np.conj(mpsl),
+                      np.diag(self.mps.lambdas[1]**2.0),h],
+                     [[1,6,3],[6,9,7],[1,4,2],[4,8,5],[8,9],[3,7,2,5]])
+        E=(E1+E2)/2.0
+        stdout.write("\rITEBD finished at: t=%4.4f, truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f, Energy =%2.6f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt),E))
+            
+        return E,self._tw,self._t0
         
 
 

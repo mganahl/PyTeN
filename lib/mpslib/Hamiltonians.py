@@ -23,7 +23,22 @@ class MPO:
            |
            2
 
-    2,3 are the physical incoming and outgoing indices, respectively. The conjugates side of the MPS is on the bottom (at index 2)
+    2,3 are the physical incoming and outgoing indices, respectively. The conjugated 
+    side of the MPS is on the bottom (at index 2)
+    I recently changed this convention, however, note that the change hasn't affected 
+    most of the existing code. To contract the mpo with an mps, one still has to connect index 2 of the mpo
+    with index 2 of the mps. Using the old convention, the implemented MPOs were actually 
+    the transposed version of what was intended. The difference between the old and new convention only matters 
+    for Hamiltonians which are complex, or more concretely, for MPOs where the local operators in the MPO
+    matrices were complex instead of real (like e.g. sigma_y). Using the old convention, 
+    implementing a siggma_y in an MPO matrix should actually be done this way:
+
+    mpo[m,n,:,:]=np.transpose(sigma_y)
+
+    The new convention fixes this to 
+
+    mpo[m,n,:,:]=sigma_y
+    
     """
 
     def __init__(self,mpo=[]):
@@ -54,59 +69,64 @@ class MPO:
         
         """
         return cls(mpolist)
-        
-    def twoSiteGate(self,m,n,tau):
+    
+    def getTwositeMPO(self,site1,site2):
+        if site2<site1:
+            mpo1=self._mpo[site2][-1,:,:,:]
+            mpo2=self._mpo[site1][:,0,:,:]
+            nl=site2
+            mr=site1
+        if site2>site1:
+            mpo1=self._mpo[site1][-1,:,:,:]
+            mpo2=self._mpo[site2][:,0,:,:]
+            nl=site1
+            nr=site2
+        assert(mpo1.shape[0]==mpo2.shape[0])
+        d1=mpo1.shape[1]
+        d2=mpo2.shape[1]        
+        return [np.expand_dims(mpo1,0),np.expand_dims(mpo2,1)]
+    
+    def getTwoSiteHamiltonian(self,site1,site2,obc=True):
         """
-        calculate the unitary two-site gates exp(tau*H(m,n))
-        The MPO has to have the member self.obc initialized in the derived class (obc is not an attribute of the base MPO class)
-        The user has to tell if he wants obc or not
+        obtain a two-site Hamiltonian H_{mn} from MPO
         Parameters:
         --------------------------------------
-        m,n: int
-             lattice sites for which to calculate the gate
-        tau: float or complex
-             time-increment
-
+        site1,site2: int
+                     lattice sites for which to calculate the Hamiltonian
+        obc:         bool
+                     boundary condition to be applied when calculting the Hamiltonian
+                     if True: the local contributions at the boundaries of the MPO are NOT divided by two
+                     if False: the local contribution at the boundaries ARE divided by two
         Returns:
         --------------------------------------------------
-        A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
-        h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
-        Gate=scipy.linalg..expm(tau*h); Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
-        dm, dn the local hilbert space dimension at site m and n, respectively
-        """
+        np.ndarray of shape (d1,d2,d3,d4)
+        A two-site Hamiltonian between sites ```site1``` and ```site2``` by summing up  
+        (for site1<site2, and site1!=0, site2!=0)
+        h=np.kron(mpo[m][-1,s=0,:,:]/2,mpo[n][s=0,0,:,:])+
+          \sum_s={1}^{M-2} np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:])+
+          np.kron(mpo[m][-1,s=M-1,:,:],mpo[n][s=M-1,0,:,:])+
+        the returned np.ndarray is a rank-4 tensor with shape (dsite1,dsite2,dsite1,dsite2), with
+        dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
-        if self.obc:
-            if n<m:
-                mpo1=self._mpo[n][-1,:,:,:]
-                mpo2=self._mpo[m][:,0,:,:]
-                nl=n
-                mr=m
-            if n>m:
-                mpo1=self._mpo[m][-1,:,:,:]
-                mpo2=self._mpo[n][:,0,:,:]
-                nl=m
-                nr=n
-            assert(mpo1.shape[0]==mpo2.shape[0])
-            d1=mpo1.shape[1]
-            d2=mpo2.shape[1]        
+        """
+        mpo1,mpo2=self.getTwositeMPO(site1,site2)
+        if site2<site1:
+            nl=site2
+            mr=site1
+        elif site2>site1:
+            nl=site1
+            nr=site2
+
+        mpo1=mpo1[0,:,:,:]
+        mpo2=mpo2[:,0,:,:]
+        d1=mpo1.shape[1]
+        d2=mpo2.shape[1]        
+        if obc:
             if nl!=0 and nr!=(len(self)-1):
                 h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
                 for s in range(1,mpo1.shape[0]-1):
                     h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
                 h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
-                #the following is a check that sometimes is useful
-                #A=np.random.rand(4,4)
-                #B=np.random.rand(4,4)
-                #bla=np.reshape(np.kron(A,B),(4,4,4,4))
-                #for n1 in range(4):
-                #    for n2 in range(4):
-                #        for n3 in range(4):
-                #            for n4 in range(4):
-                #                #print(bla[n1,n2,n3,n4]==mpo1[0,n1,n3]/2*mpo2[0,n2,n4])
-                #                #print(bla[n1,n2,n3,n4]==A[n3,n1]*B[n4,n2])
-                #                print(bla[n1,n2,n3,n4]==A[n1,n3]*B[n2,n4])
-                #                #print('-------')
-                #input()
                     
             elif nl!=0 and nr==(len(self)-1):
                 h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
@@ -123,31 +143,50 @@ class MPO:
                 h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
                 for s in range(1,mpo1.shape[0]):
                     h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-                
-            Gate=np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
-            #Gate=np.reshape(np.eye(4),(d1,d2,d1,d2))
-            return Gate
-        
-        elif not self.obc:
-            if n<m:
-                mpo1=self._mpo[n][-1,:,:,:]
-                mpo2=self._mpo[m][:,0,:,:]
-                nl=n
-                mr=m
-            if n>m:
-                mpo1=self._mpo[m][-1,:,:,:]
-                mpo2=self._mpo[n][:,0,:,:]
-                nl=m
-                nr=n
+            return np.reshape(h,(d1,d2,d1,d2))
+        elif not obc:
             assert(mpo1.shape[0]==mpo2.shape[0])
-            d1=mpo1.shape[1]
-            d2=mpo2.shape[1]        
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
             for s in range(1,mpo1.shape[0]-1):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
             h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
-            Gate=np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
-            return Gate
+
+            return np.reshape(h,(d1,d2,d1,d2))
+                
+    def twoSiteGate(self,site1,site2,tau,obc=True):
+        """
+        calculate the unitary two-site gates exp(tau*H(m,n))
+        The MPO has to have the member self.obc initialized in the derived class (obc is not an attribute of the base MPO class)
+        The user has to tell if he wants obc or not
+        Parameters:
+        --------------------------------------
+        site1,site2: int
+                     lattice sites for which to calculate the gate
+        tau:         float or complex
+                     time-increment
+        obc:         bool
+                     boundary condition to be applied when calculting the Hamiltonian
+                     if True: the local contributions at the boundaries of the MPO are NOT divided by two
+                     if False: the local contribution at the boundaries ARE divided by two
+
+        Returns:
+        --------------------------------------------------
+        A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
+        h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
+        Gate=scipy.linalg..expm(tau*h); 
+        Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
+        dm, dn the local hilbert space dimension at site m and n, respectively
+        """
+        if site2<site1:
+            d1=self[site2].shape[2]
+            d2=self[site1].shape[2]
+        elif site2>site1:
+            d1=self[site1].shape[2]
+            d2=self[site2].shape[2]
+        else:
+            raise ValuError('MPO.twoSiteGate: site1 has to be different from site2!')
+        h=np.reshape(self.getTwoSiteHamiltonian(site1,site2,obc),(d1*d2,d1*d2))
+        return np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
             
 
     def __getitem__(self,n):

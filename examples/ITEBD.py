@@ -27,6 +27,8 @@ if __name__ == "__main__":
     parser.add_argument('--Dmax', help='maximum MPS bond dimension (32)',type=int,default=32)    
     parser.add_argument('--verbose', help='verbosity (1)',type=int,default=1)    
     parser.add_argument('--cp', help='do checkpointing at specified steps (0, no checkpointing)',type=int)
+    parser.add_argument('--recanonizationstep', help='recanonize mps at specified steps (0, no recanonization)',
+                        type=int,default=1)    
     parser.add_argument('--keep_cp',action='store_true',help='if this flag is set, keep the checkpoint files; otherwise, only the last checkpoint will be kept (False)')            
     parser.add_argument('--Jx', help='Jx intercation (-1.0)',type=float,default=-1.0)
     parser.add_argument('--Bz', help='magnetic field (1.0)',type=float,default=1.0)
@@ -58,7 +60,6 @@ if __name__ == "__main__":
     elif not os.path.exists(filename):
         os.mkdir(filename)
 
-
     if args.dtype=='complex128':
         dtype=np.complex128
     elif args.dtype=='complex64':
@@ -76,7 +77,6 @@ if __name__ == "__main__":
     Jx=args.Jx*np.ones(N)
     B=args.Bz*np.ones(N)
     mpo=H.TFI(Jx,B,obc=False,dtype=dtype)
-
     dt=(-1j*args.dt)
     if np.imag(dt)<1E-12:
         dt=dtype(np.real(dt))
@@ -84,27 +84,24 @@ if __name__ == "__main__":
         os.chdir(filename)        
         try:
             mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
-            #normalize the state by sweeping the orthogonalizty center once back and forth through the system
             mps.regauge(gauge='right')
             iTEBD=en.ITEBDengine(mps,mpo,args.filename)
-            iTEBD.doITEBD(dt,numsteps=args.imax,Dmax=args.Dmax,recanonize=True,regaugetol=args.regaugetol,ncv=args.ncv,numeig=1,
-                          tr_thresh=1E-10,verbose=args.verbose,cp=args.cp,keep_cp=args.keep_cp)            
+            iTEBD.doITEBD(dt,numsteps=args.imax,Dmax=args.Dmax,recanonizestep=args.recanonizationstep,
+                          regaugetol=args.regaugetol,ncv=args.ncv,
+                          numeig=1,tr_thresh=1E-10,verbose=args.verbose,cp=args.cp,keep_cp=args.keep_cp)            
         except TypeError:
             dtype=complex            
             mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
             #normalize the state by sweeping the orthogonalizty center once back and forth through the system
             mps.regauge(gauge='right')
             iTEBD=en.ITEBDengine(mps,mpo,args.filename)
-            iTEBD.doITEBD(dt,numsteps=args.imax,Dmax=args.Dmax,recanonize=True,regaugetol=args.regaugetol,ncv=args.ncv,numeig=1,
-                          tr_thresh=1E-10,verbose=args.verbose,cp=args.cp,keep_cp=args.keep_cp)            
+            E,tw,t0=iTEBD.doITEBD(dt,numsteps=args.imax,Dmax=args.Dmax,recanonize=True,regaugetol=args.regaugetol,
+                          ncv=args.ncv,numeig=1,tr_thresh=1E-10,verbose=args.verbose,cp=args.cp,keep_cp=args.keep_cp)            
     else:
-        pass
+        iTEBD=en.ITEBDengine.read(args.load)
+        os.chdir(filename)        
+        E,tw,t0=iTEBD.doITEBD(dt,numsteps=args.imax,Dmax=args.Dmax,recanonizestep=args.recanonizationstep,
+                      regaugetol=args.regaugetol,ncv=args.ncv,
+                      numeig=1,tr_thresh=1E-10,verbose=args.verbose,cp=args.cp,keep_cp=args.keep_cp)            
+
         
-    [Gamma,lam,r]=mf.regauge(iMPS._B,gauge='symmetric',tol=args.regaugetol)
-    print('Schmidt values, normalization')
-    print(lam,np.sum(lam**2))
-    print('normalized and rescaled natural logarithm of Schmidt values')    
-    loglam=np.log(lam)
-    print((loglam-loglam[0])/(loglam[1]-loglam[0]))
-    np.save('mps',iMPS._A)
-    np.save('lam',lam)    

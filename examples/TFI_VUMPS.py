@@ -96,7 +96,7 @@ if __name__ == "__main__":
                       arncv=args.arncv,svd=args.svd,cp=args.cp,
                       solver=args.solver.upper(),keep_cp=False,landelta=args.landelta)
     else:
-        iMPS=en.VUMPSengine.load(args.load)
+        iMPS=en.VUMPSengine.read(args.load)
         os.chdir(filename)
         iMPS.optimize(Nmax=args.imax,epsilon=args.epsilon,
                       regaugetol=args.regaugetol,

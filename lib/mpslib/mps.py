@@ -126,35 +126,66 @@ class MPS(object):
         self._connector=np.diag(1.0/np.diag(self._mat))
         self._position=self.N
         self._Z=-1e10
-        self._gamma=[]
-        self._lambda=[]
+        self.gammas=[]
+        self.lambdas=[]
 
     @property
     def N(self):
+        """
+        length of the mps
+        Returns:
+        ----------------
+        int: the length of the MPS
+        """
         return len(self._tensors)
     
     @property
     def dtype(self):
         """
-        the dtype of the mps tensors
+        Returns:
+        ----------------
+        np.dtype.type: the data type of the MPS tensors
+
         """
         return np.result_type(*self._tensors).type
+    
     @property
     def obc(self):
+        """
+        Returns:
+        ---------------------
+        bool:   if True, state has obc
+        """
         return self._obc
     
     @property
     def pos(self):
         """
-        the current position of the center bond
+        Returns:
+        ----------------------------
+        int: the current position of the center bond
         """
         return self._position
     
+    @property
+    def mat(self):
+        """
+        Returns:
+        ----------------------
+        np.ndarray of shape (MPS.D[MPS.pos],MPS.D[MPS.pos]): the center matrix of the MPS
+        """
+        return self._mat
+    
+    @property
+    def connector(self):
+        """
+        np.ndarray of shape (MPS.D[0],MPS.D[0]):   the connector matrix 
+        """
+        return self._connector
 
     @classmethod
-    def random(cls,N,D,d,obc,scaling=0.5,dtype=np.dtype(float),shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
+    def random(cls,N,D,d,obc,scaling=0.5,dtype=np.float64,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         """
-        MPS.random(N,D,d,obc,scaling=0.5,dtype=float,shift=0.5,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate a random MPS
         Parameters:
         ----------------------------------------------
@@ -168,8 +199,8 @@ class MPS(object):
              boundary condition; if True, open boundary conditions are used
         scaling: float
                  initial scaling of mps matrices
-        dtype: float or complex
-               dtype of the mps tensors
+        dtype: np.dtype.type
+               dtype of the mps tensors (e.g. np.float64)
         shift: float
                shift of interval of random number generation for initial mps
         schmidt_thresh: float 
@@ -192,7 +223,6 @@ class MPS(object):
     def zeros(cls,N,D,d,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
 
         """
-        MPS.zeros(N,D,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS filled with zeros
         Parameters:
         ----------------------------------------------
@@ -204,12 +234,16 @@ class MPS(object):
            local Hilbert space dimension(s)
         obc: bool
              boundary condition; if True, open boundary conditions are used
-        dtype: float or complex
-               dtype of the mps tensors
+        dtype: np.dtype.type
+               dtype of the mps tensors (e.g. np.float64)
+
         schmidt_thresh: float 
                         truncation limit of the mps
         r_thresh: float
                   internal parameter (ignore it)
+        Returns:
+        ----------------------------------
+        MPS:      an MPS object with tensors initialized with zeros
 
         """
 
@@ -236,13 +270,16 @@ class MPS(object):
            local Hilbert space dimension(s)
         obc: bool
              boundary condition; if True, open boundary conditions are used
-        dtype: float or complex
-               dtype of the mps tensors
+        dtype: np.dtype.type
+               dtype of the mps tensors (e.g. np.float64)
         schmidt_thresh: float 
                         truncation limit of the mps
         r_thresh: float
                   internal parameter (ignore it)
 
+        Returns:
+        ----------------------------------
+        MPS:      an MPS object with tensors initialized with ones
         """
         
         tensors=mf.MPSinitializer(np.ones,N,D,d,obc,dtype,scale=1.0,shift=0.0)
@@ -260,7 +297,8 @@ class MPS(object):
         MPS.fromList(tensors,mat=None,schmidt_thresh=1E-16,r_thresh=1E-14):
         generate an MPS from a list of np.ndarrays
 
-        
+        Parameters:
+        ----------------------------
         tensors: list of np.ndarrays: 
                  mps tensors
         mat: np.ndarray of shape (D1,D2) 
@@ -269,6 +307,10 @@ class MPS(object):
                         truncation limit of the mps
         r_thresh: float 
                   internal parameter (ignore it)
+
+        Returns:
+        ----------------------------------
+        MPS:      an MPS object with tensors initialized from ```tensors```
         """
 
         mps=cls(tensors,schmidt_thresh,r_thresh)
@@ -282,21 +324,27 @@ class MPS(object):
         
     
     @classmethod
-    def productState(cls,localstate,obc,dtype=np.dtype(float),schmidt_thresh=1E-16,r_thresh=1E-16):
+    def productState(cls,localstate,obc,dtype=np.float64,schmidt_thresh=1E-16,r_thresh=1E-16):
         """
-        MPS.productState(localstate,d,obc,dtype=float,schmidt_thresh=1E-16,r_thresh=1E-16):
+        Parameters:
+        --------------------------------------------
         initialize a product state MPS:
 
         localstate: list of np.ndarray of float
                     sets the local state at position n to sum_k localstate[n][k]|k>
         obc:        bool
                     boundary condition of the mps
-        dtype:      python "float" type or "complex" type: 
-                    dtype of the tensors
+        dtype: np.dtype.type
+               dtype of the mps tensors (e.g. np.float64)
         schmidt_thresh: float 
                         truncation limit of the mps
         r_thresh: float 
                   internal parameter (ignore it)
+
+        Returns:
+        ----------------------------------
+        MPS:      an MPS object initialized in a product state as given by ```localstate```
+
         """
         dtype=np.result_type(dtype,*localstate).type
         d=np.asarray([len(s) for s in localstate])
@@ -316,13 +364,17 @@ class MPS(object):
     
     def copy(self):
         """
-        returns a copy of the MPS
+        Returns: 
+        -----------------------
+        MPS: copy of the MPS object
         """
         return self.__copy__()
     
     def __copy__(self):
         """
-        return a copy of MPS
+        Returns: 
+        -----------------------
+        MPS: copy of the MPS object
         """
         cop=MPS(self._tensors)
         cop._D=self._D
@@ -330,8 +382,8 @@ class MPS(object):
         cop._mat=copy.deepcopy(self._mat)
         cop._connector=copy.deepcopy(self._connector)
         cop._position=self._position
-        cop._gamma=copy.deepcopy(self._gamma)
-        cop._lambda=copy.deepcopy(self._lambda)
+        cop.gammas=copy.deepcopy(self.gammas)
+        cop.lambdas=copy.deepcopy(self.lambdas)
         cop._obc-self._obc
         cop._schmidt_thresh=self._schmidt_thresh
         cop._r_thresh=self._r_thresh
@@ -339,6 +391,9 @@ class MPS(object):
         return cop
 
     def __str__(self):
+        """
+        printing function
+        """
         b=['\n\n connector \n\n '+self._connector.__str__()]+['\n\n ']+['mps['+str(n)+']'+' \n\n '+self._tensors[n].__str__()+' \n\n ' for n in range(self.pos)]+\
             ['center matrix \n\n' + str(self._mat) +'\n\n ']+['mps['+str(n)+']'+' \n\n '+self._tensors[n].__str__()+' \n\n ' for n in range(self.pos,len(self))]
         return ''.join(b)
@@ -362,6 +417,10 @@ class MPS(object):
         operation: method
                    the operation to be applied to the mps tensors
         *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        None
         """
         for n in range(len(res)):
             self[n]=operation(self[n],*args,**kwargs)
@@ -375,8 +434,10 @@ class MPS(object):
         operation: method
                    the operation to be applied to the mps tensors
         *args,**kwargs: arguments of operation
-        
-        returns: a new MPS obtained from acting with operation on each individual MPS tensor
+
+        Returns:
+        -------------------
+        MPS:  MPS object obtained from acting with operation on each individual MPS tensor
         """
         res=self.__copy__()
         for n in range(len(res)):
@@ -386,53 +447,109 @@ class MPS(object):
     def __conj__(self,*args,**kwargs):
         """
         in-place complex conjugation of the MPS
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.conj
+
+        Returns:
+        ------------------------
+        None
         """
         self.__in_place_unary_operations__(np.conj,*args,**kwargs)
     
     def __conjugate__(self,*args,**kwargs):
         """
-        returns the complex conjugated MPS
-        """
-        res=self.__unary_operations__(np.conj,*args,**kwargs)
-        res._qflow=utils.flipsigns(res._qflow)                
-        return res
+        complex conjugation of MPS
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.conj
 
+        Returns:
+        ------------------------
+        MPS:       complex-conjugated MPS object
+        """
+        
+        res=self.__unary_operations__(np.conj,*args,**kwargs)
+        return res
 
     def conjugate(self,*args,**kwargs):
         """
-        returns the complex conjugated MPS
+        complex conjugation of MPS
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.conj
+
+        Returns:
+        ------------------------
+        MPS:       complex-conjugated MPS object
         """
         return self.__conjugate__(self,*args,**kwargs)
 
     def conj(self,*args,**kwargs):
         """
         in-place complex conjugation of the MPS
-        """        
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.conj
+
+        Returns:
+        ------------------------
+        None
+        """
         return self.__conj__(self,*args,**kwargs)
 
     def __exp__(self,*args,**kwargs):
         """
         element-wise exponential of the mps tensors
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.exp
+
+        Returns:
+        ------------------------
+        None
         """
         res=self.__unary_operations__(np.exp,*args,**kwargs)
         return res
+    
     def exp(self,*args,**kwargs):
         """
         element-wise exponential of the mps tensors
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.exp
+
+        Returns:
+        ------------------------
+        None
         """
         
         return self.__exp__(*args,**kwargs)
        
     def __sqrt__(self,*args,**kwargs):
         """
-        element-wise square root of the mps tensors
+        element-wise sqareroot of the mps tensors
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.sqrt
+
+        Returns:
+        ------------------------
+        None
         """
                 
         res=self.__unary_operations__(np.sqrt,*args,**kwargs)
         return res
     def sqrt(self,*args,**kwargs):
         """
-        element-wise square root of the mps tensors
+        element-wise sqareroot of the mps tensors
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.sqrt
+
+        Returns:
+        ------------------------
+        None
         """
         
         return self.__sqrt__(*args,**kwargs)
@@ -479,6 +596,13 @@ class MPS(object):
         left-multiplies "num" with MPS, i.e. returns MPS*num;
         note that "num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
+        Parameters:
+        -----------------------
+        num: float or complex
+             to be multiplied into the MPS
+        Returns:
+        ---------------
+        MPS:    the state obtained from multiplying ```num``` into MPS
         """
         if not np.isscalar(num):
             raise TypeError("in MPS.__mul__(self,num): num is not a number")
@@ -574,57 +698,71 @@ class MPS(object):
         return (other*(-1))+self
         
 
+    def connect(self):
+        """
+        merges self._mat and self._connector into the mps, such that it can be connected back to itself.
+        changes self.position to self.N prior to merging, then merges np.dot(self._mat,self._connector) 
+        into the rightmost mps tensor
+        
+        """
+        self.position(self.N)
+        self._tensors[self.N-1]=ncon.ncon([self._tensors[self.N-1],self.mat.dot(self.connector)],[[-1,1,-3],[1,-2]])
+        self._mat=np.eye(self.D[-1],dtype=self.dtype)
+        self._connector=np.eye(self.D[-1],dtype=self.dtype)
+        
     def absorbConnector(self,location):
         """
         merges self._connector into the MPS. self._connector is merged into either the 'left' most or 
         the 'right' most mps-tensor. changes self._connector to be the identity: self._connector=11
         """
 
-        if not ((location=='left') or (location=='right')):
-            raise ValueError('mps.absorbConnector(self,location): wrong value for "location"; use "location"="left" or "right"')
 
-        if location=='right':
-            if self.pos==(self.N-1):
+        if location in ('right','r',-1):
+            if self.pos==self.N:
                 warnings.warn("MPS.absorbConnector(location='right'): MPS.pos==MPS.N-1; cannot absorb on the right side; switching to location='left'")
                 self.absorbConnector('left')
             else:
                 self._tensors[self.N-1]=np.transpose(np.tensordot(self._tensors[self.N-1],self._connector,([1],[0])),(0,2,1))
                 D=np.shape(self._tensors[self.N-1])[1]
-                self._connector=np.eye(D)
+                self._connector=np.eye(D,dtype=self.dtype)
 
 
-        if location=='left':
+        elif location in ('left','l',1):
             if self.pos==0:
                 warnings.warn("MPS.absorbConnector(location='right'): MPS.pos==0; cannot absorb on the left side; switching to location='right'")
                 self.absorbConnector('right')
             else:
                 self._tensors[0]=np.tensordot(self._connector,self._tensors[0],([1],[0]))
                 D=np.shape(self._tensors[0])[0]
-                self._connector=np.eye(D)
-
+                self._connector=np.eye(D,dtype=self.dtype)
+        else:
+            raise ValueError('mps.absorbConnector(self,location): wrong value for "location"; use "location"="left","l",1 or "right","r",-1')
+        return self
+                
     def absorbCenterMatrix(self,direction=1):
         """
-        merges self._mat into the MPS. self._mat is merged into either the left (direction<0) or 
-        the right (direction>0) tensor at bond self._position
+        merges self._mat into the MPS. self._mat is merged into either the left (direction in (-1,'r','right)) or 
+        the right (direction in (1,'l','left')) tensor at bond self._position
         changes self._mat to be the identity: self._mat=11; does not change self._connector
         """
         assert(direction!=0)
-        if (self._position==self.N) and (direction>0):
+        if (self._position==self.N) and (direction in (1,'l','left')):
             direction=-1
             warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=N and direction>0; cannot contract bond-matrix to the right because there is no right tensor')
         elif (self._position==0) and (direction<0):
             direction=1                
             warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=0 and direction<0; cannot contract bond-matrix to the left tensor because there is no left tensor')
 
-        if (direction>0):
+        if (direction in (1,'l','left')):
             self._tensors[self._position]=np.tensordot(self._mat,self._tensors[self._position],([1],[0]))
             D=self._mat.shape[0]
-            self._mat=np.eye(D)
-        if (direction<0):
+            self._mat=np.eye(D,dtype=self.dtype)
+        elif (direction in (-1,'r','right')):
             self._tensors[self._position-1]=np.transpose(np.tensordot(self._tensors[self._position-1],self._mat,([1],[0])),(0,2,1))
             D=self._mat.shape[1]
-            self._mat=np.eye(D)
-            
+            self._mat=np.eye(D,dtype=self.dtype)
+        return self
+    
     def __len__(self):
         """
         return the number of tensors in the MPS
@@ -688,12 +826,17 @@ class MPS(object):
 
     @property
     def Z(self):
+        """
+        Returns:
+        ----------------
+        the norm of the state
+        """
         return self._Z
     
     @Z.setter
     def Z(self,val):
         """
-        set Z to val
+        set the norm of the state to ```val```
         """
 
         self._Z=self.dtype(val)
@@ -815,7 +958,7 @@ class MPS(object):
                 pos=self._position
                 self.position(0)
 
-                L=mf.measureLocal(self,ops,lb=np.ones((1,1,1)),rb=np.ones((1,1,1)),ortho='right')
+                L=mf.measureLocal(self,ops,lb=np.ones((1,1,1),dtype=self.dtype),rb=np.ones((1,1,1),dtype=self.dtype),ortho='right')
                 self.position(pos)
                 return L*self._Z*np.conj(self._Z)
 
@@ -851,7 +994,7 @@ class MPS(object):
                 mpspos=mps._position
                 self.position(0)
                 mps.position(0)
-                L=mf.matrixElementLocal(self,mps,ops,lb=np.ones((1,1,1)),rb=np.ones((1,1,1)))
+                L=mf.matrixElementLocal(self,mps,ops,lb=np.ones((1,1,1),dtype=self.dtype),rb=np.ones((1,1,1),dtype=self.dtype))
                 v1=np.copy(self._mat[0][0])
                 v2=np.copy(mps._mat[0][0])
                 self.position(pos)
@@ -909,18 +1052,18 @@ class MPS(object):
         par=len(ops)%2
         if par==0 or P==None:
             L=np.zeros((self[sites[s]].shape[0],self[sites[s]].shape[0],1)).astype(self.dtype)
-            L[:,:,0]=np.copy(np.eye(self[sites[s]].shape[0]))
+            L[:,:,0]=np.eye(self[sites[s]].shape[0],dtype=self.dtype)
         elif par==1 and P!=None:
             #for fermionic modes one has to take into consideration the fermionic minus signs from the start (if len(ops) is odd)
             L=np.zeros((self[0].shape[0],self[0].shape[0],1)).astype(self.dtype)
-            L[:,:,0]=np.copy(np.eye(self[0].shape[0]))
+            L[:,:,0]=np.eye(self[0].shape[0],dtype=self.dtype)
             for n in range(sites[s]-1):
                 L=mf.addLayer(L,self[n],P[n],self[n],1)
 
         while s<len(sites):
             if s<len(sites):
                 n=s
-                op=np.eye(self[s].shape[2])
+                op=np.eye(self[s].shape[2],dtype=self.dtype)
                 while n<len(sites) and sites[n]==sites[s]:
                     op=op.dot(ops[n])
                     par=(par+1)%2
@@ -944,8 +1087,8 @@ class MPS(object):
 
         assert(self._position==sites[-1]+1)
 
-        R=np.zeros((self[sites[s-1]].shape[1],self[sites[s-1]].shape[1],1))
-        R[:,:,0]=np.eye(self[sites[s-1]].shape[1])
+        R=np.zeros((self[sites[s-1]].shape[1],self[sites[s-1]].shape[1],1),dtype=self.dtype)
+        R[:,:,0]=np.eye(self[sites[s-1]].shape[1],dtype=self.dtype)
         Z=np.trace(self._mat.dot(herm(self._mat)))
         if not((np.abs(np.trace(self._mat.dot(herm(self._mat))))-1.0)<1E-10):
             warnings.warn('mps.py.measure(self,ops,sites): state is not normalized')
@@ -998,14 +1141,14 @@ class MPS(object):
         if (site==self._position):
             out=np.tensordot(self._mat,self._tensors[site],([1],[0]))
             if clear==True:
-                self._mat=np.eye(np.shape(self._tensors[site])[0])
+                self._mat=np.eye(np.shape(self._tensors[site])[0],dtype=self.dtype)
                 self._mat/=np.linalg.norm(self._mat)                                
             return out
 
         if (site==(self._position-1)):
             out=np.transpose(np.tensordot(self._tensors[site],self._mat,([1],[0])),(0,2,1))            
             if clear==True:
-                self._mat=np.eye(np.shape(self._tensors[site])[1])
+                self._mat=np.eye(np.shape(self._tensors[site])[1],dtype=self.dtype)
                 self._mat/=np.linalg.norm(self._mat)                
             return out
         
@@ -1013,8 +1156,8 @@ class MPS(object):
     def canonize(self,nmaxit=100000,tol=1E-10,ncv=20,pinv=1E-200,numeig=6):
         """
         canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in
-        mps._gamma and mps._lambda member lists;
-        len(mps._lambda) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; 
+        mps.gammas and mps.lambdas member lists;
+        len(mps.lambdas) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; 
         for obc, these are just [1.0]
         The mps is left in a left orthogonal state
 
@@ -1036,7 +1179,7 @@ class MPS(object):
         """
         if self._obc==False:
             self.regauge(gauge='symmetric',nmaxit=nmaxit,tol=tol,ncv=ncv,pinv=pinv,numeig=numeig)
-        self._gamma,self._lambda=mf.canonizeMPS(self)
+        self.gammas,self.lambdas=mf.canonizeMPS(self)
         
 
     def regauge(self,gauge,nmaxit=100000,tol=1E-12,ncv=40,pinv=1E-200,numeig=6):
@@ -1075,28 +1218,30 @@ class MPS(object):
         return 
 
 
-    def ortho(self,site,direction):
+    def ortho(self,site,which):
         """
         checks if the orthonormalization of the mps is OK
         prints out some stuff
         """
         
-        return self.orthonormalization(site,direction)
+        return self.orthonormalization(site,which)
     
-    def orthonormalization(self,site,direction):
+    def orthonormalization(self,site,which,verbose=0):
         """
         checks if the orthonormalization of the mps is OK
         prints out some stuff
         """
         assert(site<self.N)
-        if direction>0:
-            print ('deviation from left orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1]))))
+        if which in (1,'l','left'):
+            if verbose>0:
+                print ('deviation from left orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1],dtype=self.dtype))))
             #print np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))
-            return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1]))
-        if direction<0:
-            print ('deviation from right orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]))))
+            return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([0,2],[0,2]))-np.eye(np.shape(self._tensors[site])[1],dtype=self.dtype))
+        if which in (-1,'r','right'):
+            if verbose>0:            
+                print ('deviation from right orthonormalization at site {0}: {1}.'.format(site,np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]),dtype=self.dtype)))
             #print np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))
-            return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0]))
+            return np.linalg.norm(np.tensordot(self._tensors[site],np.conj(self._tensors[site]),([1,2],[1,2]))-np.eye(np.shape(self._tensors[site])[0],dtype=self.dtype))
 
 
 
@@ -1209,7 +1354,7 @@ class MPS(object):
             Ml,Mr,din,dout=mpo[n].shape 
             Dl,Dr,d=self[n].shape
             if n==0:
-                self._mat=np.eye(Ml*Dl)
+                self._mat=np.eye(Ml*Dl,dtype=self.dtype)
             self[n]=np.reshape(ncon.ncon([self[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]),(Ml*Dl,Mr*Dr,dout))
             
     def resetZ(self):
@@ -1230,7 +1375,7 @@ class MPS(object):
             pickle.dump(self,f)
 
     @classmethod
-    def load(cls,filename):
+    def read(cls,filename):
         """
         MPS.load(filename):
         unpickles an MPS object from a file "filename".pickle
@@ -1241,7 +1386,7 @@ class MPS(object):
             mps=pickle.load(f)
         return mps
     
-    def loadAndOverwrite(self,filename):
+    def load(self,filename):
         """
         MPS.load(filename):
         unpickles an MPS object from a file "filename".pickle
@@ -1258,6 +1403,20 @@ class MPS(object):
             setattr(self,attr,getattr(cls,attr))
             
     def cutandpatch(self,index):
+        """
+        cut an mps at ```index```, swap the pieces and patch it back together
+        this is an in place operation
+        Parameters:
+        -------------------
+        index:     int
+                   bond at which to cut the state apart; labelling starts at ```0``` for the bond to the left 
+                   of the first tensors, and ends at ```MPS.N``` for the right most bond to the right of 
+                   the rightmost tensor
+        Returns:
+        -------------------
+        None
+
+        """
         self.position(index)
         self.absorbConnector('left')#self._connector is now an identity
         left=[self[n] for n in range(index)]
