@@ -29,7 +29,7 @@ class MPO:
     def __init__(self,mpo=[]):
         #a list of mpo-tensors, to be initialized in the derived class
         self._mpo=mpo
-        
+
     @classmethod
     def fromMPO(cls,other):
         """
@@ -58,6 +58,8 @@ class MPO:
     def twoSiteGate(self,m,n,tau):
         """
         calculate the unitary two-site gates exp(tau*H(m,n))
+        The MPO has to have the member self.obc initialized in the derived class (obc is not an attribute of the base MPO class)
+        The user has to tell if he wants obc or not
         Parameters:
         --------------------------------------
         m,n: int
@@ -72,52 +74,81 @@ class MPO:
         Gate=scipy.linalg..expm(tau*h); Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
         dm, dn the local hilbert space dimension at site m and n, respectively
         """
-
-        if n<m:
-            mpo1=self._mpo[n][-1,:,:,:]
-            mpo2=self._mpo[m][:,0,:,:]
-            nl=n
-            mr=m
-        if n>m:
-            mpo1=self._mpo[m][-1,:,:,:]
-            mpo2=self._mpo[n][:,0,:,:]
-            nl=m
-            nr=n
-        assert(mpo1.shape[0]==mpo2.shape[0])
-        d1=mpo1.shape[1]
-        d2=mpo2.shape[1]        
-        if nl!=0 and nr!=(len(self)-1):
-            h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
-            for s in range(1,mpo1.shape[0]-1):
-                h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-            h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
-            #the following is a check that sometimes is useful
-            #A=np.random.rand(4,4)
-            #B=np.random.rand(4,4)
-            #bla=np.reshape(np.kron(A,B),(4,4,4,4))
-            #for n1 in range(4):
-            #    for n2 in range(4):
-            #        for n3 in range(4):
-            #            for n4 in range(4):
-            #                #print(bla[n1,n2,n3,n4]==mpo1[0,n1,n3]/2*mpo2[0,n2,n4])
-            #                #print(bla[n1,n2,n3,n4]==A[n3,n1]*B[n4,n2])
-            #                print(bla[n1,n2,n3,n4]==A[n1,n3]*B[n2,n4])
-            #                #print('-------')
-            #input()
+        
+        if self.obc:
+            if n<m:
+                mpo1=self._mpo[n][-1,:,:,:]
+                mpo2=self._mpo[m][:,0,:,:]
+                nl=n
+                mr=m
+            if n>m:
+                mpo1=self._mpo[m][-1,:,:,:]
+                mpo2=self._mpo[n][:,0,:,:]
+                nl=m
+                nr=n
+            assert(mpo1.shape[0]==mpo2.shape[0])
+            d1=mpo1.shape[1]
+            d2=mpo2.shape[1]        
+            if nl!=0 and nr!=(len(self)-1):
+                h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
+                for s in range(1,mpo1.shape[0]-1):
+                    h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
+                h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
+                #the following is a check that sometimes is useful
+                #A=np.random.rand(4,4)
+                #B=np.random.rand(4,4)
+                #bla=np.reshape(np.kron(A,B),(4,4,4,4))
+                #for n1 in range(4):
+                #    for n2 in range(4):
+                #        for n3 in range(4):
+                #            for n4 in range(4):
+                #                #print(bla[n1,n2,n3,n4]==mpo1[0,n1,n3]/2*mpo2[0,n2,n4])
+                #                #print(bla[n1,n2,n3,n4]==A[n3,n1]*B[n4,n2])
+                #                print(bla[n1,n2,n3,n4]==A[n1,n3]*B[n2,n4])
+                #                #print('-------')
+                #input()
+                    
+            elif nl!=0 and nr==(len(self)-1):
+                h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
+                for s in range(1,mpo1.shape[0]):
+                    h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
+                    
+            elif nl==0 and nr!=(len(self)-1):
+                h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
+                for s in range(1,mpo1.shape[0]-1):
+                    h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
+                h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
+            
+            elif nl==0 and nr==(len(self)-1):
+                h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
+                for s in range(1,mpo1.shape[0]):
+                    h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
                 
-        elif nl!=0 and nr==(len(self)-1):
+            Gate=np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
+            #Gate=np.reshape(np.eye(4),(d1,d2,d1,d2))
+            return Gate
+        
+        elif not self.obc:
+            if n<m:
+                mpo1=self._mpo[n][-1,:,:,:]
+                mpo2=self._mpo[m][:,0,:,:]
+                nl=n
+                mr=m
+            if n>m:
+                mpo1=self._mpo[m][-1,:,:,:]
+                mpo2=self._mpo[n][:,0,:,:]
+                nl=m
+                nr=n
+            assert(mpo1.shape[0]==mpo2.shape[0])
+            d1=mpo1.shape[1]
+            d2=mpo2.shape[1]        
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
-            for s in range(1,mpo1.shape[0]):
-                h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-        elif nl==0 and nr!=(len(self)-1):
-            h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
             for s in range(1,mpo1.shape[0]-1):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
             h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
-        Gate=np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
-        #Gate=np.reshape(np.eye(4),(d1,d2,d1,d2))
-
-        return Gate
+            Gate=np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
+            return Gate
+            
 
     def __getitem__(self,n):
         return self._mpo[n]
@@ -167,10 +198,10 @@ class TFI(MPO):
     
     """
     
-    def __init__(self,Jx,Bz,obc=True,dtype=float):
-        self._obc=obc
-        self._Jx=Jx
-        self._Bz=Bz
+    def __init__(self,Jx,Bz,obc=True,dtype=np.float64):
+        self.obc=obc
+        self._Jx=Jx.astype(dtype)
+        self._Bz=Bz.astype(dtype)
         N=len(Bz)
         if obc==True:
             mpo=[]
@@ -232,6 +263,7 @@ class TFI(MPO):
                 temp[1,0,1,0]=1
                 temp[1,0,0,1]=1
                 #BSz
+
                 temp[2,0,0,0]=-self._Bz[n]
                 temp[2,0,1,1]= self._Bz[n]
                 #Sx
@@ -249,7 +281,7 @@ class BranchingHamiltonian(MPO):
     Jess's Hamiltonian, everyone loves it!
     """    
     def __init__(self,J,w,chi,obc=True):
-        self._obc=obc
+        self.obc=obc
         self._J=J
         self._w=w
         self._chi=chi
@@ -345,7 +377,7 @@ class XXZ(MPO):
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
     def __init__(self,Jz,Jxy,Bz,obc=True,dtype=float):
-        self._obc=obc
+        self.obc=obc
         self._Jz=Jz
         self._Jxy=Jxy
         self._Bz=Bz
@@ -459,7 +491,7 @@ class XXZIsing(MPO):
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
     def __init__(self,J,w,obc=True):
-        self._obc=obc
+        self.obc=obc
         self._J=J
         self._w=w
         N=len(w)
@@ -510,7 +542,7 @@ class XXZflipped(MPO):
     def __init__(self,Delta,J,obc=True,dtype=float):
         self._Delta=Delta
         self._J=J
-        self._obc=obc
+        self.obc=obc
         mpo=[]
         if obc==True:
             N=len(Delta)+1
@@ -627,7 +659,7 @@ class SpinlessFermions(MPO):
         self._interaction=interaction
         self._hoping=hopping
         self._chempot=chempot
-        self._obc=obc
+        self.obc=obc
         
         N=len(chempot)
         c=np.zeros((2,2)).astype(dtype)
@@ -693,7 +725,7 @@ class HubbardChain(MPO):
         self._t_down=t_down
         self._mu_up=mu_up
         self._mu_down=mu_down
-        self._obc=obc
+        self.obc=obc
         N=len(U)
         
         assert(len(mu_up)==N)

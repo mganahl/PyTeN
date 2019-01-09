@@ -881,7 +881,7 @@ class VUMPSengine(Container):
     VUMPSengine
     container object for mps ground-state optimization  using the VUMPS algorithm and time evolution using the TDVP 
     """
-    def __init__(self,mps,mpo,filename,tol=1E-12,ncv=40,pinv=1E-200,numeig=6):
+    def __init__(self,mps,mpo,filename,regaugetol=1E-12,ncv=40,pinv=1E-200,numeig=6):
         """
         initialize a VUMPS simulation object
 
@@ -893,9 +893,14 @@ class VUMPSengine(Container):
                         Hamiltonian in MPO format
         filename:       str
                         the name of the simulation
-        ncv:            int
-                        number of krylov vectors used in sparse transfer-matrix eigendecomposition
-        numeig:         number of eigenvectors to be returned bei eigs when computing the left and right reduced steady state density matrices
+        regaugetol: float  
+                    desired accuracy when regauging
+        ncv:        int
+                    number of krylov vectors in eigs
+        pinv:       float 
+                    pseudoinverse cutoff
+        numeig:     int
+                    number of eigenvector-eigenvalue pairs to be calculated in eigs (hyperparameter)
         """
         if len(mps)>1:
             raise ValueError("VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
@@ -917,7 +922,7 @@ class VUMPSengine(Container):
         mpor[-1,0,:,:]/=2.0
         self._mpo=H.MPO.fromlist([mpol,mpo[0],mpor])
         self._t0=self.dtype(0.0)
-        self.mps.regauge('symmetric')#,tol=tol,ncv=ncv,pinv=pinv,numeig=numeig)
+        self.mps.regauge('symmetric',tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
 
         self._A=np.copy(self.mps[0])
         self._B=ncon.ncon([np.diag(1.0/np.diag(self.mps._mat)),self._A,self.mps._mat],[[-1,1],[1,2,-3],[2,-2]])
@@ -1224,7 +1229,7 @@ class VUMPSengine(Container):
         self.mps._connector=np.linalg.pinv(evMat)
         self.mps._position=0
 
-    def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
+    def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,regaugetol=1E-10,ncv=40,numeig=1,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
 
         """
         !!!!!!!!!!!!!!!!!!!!!!         This has not yet been tested    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1242,6 +1247,13 @@ class VUMPSengine(Container):
                         number of krylov vectors to be used with solver=LAN
         atol,rtol:      float
                         absolute and relative tolerance of the RK45 and RK23 solvers
+        regaugetol:     float
+                        precision of the left and right dominant eigenvectors of the transfer operator
+        ncv:            int
+                        number of krylov vectors used for diagonalizeing transfer operator
+        numeig:         int 
+                        number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
+                        operator (hyperparameter)
         lgmrestol:      float
                         precision of lgmres used in determining left and right Hamiltonian environments 
         Nmaxlgmres:     int
@@ -1264,7 +1276,8 @@ class VUMPSengine(Container):
 
         current='None'
         while self._it <=numsteps:
-            Edens,Elocright,leftn,rightn=self._prepareStep()            
+            Edens,Elocright,leftn,rightn=self._prepareStep(tol=regaugetol,ncv=ncv,numeig=numeig,
+                                                           lgmrestol=lgmrestol,Nmaxlgmres=Nmaxlgmres)
             self._doEvoStep(solver,dt,krylov_dim,rtol,atol)
             if verbose>=1:
                 self._t0+=np.abs(dt)
@@ -1356,24 +1369,7 @@ class TimeEvolutionEngine(Container):
                        if None, obc are assumed
         """
 
-        if (np.all(lb)!=None) and (np.all(rb)!=None):
-            assert(mps[0].shape[0]==lb.shape[0])
-            assert(mps[-1].shape[1]==rb.shape[0])
-            assert(mpo[0].shape[0]==lb.shape[2])
-            assert(mpo[-1].shape[1]==rb.shape[2])
-            self._lb=np.copy(lb)
-            self._rb=np.copy(rb)
-            
-        else:
-            assert(mpo[0].shape[0]==1)
-            assert(mpo[-1].shape[1]==1)
-            assert(mps[0].shape[0]==1)
-            assert(mps[-1].shape[1]==1)            
-            
-            self._lb=np.ones((1,1,1))
-            self._rb=np.ones((1,1,1))
-            
-        super(TimeEvolutionEngine,self).__init__(mps,mpo,filename)        
+        super(TimeEvolutionEngine,self).__init__(mps,mpo,filename,lb,rb)        
         self.gates=self.mpo
         self._mps.position(0)
         self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
@@ -1858,14 +1854,15 @@ class TimeEvolutionEngine(Container):
         return self._tw,self._t0    
 
     
-class ITEBD(TimeEvolutionEngine):
+class ITEBDengine(TimeEvolutionEngine):
     def __init__(self,mps,mpo,filename='ITEBD'):
         if len(mps)!=2:
             raise ValueError('ITEBD: len(mps)!=2: only two-site unitcells are supported')
         if len(mpo)!=2:
             raise ValueError('ITEBD: len(mpo)!=2: only two-site unitcells are supported')
-
-        super(ITEBD,self).__init__(mps,mpo,filename,lb=None,rb=None)
+        if not mps.obc==False:
+            raise ValueError('ITEBD: mpo.obc=True; use and mpo with mpo.obc=False')
+        super(ITEBDengine,self).__init__(mps,mpo,filename,lb=None,rb=None)
         self._it=0
         self._time=0
         
@@ -1900,18 +1897,16 @@ class ITEBD(TimeEvolutionEngine):
         tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
         tw+=tw_
         #swap the mps and mpo tensors
-        self.mps[0],self.mps[1]=self.mps[1],self.mps[0] 
-        self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]       
+        self.mps.cutandpatch(1)
+        self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]
         tw_,D=self.mps.applyTwoSiteGate(gate=self.gates.twoSiteGate(0,1,dt),site=0,Dmax=Dmax,thresh=tr_thresh)
         tw+=tw_
-        #swap back 
-        self.mps[0],self.mps[1]=self.mps[1],self.mps[0]
+        #swap back
+        self.mps.cutandpatch(1)
         self.mpo[0],self.mpo[1]=self.mpo[1],self.mpo[0]
-
           
         return tw
 
-    
     def doITEBD(self,dt,numsteps,Dmax,recanonize=True,regaugetol=1E-10,ncv=30,pinv=1E-200,numeig=1,
                tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
         """
@@ -1937,6 +1932,7 @@ class ITEBD(TimeEvolutionEngine):
         Returns:
         a tuple containing the truncated weight and the simulated time
         """
+        
         current='None'
         for step in range(numsteps):
             #odd step updates:
@@ -1944,7 +1940,7 @@ class ITEBD(TimeEvolutionEngine):
             if recanonize:
                 self.mps.canonize(nmaxit=1000,tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
                 self.mps.absorbConnector('left')
-            
+                
             if verbose>=1:
                 self._t0+=np.abs(dt)
                 stdout.write("\rITEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self._t0,self._tw,np.max(self.mps.D),Dmax,tr_thresh,np.abs(dt)))
@@ -1963,7 +1959,7 @@ class ITEBD(TimeEvolutionEngine):
                     current=self._filename+'_itebd_cp'+str(self._it)
                     self.save(current)
 
-            self._it=+=1
+            self._it+=1
             self._mps.resetZ()
         return self._tw,self._t0
         

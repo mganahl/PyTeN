@@ -338,8 +338,11 @@ class MPS(object):
         cop._Z=self._Z
         return cop
 
-    def __str__():
-        return self._tensors.__str__()
+    def __str__(self):
+        b=['\n\n connector \n\n '+self._connector.__str__()]+['\n\n ']+['mps['+str(n)+']'+' \n\n '+self._tensors[n].__str__()+' \n\n ' for n in range(self.pos)]+\
+            ['center matrix \n\n' + str(self._mat) +'\n\n ']+['mps['+str(n)+']'+' \n\n '+self._tensors[n].__str__()+' \n\n ' for n in range(self.pos,len(self))]
+        return ''.join(b)
+        
     
     def __getitem__(self,n):
         if isinstance(n,int):
@@ -581,15 +584,23 @@ class MPS(object):
             raise ValueError('mps.absorbConnector(self,location): wrong value for "location"; use "location"="left" or "right"')
 
         if location=='right':
-            self._tensors[self.N-1]=np.transpose(np.tensordot(self._tensors[self.N-1],self._connector,([1],[0])),(0,2,1))
-            D=np.shape(self._tensors[self.N-1])[1]
-            self._connector=np.eye(D)
+            if self.pos==(self.N-1):
+                warnings.warn("MPS.absorbConnector(location='right'): MPS.pos==MPS.N-1; cannot absorb on the right side; switching to location='left'")
+                self.absorbConnector('left')
+            else:
+                self._tensors[self.N-1]=np.transpose(np.tensordot(self._tensors[self.N-1],self._connector,([1],[0])),(0,2,1))
+                D=np.shape(self._tensors[self.N-1])[1]
+                self._connector=np.eye(D)
+
 
         if location=='left':
-            self._tensors[0]=np.tensordot(self._connector,self._tensors[0],([1],[0]))
-            D=np.shape(self._tensors[0])[0]
-            self._connector=np.eye(D)
-
+            if self.pos==0:
+                warnings.warn("MPS.absorbConnector(location='right'): MPS.pos==0; cannot absorb on the left side; switching to location='right'")
+                self.absorbConnector('right')
+            else:
+                self._tensors[0]=np.tensordot(self._connector,self._tensors[0],([1],[0]))
+                D=np.shape(self._tensors[0])[0]
+                self._connector=np.eye(D)
 
     def absorbCenterMatrix(self,direction=1):
         """
@@ -597,14 +608,13 @@ class MPS(object):
         the right (direction>0) tensor at bond self._position
         changes self._mat to be the identity: self._mat=11; does not change self._connector
         """
-        
         assert(direction!=0)
         if (self._position==self.N) and (direction>0):
-                direction=-1
-                warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=N and direction>0; cannot contract bond-matrix to the right because there is no right tensor')
+            direction=-1
+            warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=N and direction>0; cannot contract bond-matrix to the right because there is no right tensor')
         elif (self._position==0) and (direction<0):
-                direction=1                
-                warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=0 and direction<0; cannot contract bond-matrix to the left tensor because there is no left tensor')
+            direction=1                
+            warnings.warn('mps.absorbCenterMatrix(self,direction): self._position=0 and direction<0; cannot contract bond-matrix to the left tensor because there is no left tensor')
 
         if (direction>0):
             self._tensors[self._position]=np.tensordot(self._mat,self._tensors[self._position],([1],[0]))
@@ -1246,3 +1256,17 @@ class MPS(object):
             
         for attr in cls.__dict__.keys():
             setattr(self,attr,getattr(cls,attr))
+            
+    def cutandpatch(self,index):
+        self.position(index)
+        self.absorbConnector('left')#self._connector is now an identity
+        left=[self[n] for n in range(index)]
+        for n in range(index,self.N):
+            self[n-index]=self[n]
+        for n in range(0,index):
+            self[n+self.N-index]=left[n]
+        self._position=0
+        self._connector=np.eye(self.D[0],dtype=self.dtype)#create a new connector with the right shape
+        if not self.D[0]==self.D[-1]:
+            raise ValueError('cutandpatch: state does not connect back to itself')
+        

@@ -85,7 +85,7 @@ if __name__ == "__main__":
     mps.regauge(gauge='right')
     if args.load==None:
         os.chdir(filename)        
-        iMPS=en.VUMPSengine(mps,mpo,args.filename,args.regaugetol,args.ncv,args.numeig)
+        iMPS=en.VUMPSengine(mps=mps,mpo=mpo,filename=args.filename,regaugetol=args.regaugetol,ncv=args.ncv,numeig=args.numeig)
         iMPS.optimize(Nmax=args.imax,epsilon=args.epsilon,
                       regaugetol=args.regaugetol,
                       ncv=args.ncv,

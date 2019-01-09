@@ -22,7 +22,7 @@ herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser('HeisIMPS.py: ground-state simulation for the infinite XXZ model using gradient optimization')    
-    parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float')
+    parser.add_argument('--dtype', help='type of the matrix (float)',type=str,default='float64')
     parser.add_argument('--D', help='MPS bond dimension (32)',type=int,default=32)
     parser.add_argument('--verbose', help='verbosity (1)',type=int,default=1)    
     parser.add_argument('--cp', help='do checkpointing at specified steps (0, no checkpointing)',type=int)
@@ -59,25 +59,40 @@ if __name__ == "__main__":
         os.mkdir(filename)
 
 
-    Jx=args.Jx*np.ones(N)
-    B=args.Bz*np.ones(N)
-    mpo=H.TFI(Jx,B,False)
-    if args.dtype=='complex':
-        dtype=complex
-    elif args.dtype=='float':
-        dtype=float        
+    if args.dtype=='complex128':
+        dtype=np.complex128
+    elif args.dtype=='complex64':
+        dtype=np.complex64
+    elif args.dtype=='complex32':
+        dtype=np.complex32
+    elif args.dtype=='float64':
+        dtype=np.float64
+    elif args.dtype=='float32':
+        dtype=np.float32
+    elif args.dtype=='float16':
+        dtype=np.float16
     else:
         sys.exit('unknown type args.dtype={0}'.format(args.dtype))
+    print(dtype)
+
+
+    Jx=args.Jx*np.ones(N)
+    B=args.Bz*np.ones(N)
+    mpo=H.TFI(Jx,B,False,dtype=dtype)
+    dt=(-1j*args.dt)
+    if np.imag(dt)<1E-12:
+        dt=dtype(np.real(dt))
     if args.load==None:
         os.chdir(filename)        
         try:
             mps=mpslib.MPS.random(N=N,D=args.D,d=d,obc=False,dtype=dtype)  #initialize a random MPS with bond dimension D'=10
             #normalize the state by sweeping the orthogonalizty center once back and forth through the system
-        
             mps.regauge(gauge='right')
-            iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
-            #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
-            iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
+            iMPS=en.VUMPSengine(mps,mpo,args.filename,regaugetol=args.regaugetol,ncv=args.ncv,numeig=args.numeig)
+            #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):
+            
+            iMPS.doTDVP(dt=dt,numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,regaugetol=args.regaugetol,ncv=args.ncv,numeig=1,
+                        lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,
                         verbose=args.verbose,rtol=args.rtol,atol=args.atol)
         except TypeError:
             dtype=complex
@@ -87,7 +102,8 @@ if __name__ == "__main__":
             mps.regauge(gauge='right')
             iMPS=en.VUMPSengine(mps,mpo,args.filename,ncv=args.ncv,regaugetol=args.regaugetol,numeig=args.numeig)
             #def doTDVP(self,dt,numsteps,solver='LAN',krylov_dim=10,rtol=1E-6,atol=1e-12,lgmrestol=1E-10,Nmaxlgmres=40,cp=None,keep_cp=False,verbose=1):    
-            iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,\
+            iMPS.doTDVP(dt=(-1j*args.dt),numsteps=args.imax,solver=args.solver.upper(),krylov_dim=args.krylov_dim,regaugetol=args.regaugetol,ncv=args.ncv,numeig=1,
+                        lgmrestol=args.lgmrestol,Nmaxlgmres=args.Nmaxlgmres,cp=args.cp,keep_cp=args.keep_cp,
                         verbose=args.verbose,rtol=args.rtol,atol=args.atol)
     else:
         iMPS=en.VUMPSengine.load(args.load)

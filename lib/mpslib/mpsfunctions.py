@@ -51,16 +51,16 @@ def overlap(mps1,mps2):
     if isinstance(mps1,MPSL.MPS) and isinstance(mps2,MPSL.MPS):
         pos1=mps1._position
         pos2=mps2._position        
-        if (mps1._N-mps1._position)>mps1._position:
+        if (mps1.N-mps1._position)>mps1._position:
             mps1.position(0)
             mps2.position(0)        
         else:
-            mps1.position(mps1._N)
-            mps2.position(mps2._N)
-    #if (mps2._N-mps2._position)>mps2._position:
+            mps1.position(mps1.N)
+            mps2.position(mps2.N)
+    #if (mps2.N-mps2._position)>mps2._position:
     #    mps2.position(0)
     #else:
-    #    mps2.position(mps2._N)        
+    #    mps2.position(mps2.N)        
 
 
     if len(mps1)!=len(mps2):
@@ -1961,7 +1961,7 @@ def getBlockHam(mps,lbold,rbold,mpo,index):
     for n in range(index):
         lb=addLayer(lb,mps._tensors[n],mpo[n],mps._tensors[n],1)
     lb=addLayer(lb,A,mpo[index],A,1)
-    for n in range(mps._N-1,index,-1):
+    for n in range(mps.N-1,index,-1):
         rb=addLayer(rb,mps._tensors[n],mpo[n],mps._tensors[n],-1)
     return lb,rb,lam
 
@@ -2055,7 +2055,7 @@ def getBoundaryHams(mps,mpo,regauge=False,numeig=6):
         f0r=np.zeros((D*D))
         f0r,hr=computeUCsteadyStateHamiltonianGMRES(temp,mpo,f0r,ldens,rdens,direction=-1,thresh=1E-10,imax=1000)
         
-        mps.position(mps._N)
+        mps.position(mps.N)
         if regauge:
             phasematrix=mps._mat.dot(mps._connector)
             mps[-1]=ncon.ncon([mps[-1],phasematrix],[[-1,1,-3],[1,-2]])
