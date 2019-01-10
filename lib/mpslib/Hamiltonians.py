@@ -70,20 +70,31 @@ class MPO:
         """
         return cls(mpolist)
     
-    def getTwositeMPO(self,site1,site2):
+    def getTwositeMPO(self,site1,site2,obc):
         if site2<site1:
             mpo1=self._mpo[site2][-1,:,:,:]
             mpo2=self._mpo[site1][:,0,:,:]
             nl=site2
             mr=site1
+            if site2==0:
+                mpo1[0,:,:]/=2.0
+            if site1==(len(self)-1):
+                mpo2[-1,:,:]/=2.0
+                
         if site2>site1:
             mpo1=self._mpo[site1][-1,:,:,:]
             mpo2=self._mpo[site2][:,0,:,:]
             nl=site1
             nr=site2
+            if site1==0:
+                mpo1[0,:,:]/=2.0
+            if site2==(len(self)-1):
+                mpo2[-1,:,:]/=2.0
+            
         assert(mpo1.shape[0]==mpo2.shape[0])
         d1=mpo1.shape[1]
-        d2=mpo2.shape[1]        
+        d2=mpo2.shape[1]
+
         return [np.expand_dims(mpo1,0),np.expand_dims(mpo2,1)]
     
     def getTwoSiteHamiltonian(self,site1,site2,obc=True):

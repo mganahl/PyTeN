@@ -422,7 +422,7 @@ class MPS(object):
         -------------------
         None
         """
-        for n in range(len(res)):
+        for n in range(len(self)):
             self[n]=operation(self[n],*args,**kwargs)
 
 
@@ -444,7 +444,7 @@ class MPS(object):
             res[n]=operation(res[n],*args,**kwargs)
         return res
 
-    def __conj__(self,*args,**kwargs):
+    def conj(self,*args,**kwargs):
         """
         in-place complex conjugation of the MPS
         Parameters:
@@ -457,9 +457,58 @@ class MPS(object):
         """
         self.__in_place_unary_operations__(np.conj,*args,**kwargs)
     
+
+    def __in_place_unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements in-place unary operations on TensorNetwork tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        None
+        """
+        for n in range(len(res)):
+            self[n]=operation(self[n],*args,**kwargs)
+
+
+    def __unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements unary operations on TensorNetwork tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        MPS:  MPS object obtained from acting with operation on each individual MPS tensor
+        """
+        res=copy.deepcopy(self)
+        for n in range(len(res)):
+            res[n]=operation(res[n],*args,**kwargs)
+        return res
+
+    def __conj__(self,*args,**kwargs):
+        """
+        in-place complex conjugation of the TensorNetwork
+        Parameters:
+        ------------------
+        *args,**kwargs:   arguments to np.conj
+
+        Returns:
+        ------------------------
+        None
+        """
+        self.__in_place_unary_operations__(np.conj,*args,**kwargs)
+    
     def __conjugate__(self,*args,**kwargs):
         """
-        complex conjugation of MPS
+        complex conjugation of TensorNetwork
         Parameters:
         ------------------
         *args,**kwargs:   arguments to np.conj
@@ -586,6 +635,8 @@ class MPS(object):
         return self.__imag__(*args,**kwargs)
     
 
+
+
     __neg__ = generate_unary_deferer(opr.neg)
     __pos__ = generate_unary_deferer(opr.pos)
     __abs__ = generate_unary_deferer(abs)
@@ -646,7 +697,6 @@ class MPS(object):
         cpy._Z/=num
         cpy._dtype=np.result_type(type(num),self.dtype).type
         return cpy
-    
     
     
     def __rmul__(self,num):

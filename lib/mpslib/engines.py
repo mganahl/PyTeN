@@ -89,9 +89,9 @@ class Container(object):
         filename: str
                   the filename of the file
         """
-
         with open(filename+'.pickle', 'wb') as f:
             pickle.dump(self,f)
+
             
     @classmethod
     def read(self,filename):
@@ -106,6 +106,7 @@ class Container(object):
         with open(filename, 'rb') as f:
             out=pickle.load(f)
         return out
+
     
     def load(self,filename):
         """
@@ -123,6 +124,7 @@ class Container(object):
         for attr in cls.__dict__.keys():
             setattr(self,attr,getattr(cls,attr))
 
+            
     @property
     def mps(self):
         """
@@ -942,8 +944,8 @@ class VUMPSengine(Container):
 
         self._A=np.copy(self.mps[0])
         self._B=ncon.ncon([np.diag(1.0/np.diag(self.mps._mat)),self._A,self.mps._mat],[[-1,1],[1,2,-3],[2,-2]])
-        self._r=np.eye(self._B.shape[0]).astype(self.dtype)
-        self._l=np.eye(self._A.shape[0]).astype(self.dtype)
+        self._r=np.eye(self._B.shape[0],dtype=self.dtype)
+        self._l=np.eye(self._A.shape[0],dtype=self.dtype)
         #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self.mps])
 
     def reset(self):
@@ -953,8 +955,8 @@ class VUMPSengine(Container):
         """
         self._it=1
         self._t0=0.0
-        self._r=np.eye(self._B.shape[0])
-        self._l=np.eye(self._A.shape[0])        
+        self._r=np.eye(self._B.shape[0],dtype=self.dtype)
+        self._l=np.eye(self._A.shape[0],dtype=self.dtype)        
         
     def _prepareStep(self,tol=1E-12,ncv=30,numeig=1,lgmrestol=1E-10,Nmaxlgmres=40):
         [etar,vr,numeig]=mf.TMeigs(self._A,direction=-1,numeig=numeig,init=self._r,nmax=10000,tolerance=tol,ncv=ncv,which='LR')
@@ -968,22 +970,22 @@ class VUMPSengine(Container):
         self._r=(r+herm(r))/2.0            
 
 
-        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0]).astype(self.dtype))
-        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1]).astype(self.dtype))
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0],dtype=self.dtype)
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1],dtype=self.dtype)
 
-        self._lb=mf.initializeLayer(self._A,np.eye(self.mps.D[0]).astype(self.dtype),self._A,self._mpo[0],1)
+        self._lb=mf.initializeLayer(self._A,np.eye(self.mps.D[0],dtype=self.dtype),self._A,self._mpo[0],1)
 
 
         ihl=mf.addLayer(self._lb,self._A,self._mpo[2],self._A,1)[:,:,0]
         Elocleft=np.tensordot(ihl,self._r,([0,1],[0,1]))
-        self._rb=mf.initializeLayer(self._B,np.eye(self.mps.D[-1]).astype(self.dtype),self._B,self._mpo[2],-1)
+        self._rb=mf.initializeLayer(self._B,np.eye(self.mps.D[-1],dtype=self.dtype),self._B,self._mpo[2],-1)
 
 
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0]).astype(self.dtype))
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1]).astype(self.dtype))
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0],dtype=self.dtype)
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1],dtype=self.dtype)
         
         self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
                                            maxiteration=Nmaxlgmres,direction=1)
@@ -1874,6 +1876,10 @@ class TimeEvolutionEngine(Container):
 
     
 class ITEBDengine(TimeEvolutionEngine):
+    """
+    a simulation engine for doing iTEBD for an infinite system
+    with a two-site unitcell
+    """
     def __init__(self,mps,mpo,filename='ITEBD'):
         if len(mps)!=2:
             raise ValueError('ITEBD: len(mps)!=2: only two-site unitcells are supported')
@@ -1894,16 +1900,6 @@ class ITEBDengine(TimeEvolutionEngine):
                    step size (scalar)
         Dmax:      int
                    maximum bond dimension to be kept
-        recanonize:bool
-                   recanonize the MPS after gate applications
-        regaugetol: float  
-                    desired accuracy when regauging
-        ncv:        int
-                    number of krylov vectors in eigs
-        pinv:       float 
-                    pseudoinverse cutoff
-        numeig:     int
-                    number of eigenvector-eigenvalue pairs to be calculated in eigs (hyperparameter)
         tr_thresh: float
                    truncation threshold 
         Returns:
@@ -1930,8 +1926,7 @@ class ITEBDengine(TimeEvolutionEngine):
     def doITEBD(self,dt,numsteps,Dmax,recanonizestep=1,regaugetol=1E-10,ncv=30,pinv=1E-200,numeig=1,
                tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
         """
-        ITEBD.doTEBD(self,dt,numsteps,Dmax,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
-        uses a second order trotter decomposition to evolve the state using TEBD
+        uses a first order trotter decomposition to evolve the state using iTEBD
         Parameters:
         -------------------------------
         dt:             float
@@ -1942,6 +1937,14 @@ class ITEBDengine(TimeEvolutionEngine):
                         maximum bond dimension to be kept
         recanonizestep: int
                         recanonize the mps every ```recanonizestep``` steps
+        regaugetol: float  
+                    desired accuracy when regauging
+        ncv:        int
+                    number of krylov vectors in eigs
+        pinv:       float 
+                    pseudoinverse cutoff
+        numeig:     int
+                    number of eigenvector-eigenvalue pairs to be calculated in eigs (hyperparameter)
         tr_thresh:      float
                         truncation threshold 
         verbose:        int
@@ -2000,6 +2003,7 @@ class ITEBDengine(TimeEvolutionEngine):
                     self.save(current)
             self._it+=1
             self._mps.resetZ()
+                      
         self.mps.canonize(nmaxit=1000,tol=regaugetol,ncv=ncv,pinv=pinv,numeig=numeig)
         mpsl=np.tensordot(np.diag(self.mps.lambdas[0]),self.mps.gammas[0],([1],[0]))
         mpsr=np.tensordot(np.diag(self.mps.lambdas[1]),self.mps.gammas[1],([1],[0]))                
@@ -2036,7 +2040,6 @@ def gram(Neff,mpo,vec):
 #    tensor=np.reshape(vec,(D,D,d))
 #    return np.reshape(ncon.ncon([Neff,tensor],[[1,-1,2,-2],[1,2,-3]]),(D*D*d))
 
-
 def matvecbond(Heff,vec):
     D=Heff.shape[0]
     mat=np.reshape(vec,(D,D))
@@ -2049,23 +2052,22 @@ def grambond(Neff,vec):
 
 
 
-class PeriodicMPSengine(Container):
-    def __init__(self,mps,mpo,N,filename):
+class PUMPSengine(Container):
+    def __init__(self,mps,mpo,filename):
         """
-        initialize a VUMPS simulation object
+        initialize a PUMPS simulation object
         mps: a list of a single np.ndarray of shape(D,D,d), or an MPS object of length 1
         mpo: an MPO object
         filename: str
                   the name of the simulation
         """
         if len(mps)>1:
-            raise ValueError("PeriodicMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1")
+            raise ValueError("PUMPSengine: got an mps of len(mps)>1: can only handle len(mps)=1")
         if (mps.obc==True):
-            raise ValueError("PeriodicMPSengine: got an mps with obc=True")
-        self._dtype=np.result_type(mps[0].dtype,mpo.dtype)
-        self._N=N
-
-        [B1,B2,d1,d2]=mpo[0].shape
+            raise ValueError("PUMPSengine: got an mps with obc=True")
+        super(PUMPSengine,self).__init__(mps,mpo,filename,lb=None,rb=None)#initializes lb and rb                      \
+                      
+        [B1,B2,d1,d2]=self.mpo[0].shape
         mpol=np.zeros((1,B2,d1,d2),dtype=self._dtype)
         mpor=np.zeros((B1,1,d1,d2),dtype=self._dtype)
         
@@ -2123,7 +2125,7 @@ class PeriodicMPSengine(Container):
         [D1,D2,d]=self._mps[0].shape
         Hbla=ncon.ncon([self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-4,-1,1],[-6,-3,1,2],[-5,-2,2]])
         n=1
-        while n<(self._N-1):
+        while n<(len(self)-1):
             Hbla=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])
             #bla=np.zeros((D1,D1),dtype=Hbla.dtype)
             #for k in range(D1):
@@ -2131,16 +2133,16 @@ class PeriodicMPSengine(Container):
             #print(bla)
             #input()
             n+=1            
-            #if n==(self._N-3):
+            #if n==(len(self)-3):
             #    #N_temp contains all mps-tensors except those at 0,N-2 and N-1; will be contracted with local mpo to connect both ends
             #    N_temp=np.copy(Hbla[:,:,0,:,:,0])
-            #    #print('length of N_temp: ',n,self._N)
-            #print('contracted ',n,self._N)
+            #    #print('length of N_temp: ',n,len(self))
+            #print('contracted ',n,len(self))
 
         #Neffbond has all mps tensors contracted into it
         #Neffbond=ncon.ncon([Hbla,self._mps[0],self._mpo[1],np.conj(self._mps[0])],[[-1,-2,-3,1,5,3],[-4,1,2],[-6,3,2,4],[-5,5,4]])[:,:,0,:,:,0]
-        Neffbond=self.empty_pow(self._N)
-        N_temp=self.empty_pow(self._N-3)
+        Neffbond=self.empty_pow(len(self))
+        N_temp=self.empty_pow(len(self)-3)
         #Neffbond has all but the N-1st mps tensors contracted into it        
         Neffsite=np.zeros((D1,D1,1,D2,D2,1),dtype=Hbla.dtype)            
         Neffsite[:,:,0,:,:,0]=Hbla[:,:,0,:,:,0]
@@ -2151,11 +2153,11 @@ class PeriodicMPSengine(Container):
         #print(bla)
         #input()        
         Henvsite=Hbla[:,:,0,:,:,-1]
-        #H2=self.checkH(self._N-1)
+        #H2=self.checkH(len(self)-1)
         #print(np.linalg.norm(Henvsite-H2))
-        #print(np.linalg.norm(Neffsite[:,:,0,:,:,0]-self.empty_pow(self._N-1)))
-        #print(np.linalg.norm(Neffbond-self.empty_pow(self._N)))
-        #print(np.linalg.norm(N_temp-self.empty_pow(self._N-3)))        
+        #print(np.linalg.norm(Neffsite[:,:,0,:,:,0]-self.empty_pow(len(self)-1)))
+        #print(np.linalg.norm(Neffbond-self.empty_pow(len(self))))
+        #print(np.linalg.norm(N_temp-self.empty_pow(len(self)-3)))        
         #input()
         #Hevn contains all hamiltonian contributions that don't act on the last site N-1
         #N_temp contains the mps overlap on sites 1,...,N-3
@@ -2195,22 +2197,22 @@ class PeriodicMPSengine(Container):
             
             energy=np.tensordot(np.conj(self._mps[0]),gradmps,([0,1,2],[0,1,2]))
             Z=np.trace(np.reshape(Neffbond,(D1*D1,D2*D2)))
-            edens=energy/Z/self._N
+            edens=energy/Z/len(self)
             
             self._mps[0]-=np.copy(alpha*gradmps)
-            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))
+            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(len(self)))))
 
             #mps=self._mps[0]-alpha*gradmps
             #mat=np.eye(D1)-alpha*gradmat
             #ACC_l=np.reshape(ncon.ncon([mps,herm(mat)],[[-1,1,-2],[1,-3]]),(D1*d,D2))
             #Ul,Sl,Vl=mf.svd(ACC_l)
             #self._mps[0]=np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
-            #self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))
+            #self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(len(self)))))
             
             self._mps._mat=np.eye(D1)
             self._mps._connector=np.eye(D1)
             if verbose>0:
-                stdout.write("\rPeriodic MPS gradient optimization for N=%i sites: it=%i/%i, E=%.16f+%.16f at alpha=%1.5f, D=%i"%(self._N,it,Nmax,np.real(edens),np.imag(edens),alpha,D1))
+                stdout.write("\rPeriodic MPS gradient optimization for N=%i sites: it=%i/%i, E=%.16f+%.16f at alpha=%1.5f, D=%i"%(len(self),it,Nmax,np.real(edens),np.imag(edens),alpha,D1))
                 stdout.flush()
 
             if np.abs(eold-edens)<Econv:
@@ -2271,7 +2273,7 @@ class PeriodicMPSengine(Container):
 
             self._mps[0]=mps#np.transpose(np.reshape(Ul.dot(Vl),(D1,d,D2)),(0,2,1))
             print(mps.shape)
-            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(self._N))))            
+            self._mps[0]=np.copy(self._mps[0]/(Z**(0.5/(len(self)))))            
             self._mps._mat=np.eye(D1)
             self._mps._connector=np.eye(D1)
             
@@ -2290,9 +2292,9 @@ class PeriodicMPSengine(Container):
             #print('lowest eigenvalue of Hbond from dense:  ',np.sort(eta2)[0])                        
 
             #print(np.sort(eta2))
-            print('etasite:',np.sort(etasite)[0]/self._N)
-            print('etabond:',np.sort(etabond)[0]/self._N)
-            print('energy ={0}, Z={1}, energy/N*Z={2}'.format(energy,Z,energy/Z/self._N))
+            print('etasite:',np.sort(etasite)[0]/len(self))
+            print('etabond:',np.sort(etabond)[0]/len(self))
+            print('energy ={0}, Z={1}, energy/N*Z={2}'.format(energy,Z,energy/Z/len(self)))
             input()
             #print(self._mps[0])
             #print(self._mps._mat)                
