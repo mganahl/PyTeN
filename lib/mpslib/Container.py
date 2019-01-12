@@ -18,15 +18,18 @@ herm=lambda x:np.conj(np.transpose(x))
 class Tensor(np.ndarray):
     def __new__(cls,*args,**kwargs):
         return super(Tensor,cls).__new__(cls,*args,**kwargs)
-    def merge(self,indices):
+    def merge(self,*indices):
         if max(indices)>=len(self.shape):
             raise ValueError("Tensor.merge(indices): max(indices)>=len(shape)")
         left=list(range(0,min(indices)))
-        complement=sorted(list(set(range(len(self.shape))).intersection(set(left+list(indices)))))
+        print(left)
+
+        complement=sorted(list(set(range(len(self.shape))).difference(set(left+list(indices)))))
+        print(complement)
         neworder=left+list(indices)+complement
-        
-        np.reshape(np.transpose(self,neworder))
-        print(neworder)
+        newshape=tuple([self.shape[l] for l in left]+[np.prod([self.shape[l] for l in indices])]+[self.shape[l] for l in complement])
+        return np.reshape(np.transpose(self,neworder),newshape).view(Tensor)
+
         
 def generate_unary_deferer(op_func):
     def deferer(cls, *args, **kwargs):
@@ -54,17 +57,19 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     """
     mean=kwargs.get('mean',0.5)
     scale=kwargs.get('scale',0.1)
-    dtype=kwargs.get('dtype',np.float64)    
+    dtype=kwargs.get('dtype',np.float64)
+
     if numpy_func in (np.random.random_sample,np.random.rand,np.random.randn):
         if np.issubdtype(dtype,np.complexfloating):
-            return [(numpy_func(shape)-mean+1j*(numpy_func(shape)-mean)).astype(dtype)*scale for shape in shapes]
+            return [(numpy_func(shape).view(Tensor)-mean+1j*(numpy_func(shape).view(Tensor)-mean)).astype(dtype)*scale for shape in shapes]
+
         elif np.issubdtype(dtype,np.floating):
-            return [(numpy_func(shape)-mean).astype(dtype)*scale for shape in shapes]
+            return [(numpy_func(shape).view(Tensor)-mean).astype(dtype)*scale for shape in shapes]
     else:
         if np.issubdtype(dtype,np.complexfloating):
-            return [numpy_func(shape,*args,**kwargs)+1j*numpy_func(shape,*args,**kwargs) for shape in shapes]
+            return [numpy_func(shape,*args,**kwargs).view(Tensor)+1j*numpy_func(shape,*args,**kwargs).view(Tensor) for shape in shapes]
         elif np.issubdtype(dtype,np.floating):            
-            return [numpy_func(shape,*args,**kwargs) for shape in shapes]
+            return [numpy_func(shape,*args,**kwargs).view(Tensor) for shape in shapes]
         
 #functions below need to implement U(1) symmetric tensors
 def eye(shape,dtype):
@@ -181,8 +186,8 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
             _shape=shape
         else:
             _shape=tuple([len(tensors)])
-            
-        self._tensors=np.empty((len(tensors)),dtype=np.ndarray)
+
+        self._tensors=np.empty((len(tensors)),dtype=object)
         for n in range(len(tensors)):
             self._tensors[n]=tensors[n]
         self._tensors=self._tensors.reshape(_shape)
@@ -196,6 +201,8 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         compatible with np.reshape
         """
         view=TensorNetwork.view(self)
+        print(type(view._tensors[0]))
+        io
         view._tensors=np.reshape(view._tensors,newshape,order=order)
         return view
     
