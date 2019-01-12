@@ -8,6 +8,26 @@ import operator as opr
 import copy
 import numbers
 import numpy as np
+import lib.mpslib.mpsfunctions as mf
+import lib.ncon as ncon
+comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
+anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
+herm=lambda x:np.conj(np.transpose(x))
+
+
+class Tensor(np.ndarray):
+    def __new__(cls,*args,**kwargs):
+        return super(Tensor,cls).__new__(cls,*args,**kwargs)
+    def merge(self,indices):
+        if max(indices)>=len(self.shape):
+            raise ValueError("Tensor.merge(indices): max(indices)>=len(shape)")
+        left=list(range(0,min(indices)))
+        complement=sorted(list(set(range(len(self.shape))).intersection(set(left+list(indices)))))
+        neworder=left+list(indices)+complement
+        
+        np.reshape(np.transpose(self,neworder))
+        print(neworder)
+        
 def generate_unary_deferer(op_func):
     def deferer(cls, *args, **kwargs):
         try:
@@ -16,7 +36,8 @@ def generate_unary_deferer(op_func):
             raise(AttributeError("cannot generate unary deferer for class withtou __unary_operations__"))
     return deferer
 
-def numpy_initializer(numpy_func,shapes,*args,**kwargs):
+
+def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     """
     initializer function for numpy.npdaarys
     Parameters:
@@ -45,6 +66,14 @@ def numpy_initializer(numpy_func,shapes,*args,**kwargs):
         elif np.issubdtype(dtype,np.floating):            
             return [numpy_func(shape,*args,**kwargs) for shape in shapes]
         
+#functions below need to implement U(1) symmetric tensors
+def eye(shape,dtype):
+    if isinstance(shape,int):
+        return np.eye(shape,dtype=dtype)
+    else:
+        return NotImplemented
+
+    
 class Container(object):
 
     def __init__(self,name=None):
@@ -159,14 +188,17 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         self._tensors=self._tensors.reshape(_shape)
         self.Z=np.result_type(*self._tensors,Z).type(Z)
 
-        
-    def reshape(self,shape):
+    def __array__(self):
+        return self._tensors
+    def reshape(self,newshape,order='C'):
         """
         returns a reshaped view of self
+        compatible with np.reshape
         """
         view=TensorNetwork.view(self)
-        view._tensors=np.reshape(view._tensors,shape)
+        view._tensors=np.reshape(view._tensors,newshape,order=order)
         return view
+    
     @property
     def N(self):
         """
@@ -200,69 +232,89 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     @classmethod
     def view(cls,other):
         """
-        generate a random TensorNetwork
+        return a view of other
         Parameters:
         ----------------------------------------------
-        initializer:     callable
-                         initializer(*args,**kwargs) should return the initial tensors
-        filename:        str or None
-                        
+        other:   TensorNetwork
         """
         return cls(tensors=other.tensors,shape=other.shape,name=other.name,Z=other.Z)
         
     
     @classmethod
-    def random(cls,shape=(),tensorshapes=(),name=None,initializer=numpy_initializer,*args,**kwargs):
+    def random(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
         ----------------------------------------------
+        shape:           tuple
+                         shape of the Tensor Network 
+        tensorshapes:    tuple 
+                         shapes if the tensors in TensorNetwork
+        name:            str or None
+                         name of the TensorNetwork
         initializer:     callable
                          initializer(*args,**kwargs) should return the initial tensors
-        filename:        str or None
+        *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
         return cls(tensors=initializer(np.random.random_sample,np.prod(shape)*[tensorshapes],*args,**kwargs),
                    name=name,shape=shape,Z=1.0)
 
         
     @classmethod
-    def zeros(cls,shapes=[(3,3,2)],name=None,shape=(),initializer=numpy_initializer,*args,**kwargs):
+    def zeros(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
-        generate a random TensorNetwork
+        generate a TensorNetwork of zeros-tensors
         Parameters:
         ----------------------------------------------
+        shape:           tuple
+                         shape of the Tensor Network 
+        tensorshapes:    tuple 
+                         shapes if the tensors in TensorNetwork
+        name:            str or None
+                         name of the TensorNetwork
         initializer:     callable
                          initializer(*args,**kwargs) should return the initial tensors
-        filename:        str or None
+        *args,**kwargs:  arguments and keyword arguments for ```initializer```
                         
         """
         return cls(tensors=initializer(np.zeros,np.prod(shape)*[tensorshapes],*args,**kwargs),
                    name=name,shape=shape,Z=1.0)
 
     @classmethod
-    def ones(cls,shapes=[(3,3,2)],name=None,shape=(),initializer=numpy_initializer,*args,**kwargs):
+    def ones(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
-        generate a random TensorNetwork
+        generate a TensorNetwork of ones-tensors
         Parameters:
         ----------------------------------------------
+        shape:           tuple
+                         shape of the Tensor Network 
+        tensorshapes:    tuple 
+                         shapes if the tensors in TensorNetwork
+        name:            str or None
+                         name of the TensorNetwork
         initializer:     callable
                          initializer(*args,**kwargs) should return the initial tensors
-        filename:        str or None
+        *args,**kwargs:  arguments and keyword arguments for ```initializer```
                         
         """
         return cls(tensors=initializer(np.ones,np.prod(shape)*[tensorshapes],*args,**kwargs),
                    name=name,shape=shape,Z=1.0)
     
     @classmethod
-    def empty(cls,shapes=[(3,3,2)],name=None,shape=(),initializer=numpy_initializer,*args,**kwargs):
+    def empty(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
-        generate a random TensorNetwork
+        generate a TensorNetwork of empty tensors
         Parameters:
         ----------------------------------------------
+        shape:           tuple
+                         shape of the Tensor Network 
+        tensorshapes:    tuple 
+                         shapes if the tensors in TensorNetwork
+        name:            str or None
+                         name of the TensorNetwork
         initializer:     callable
                          initializer(*args,**kwargs) should return the initial tensors
-        filename:        str or None
-                        
+        *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
         return cls(tensors=initializer(np.empty,np.prod(shape)*[tensorshapes],*args,**kwargs),
                    name=name,shape=shape,Z=1.0)
@@ -276,24 +328,14 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         Parameters:
         ----------------------------
         tensors: list tensor objects 
+        name:    str or None
+                 name of the TensorNetwork
         Returns:
         ----------------------------------
         TensorNetwork object with tensors initialized from ```tensors```
         """
+        return cls(tensors=tensors,shape=(),name=name,Z=1)
 
-        TN=cls(tensors=tensors,name=name)
-        TN.Z=self.dtype.type(1.0)
-        return TN
-
-    def append(self,t):
-        self._tensors.append(t)
-        
-    def extend(self,ts):
-        self._tensors.extend(ts)
-    def insert(self,index,t):
-        self._tensors.insert(index,t)
-    def pop(self,index):
-        return self._tensors.pop(index)
 
     def __getitem__(self,n,**kwargs):
         return self._tensors[n]
@@ -303,7 +345,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
 
     def __str__(self):
         """
-        printing function
+        return a str representation of the TensorNetwork
         """
         
         inds=np.unravel_index(range(len(self)),dims=self.shape)
@@ -311,10 +353,20 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         return ''.join(['\n\n ']+['TN'+str(index)+' \n\n '+self[index].__str__()+' \n\n ' for index in inds]+['\n\n Z=',str(self.Z)])
 
     def __len__(self):
+        """
+        return the total number of tensors in the TensorNetwork
+        Returns:
+        ---------------
+        int:    the total number of tensors in TensorNetwork
+        """
         return np.prod(self.shape)
 
     def __iter__(self):
-        return self._tensors.__iter__()
+        """
+        Returns:
+        iterator:  an iterator over the tensors of the TensorNetwork
+        """
+        return iter(self._tensors)
     def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
         """
         implements np.ufuncs for the TensorNetwork
@@ -467,9 +519,8 @@ class MPS(TensorNetwork):
         else:
             self._D=Dmax
             
-
-        self._mat=np.eye(np.shape(self._tensors[-1])[1]).astype(self.dtype)
-        self._mat=self._mat/np.sqrt(np.trace(self._mat.dot(herm(self._mat))))
+        self.mat=eye(tensors[-1].shape[1],dtype=self.dtype)
+        self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(herm(self.mat))))
         self._position=self.N
         self.gammas=[]
         self.lambdas=[]
@@ -488,7 +539,16 @@ class MPS(TensorNetwork):
         returns a list containig the bond-dimensions of the MPS
         """
         return [m.shape[2] for m in self]
-        
+    
+    @property
+    def pos(self):
+        """
+        Returns:
+        ----------------------------
+        int: the current position of the center bond
+        """
+        return self._position
+       
     @property
     def Dmax(self):
         """
@@ -501,8 +561,67 @@ class MPS(TensorNetwork):
         """
         set Dmax to D
         """
-        self._D=D
+        
+    @classmethod
+    def random(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                       *args,**kwargs),
+                   name=name,Z=1.0)
 
+    @classmethod
+    def zeros(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                       *args,**kwargs),
+                   name=name,Z=1.0)
+
+    @classmethod
+    def ones(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                       *args,**kwargs),
+                   name=name,Z=1.0)
+    @classmethod
+    def empty(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                       *args,**kwargs),
+                   name=name,Z=1.0)
+
+
+    def __str__(self):
+        """
+        return a str representation of the TensorNetwork
+        """
+        inds=range(len(self))
+        s1=['\n\n ']+['TN['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos)]+\
+            ['center matrix \n\n ',self.mat.__str__()]+['\n\n TN['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
+        return ''.join(s1)
 
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
@@ -529,43 +648,107 @@ class MPS(TensorNetwork):
         in this case, one preconditions the method by first doing a qr, and setting all values in r
         which are smaller than r_thresh to 0, then does an svd.
         """
-            
         if bond==self._position:
             return
         
         if bond>self._position:
-            self[self._position]=np.tensordot(self._mat,self[self._position],([1],[0]))
+            self[self._position]=np.tensordot(self.mat,self[self._position],([1],[0]))
             for n in range(self._position,bond):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self._mat,Z=mf.prepareTensor(self[n],direction=1)
+                    tensor,self.mat,Z=mf.prepareTensor(self[n],direction=1)
                     
                 else:
                     tensor,s,v,Z=mf.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                     r_thresh=r_thresh)
-                    self._mat=np.diag(s).dot(v)
+                    self.mat=np.diag(s).dot(v)
                 self.Z*=Z                    
                 self[n]=tensor
                 if (n+1)<bond:
-                    self[n+1]=np.tensordot(self._mat,self[n+1],([1],[0]))
+                    self[n+1]=np.tensordot(self.mat,self[n+1],([1],[0]))
 
         if bond<self._position:
-            self[self._position-1]=np.transpose(np.tensordot(self[self._position-1],self._mat,([1],[0])),(0,2,1))
+            self[self._position-1]=np.transpose(np.tensordot(self[self._position-1],self.mat,([1],[0])),(0,2,1))
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self._mat,Z=mf.prepareTensor(self[n],direction=-1)
+                    tensor,self.mat,Z=mf.prepareTensor(self[n],direction=-1)
 
                 else:
                     u,s,tensor,Z=mf.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                     r_thresh=r_thresh)
-                    self._mat=u.dot(np.diag(s))
-                self._Z*=Z                                        
+                    self.mat=u.dot(np.diag(s))
+                self.Z*=Z                                        
                 self[n]=tensor
                 if n>bond:
-                    self[n-1]=np.transpose(np.tensordot(self[n-1],self._mat,([1],[0])),(0,2,1))
+                    self[n-1]=np.transpose(np.tensordot(self[n-1],self.mat,([1],[0])),(0,2,1))
         self._position=bond
-        #print("after position: self._D=",self._D)
         
+    def ortho(self,sites,which):
+        """
+        checks if the orthonormalization of the mps is OK
+        prints out some stuff
+        """
+        if which in (1,'l','left'):
+            if hasattr(sites,'__iter__'):
+                return [np.linalg.norm(np.tensordot(self[site],np.conj(self[site]),([0,2],[0,2]))-\
+                                       eye(self[site].shape[1],dtype=self.dtype))for site in sites]
+            else:
+                return np.linalg.norm(np.tensordot(self[sites],np.conj(self[sites]),([0,2],[0,2]))-\
+                                      eye(self[sites].shape[1],dtype=self.dtype))
+
+        elif which in (-1,'r','right'):
+            if hasattr(sites,'__iter__'):
+                return [np.linalg.norm(np.tensordot(self[site],np.conj(self[site]),([1,2],[1,2]))-eye(self[site].shape[0],dtype=self.dtype))for site in sites]
+            else:
+                return np.linalg.norm(np.tensordot(self[sites],np.conj(self[sites]),([1,2],[1,2]))-eye(self[sites].shape[0],dtype=self.dtype))
+        else:
+            raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
+                
         
+    def absorbCenterMatrix(self,direction):
+        """
+        merges self.mat into the MPS. self.mat is merged into either the left (direction in (-1,'l','left')) or 
+        the right (direction in (1,'r','right')) tensor at bond self.pos
+        changes self.mat to be the identity: self.mat=11
+        """
+        assert(direction!=0)
+        if (self.pos==len(self)) and (direction in (1,'r','right')):
+            direction=-1
+            warnings.warn('mps.absorbCenterMatrix(self,direction): self.pos=len(self) and direction>0; cannot contract bond-matrix to the right because there is no right tensor; absorbing into the left tensor')
+        elif (self.pos==0) and (direction in (-1,'l','left')):
+            direction=1                
+            warnings.warn('mps.absorbCenterMatrix(self,direction): self.pos=0 and direction<0; cannot contract bond-matrix to the left tensor because there is no left tensor; absorbing into right tensor')
 
-
+        if (direction in (1,'r','right')):
+            self[self.pos]=ncon.ncon([self.mat,self[self.pos]],[[-1,1],[1,-2,-3]])
+            self.mat=eye(self.mat.shape[0],dtype=self.dtype)
+        elif (direction in (-1,'l','left')):
+            self[self.pos-1]=ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
+            self.mat=eye(self.mat.shape[1],dtype=self.dtype)
+        return self
+    
+    ###########################  note yes finished #################################
+    def localWaveFunction(self,length=0):
+        
+        """
+        returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
+        if clear=True, self._mat is replaced with a normalized identity matrix
+        """
+        if length==0:
+            return copy.deepcopy(self.mat)
+        elif length==1:
+            if self.pos<len(self):
+                return ncon.ncon([self.mat,self[self.pos]],[[-1,1],[1,-2,-3]])
+            elif self.pos==len(self):
+                return ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
+        elif length==2:
+            if (self.pos<len(self)) and (self.pos>0):
+                shape=(self.D[self.pos-1],self.d[self.pos-1],self.d[self.pos],self.D[self.pos+1])
+                return ncon.ncon([self[self.pos-1],self.mat,self[self.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).reshape(shape)
+            elif self.pos==len(self):
+                shape=(self.D[self.pos-2],self.d[self.pos-2],self.d[self.pos-1],self.D[self.pos])                
+                return ncon.ncon([self[self.pos-1],elf[self.pos],self.mat],[[-1,1,-3],[1,2,-4],[2,-2]]).reshape(shape)
+            elif self.pos==0:
+                shape=(self.D[self.pos],self.d[self.pos],self.d[self.pos+1],self.D[self.pos+2])                
+                return ncon.ncon([self.mat,self[self.pos],elf[self.pos+1]],[[-1,1],[1,2,-3],[2,-2,-4]]).reshape(shape)
+        
     
