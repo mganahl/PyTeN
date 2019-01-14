@@ -13,24 +13,8 @@ import lib.ncon as ncon
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
+from lib.mpslib.Tensor import TensorBase, Tensor
 
-
-class Tensor(np.ndarray):
-    def __new__(cls,*args,**kwargs):
-        return super(Tensor,cls).__new__(cls,*args,**kwargs)
-    def merge(self,*indices):
-        if max(indices)>=len(self.shape):
-            raise ValueError("Tensor.merge(indices): max(indices)>=len(shape)")
-        left=list(range(0,min(indices)))
-        print(left)
-
-        complement=sorted(list(set(range(len(self.shape))).difference(set(left+list(indices)))))
-        print(complement)
-        neworder=left+list(indices)+complement
-        newshape=tuple([self.shape[l] for l in left]+[np.prod([self.shape[l] for l in indices])]+[self.shape[l] for l in complement])
-        return np.reshape(np.transpose(self,neworder),newshape).view(Tensor)
-
-        
 def generate_unary_deferer(op_func):
     def deferer(cls, *args, **kwargs):
         try:
@@ -64,20 +48,13 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
             return [(numpy_func(shape).view(Tensor)-mean+1j*(numpy_func(shape).view(Tensor)-mean)).astype(dtype)*scale for shape in shapes]
 
         elif np.issubdtype(dtype,np.floating):
-            return [(numpy_func(shape).view(Tensor)-mean).astype(dtype)*scale for shape in shapes]
+           return [(numpy_func(shape).view(Tensor)-mean).astype(dtype)*scale for shape in shapes]
     else:
         if np.issubdtype(dtype,np.complexfloating):
             return [numpy_func(shape,*args,**kwargs).view(Tensor)+1j*numpy_func(shape,*args,**kwargs).view(Tensor) for shape in shapes]
         elif np.issubdtype(dtype,np.floating):            
             return [numpy_func(shape,*args,**kwargs).view(Tensor) for shape in shapes]
         
-#functions below need to implement U(1) symmetric tensors
-def eye(shape,dtype):
-    if isinstance(shape,int):
-        return np.eye(shape,dtype=dtype)
-    else:
-        return NotImplemented
-
     
 class Container(object):
 
@@ -187,22 +164,20 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         else:
             _shape=tuple([len(tensors)])
 
-        self._tensors=np.empty((len(tensors)),dtype=object)
+        self._tensors=np.empty(_shape,dtype=Tensor)
         for n in range(len(tensors)):
-            self._tensors[n]=tensors[n]
-        self._tensors=self._tensors.reshape(_shape)
+            self._tensors.flat[n]=tensors[n].view(Tensor)
         self.Z=np.result_type(*self._tensors,Z).type(Z)
 
     def __array__(self):
         return self._tensors
+    
     def reshape(self,newshape,order='C'):
         """
         returns a reshaped view of self
         compatible with np.reshape
         """
         view=TensorNetwork.view(self)
-        print(type(view._tensors[0]))
-        io
         view._tensors=np.reshape(view._tensors,newshape,order=order)
         return view
     
@@ -525,8 +500,7 @@ class MPS(TensorNetwork):
             self._D=max(self.D)
         else:
             self._D=Dmax
-            
-        self.mat=eye(tensors[-1].shape[1],dtype=self.dtype)
+        self.mat=tensors[-1].eye(1)
         self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(herm(self.mat))))
         self._position=self.N
         self.gammas=[]
@@ -659,34 +633,32 @@ class MPS(TensorNetwork):
             return
         
         if bond>self._position:
-            self[self._position]=np.tensordot(self.mat,self[self._position],([1],[0]))
+            self[self._position]=ncon.ncon([self.mat,self[self._position]],[[-1,1],[1,-2,-3]])
             for n in range(self._position,bond):
                 if schmidt_thresh < 1E-15 and D==None:
                     tensor,self.mat,Z=mf.prepareTensor(self[n],direction=1)
-                    
                 else:
                     tensor,s,v,Z=mf.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                     r_thresh=r_thresh)
-                    self.mat=np.diag(s).dot(v)
+                    self.mat=s.diag(s).dot(v)
                 self.Z*=Z                    
                 self[n]=tensor
                 if (n+1)<bond:
-                    self[n+1]=np.tensordot(self.mat,self[n+1],([1],[0]))
-
+                    self[n+1]=ncon.ncon([self.mat,self[n+1]],[[-1,1],[1,-2,-3]])
         if bond<self._position:
-            self[self._position-1]=np.transpose(np.tensordot(self[self._position-1],self.mat,([1],[0])),(0,2,1))
+            self[self._position-1]=ncon.ncon([self[self._position-1],self.mat],[[-1,1,-3],[1,-2]])
+
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
                     tensor,self.mat,Z=mf.prepareTensor(self[n],direction=-1)
-
                 else:
                     u,s,tensor,Z=mf.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                     r_thresh=r_thresh)
-                    self.mat=u.dot(np.diag(s))
+                    self.mat=u.dot(s.diag(s))
                 self.Z*=Z                                        
                 self[n]=tensor
                 if n>bond:
-                    self[n-1]=np.transpose(np.tensordot(self[n-1],self.mat,([1],[0])),(0,2,1))
+                    self[n-1]=ncon.ncon([self[n-1],self.mat],[[-1,1,-3],[1,-2]])
         self._position=bond
         
     def ortho(self,sites,which):
@@ -696,17 +668,17 @@ class MPS(TensorNetwork):
         """
         if which in (1,'l','left'):
             if hasattr(sites,'__iter__'):
-                return [np.linalg.norm(np.tensordot(self[site],np.conj(self[site]),([0,2],[0,2]))-\
-                                       eye(self[site].shape[1],dtype=self.dtype))for site in sites]
+                return [np.linalg.norm(ncon.ncon([self[site],np.conj(self[site])],[[1,-1,2],[1,-2,2]])-\
+                                       self[site].eye(1,dtype=self.dtype)) for site in sites]
             else:
-                return np.linalg.norm(np.tensordot(self[sites],np.conj(self[sites]),([0,2],[0,2]))-\
-                                      eye(self[sites].shape[1],dtype=self.dtype))
+                return np.linalg.norm(ncon.ncon([self[sites],np.conj(self[sites])],[[1,-1,2],[1,-2,2]])-\
+                                      self[sites].eye(1,dtype=self.dtype))
 
         elif which in (-1,'r','right'):
             if hasattr(sites,'__iter__'):
-                return [np.linalg.norm(np.tensordot(self[site],np.conj(self[site]),([1,2],[1,2]))-eye(self[site].shape[0],dtype=self.dtype))for site in sites]
+                return [np.linalg.norm(ncon.ncon([self[site],np.conj(self[site])],[[-1,1,2],[-2,1,2]])-self[site].eye(0,dtype=self.dtype)) for site in sites]
             else:
-                return np.linalg.norm(np.tensordot(self[sites],np.conj(self[sites]),([1,2],[1,2]))-eye(self[sites].shape[0],dtype=self.dtype))
+                return np.linalg.norm(ncon.ncon([self[sites],np.conj(self[sites])],[[-1,1,2],[-2,1,2]])-self[sites].eye(0,dtype=self.dtype))
         else:
             raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
                 
@@ -727,10 +699,10 @@ class MPS(TensorNetwork):
 
         if (direction in (1,'r','right')):
             self[self.pos]=ncon.ncon([self.mat,self[self.pos]],[[-1,1],[1,-2,-3]])
-            self.mat=eye(self.mat.shape[0],dtype=self.dtype)
+            self.mat=self.mat.eye(0,dtype=self.dtype)
         elif (direction in (-1,'l','left')):
             self[self.pos-1]=ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
-            self.mat=eye(self.mat.shape[1],dtype=self.dtype)
+            self.mat=self.mat.eye(1,dtype=self.dtype)
         return self
     
     ###########################  note yes finished #################################

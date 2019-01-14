@@ -313,10 +313,10 @@ def do_check_indices(AA, v, order, forder):
 
 
 def con(A, B, inds):
-    if type(A) == type(B) == np.ndarray:
-        return np.tensordot(A, B, inds)
+    if isinstance(A,np.ndarray) and isinstance(B,np.ndarray):
+        return np.tensordot(A, B, inds).view(type(A))
     else:
-        return A.dot(B, inds)
+        return A.tensordot(B, inds)
 
 
 def trace(A, axis1=0, axis2=1):

@@ -85,62 +85,6 @@ def overlap(mps1,mps2):
 
 
 
-def check_orthogonality(tensor,which,thresh=1E-10):
-    """
-    checks if tensor obeys left or right orthogonalization;
-    Parameters:
-    ---------------
-    tensor:  np.ndarray of shape (D1,D2,d)
-             an mps tensor
-    which:   int or str
-             the gauge to be checked against: which can be in (1,'l','left') or (-1,'r','right')
-             to check left or right orthogonality, respectively
-    
-    Returns: 
-    ----------------
-    a float giving the total deviation from orthonormality, i.e. ||(11|E-11|| or || E|11) -11||
-    """
-    if which in (1,'l','left'):
-        Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([0,2],[0,2]))-np.eye(tensor.shape[1]))
-        if Z>thresh:
-            print('check_orthogonality: tensor is not left orthogonal with a residual of {0}'.format(Z) )
-    if which in (-1,'r','right'):
-        Z=np.linalg.norm(np.tensordot(tensor,np.conj(tensor),([1,2],[1,2]))-np.eye(tensor.shape[0]))
-        if Z>thresh:
-            print('check_orthogonality: tensor is not right orthogonal with a residual of {0}'.format(Z) )
-    return Z
-
-#finegrains a d=2 MPS by a factor of 2
-
-def FinegrainDolfi(mps):
-    """
-    fine-grains an MPS by splitting a single site into 2 sites (see paper by Dolfi et al)
-    takes a list of mps tensors
-    returns: a new list of the fine-grained mps tensors
-    """
-    assert(mps[0].shape[2]==2)
-    T=np.zeros((2,2,2)).astype(mps[0].dtype)
-    T[0,0,0]=1.0
-    T[1,1,0]=1.0/np.sqrt(2.0)
-    T[1,0,1]=1.0/np.sqrt(2.0)
-    mpsfine=[]
-    for n in range(len(mps)):
-        D1,D2,d=mps[n].shape
-        if d!=2:
-            raise ValueError("in FinegrainDolfi: local hilbert space dimension d has to be 2")
-        tensor=np.transpose(np.tensordot(mps[n],T,([2],[0])),(0,2,1,3))
-        matrix=np.reshape(tensor,(D1*2,D2*2))
-        U,S,V=np.linalg.svd(matrix)
-
-        leftmat=U.dot(np.diag(np.sqrt(S)))
-        rightmat=np.diag(np.sqrt(S)).dot(V)
-        lefttens=np.transpose(np.reshape(leftmat,(D1,2,len(S))),(0,2,1))
-        righttens=np.reshape(rightmat,(len(S),D1,2))
-
-        mpsfine.append(np.copy(lefttens))
-        mpsfine.append(np.copy(righttens))
-    return mpsfine
-
 def svd(mat,full_matrices=False,compute_uv=True,r_thresh=1E-14):
     """
     wrapper around numpy svd
@@ -226,7 +170,7 @@ def directsum(m1,m2):
     return out
     
 
-def addMPS(mps1,Z1,mps2,Z2,obc=True):
+def addMPS(mps1,mps2,obc=True):
     """
     addMPS(mps1,mps2,obc=True)
     adds two mps
@@ -235,10 +179,6 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
     if len(mps1)!=len(mps2):
         raise ValueError("addMPS(mps1,mps2): mps1 and mps2 have different length")
     
-    #dtype=int
-    # for n in range(len(mps1)):
-    #     dtype=np.result_type(dtype,mps1[n].dtype)
-    #     dtype=np.result_type(dtype,mps2[n].dtype)
     dtype=np.result_type(*mps1,*mps2).type
     if obc==True:
 
@@ -251,7 +191,7 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
         for n in range(mps1[0].shape[2]):
             mat[0,0:mps1[0].shape[1],n]=mps1[0][0,:,n]*Z1
             mat[0,mps1[0].shape[1]:mps1[0].shape[1]+mps2[0].shape[1],n]=mps2[0][0,:,n]*Z2
-        mps.append(np.copy(mat))
+        mps.append(mat)
         for site in range(1,len(mps1)-1):
             if mps1[site].shape[2]!=mps2[site].shape[2]:
                 raise ValueError("in addMPS: mps1[{0}] and mps2[{0}] have different hilbert space dimensions".format(site))
@@ -262,7 +202,7 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
             mat=(np.random.random_sample(shape).astype(dtype)-0.5)*1E-16            
             for n in range(mps1[site].shape[2]):
                 mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
-            mps.append(np.copy(mat))                
+            mps.append(mat)
         
         shape=(mps1[-1].shape[0]+mps2[-1].shape[0],1,mps1[-1].shape[2])
         if mps1[-1].shape[2]!=mps2[-1].shape[2]:
@@ -271,7 +211,7 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
         for n in range(mps1[-1].shape[2]):
             mat[0:mps1[-1].shape[0],0,n]=mps1[-1][:,0,n]
             mat[mps1[-1].shape[0]:mps1[-1].shape[0]+mps2[-1].shape[0],0,n]=mps2[-1][:,0,n]
-        mps.append(np.copy(mat))                            
+        mps.append(mat)
         
     if obc==False:
 
@@ -292,8 +232,7 @@ def addMPS(mps1,Z1,mps2,Z2,obc=True):
             else:
                 for n in range(mps1[site].shape[2]):
                     mat[:,:,n]=directsum(mps1[site][:,:,n],mps2[site][:,:,n])
-                    
-            mps.append(np.copy(mat))                                        
+            mps.append(mat)
 
     return mps
 
@@ -605,131 +544,6 @@ def measure(operator,lb,rb,mps,site):
     return np.tensordot(L,R,([0,1],[0,1]))[0,0]/(np.tensordot(Lnorm,R,([0,1],[0,1]))[0,0])
 
 
-
-def MPSinitializer(numpyfun,length,D,d,obc=True,dtype=np.dtype(float),scale=1.0,shift=0.5):
-    """
-    initializes a list of ndarrays of dimension (D,D,d) with random tensors
-    numpyfun: functions to be used for the initialization (note that np.random.rand is not working, use np.random.random_sample instead)
-    length: length of MPS
-    D: bond dimension
-    obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
-    dtype: tyupe of the mps matrices
-    scale: initial scaling of the tensors
-    shift: shift of the interval where random numbers are drawn from 
-    """
-    if isinstance(d,int):
-        d=[d]*length
-
-    if obc==True:
-        if length==1:
-            raise ValueError("length of an obc MPS should be larger than 1")
-        mps=[]
-        if np.issubdtype(dtype,np.floating):
-            mps.append(((numpyfun((1,D,d[0]))-shift)*scale).astype(dtype))
-            for n in range(1,length-1):
-                mps.append(((numpyfun((D,D,d[n]))-shift)*scale).astype(dtype))
-            mps.append(((numpyfun((D,1,d[-1]))-shift)*scale).astype(dtype))
-        elif np.issubdtype(dtype,np.complexfloating):            
-            mps.append(((numpyfun((1,D,d[0]))-shift+1j*(numpyfun((1,D,d[0]))-shift))*scale).astype(dtype))
-            for n in range(1,length-1):
-                mps.append(((numpyfun((D,D,d[n]))-shift+1j*(numpyfun((D,D,d[n]))-shift))*scale).astype(dtype))
-            mps.append(((numpyfun((D,1,d[-1]))-shift+1j*(numpyfun((D,1,d[-1]))-shift))*scale).astype(dtype))
-        else:
-            raise TypeError("incompatible type {0} detected".format(dtype))
-
-        return mps
-    if obc==False:
-        mps=[]
-        if np.issubdtype(dtype,np.floating):
-            for n in range(length):
-                mps.append(((numpyfun((D,D,d[0]))-shift)*scale).astype(dtype))
-        elif np.issubdtype(dtype,np.complexfloating):                            
-            for n in range(length):
-                mps.append(((numpyfun((D,D,d[n]))-shift+1j*(numpyfun((D,D,d[n]))-shift))*scale).astype(dtype))
-        else:
-            raise TypeError("incompatible type {0} detected".format(dtype))
-                
-        return mps
-
-def MPSinit(length,D,d,obc=True,dtype=np.dtype(float),scale=1.0,shift=0.5):
-    """
-    initializes a list of mps tensors (ndarrays of dimension (D,D,d) with random tensors
-    length: length of MPS
-    D: bond dimension
-    obc ={True,False}: boundary conditions; if True, the mps is finite, if False, the mps has infinite boundary conditions
-    dtype: tyupe of the mps matrices
-    scale: initial scaling of the tensors
-    shift: shift of the interval where random numbers are drawn from 
-    """
-    
-    return MPSinitializer(np.random.random_sample,length,D,d,obc=obc,dtype=np.dtype(float),scale=scale,shift=shift)
-
-
-
-
-def prepareTensorSVD(tensor,direction,fixphase=False):
-    """
-    prepares an mps tensor using svd decomposition 
-    this is a deprecated routine, use prepareTruncate instead
-
-    Parameters:
-    ---------------------
-    tensor: np.ndarray of shape(D1,D2,d)
-            an mps tensor
-    direction: int
-               if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
-    fixphase: bool
-              if True and direction>0: fixes the phase of the diagonal of u to be real and positive
-              if True and direction<0: fixes the phase of the diagonal of v to be real and positive
-
- 
-    Returns:
-    ----------------------------
-    direction>0: out,s,v,Z
-                 out: a left isometric tensor of dimension (D1,D,d)
-                 s  : the singular values of length D
-                 v  : a right isometric matrix of dimension (D,D2)
-                 Z  : the norm of tensor, i.e. tensor"="out.dot(s).dot(v)*Z
-    direction<0: u,s,out,Z
-                 u  : a left isometric matrix of dimension (D1,D)
-                 s  : the singular values of length D
-                 out: a right isometric tensor of dimension (D,D2,d)
-                 Z  : the norm of tensor, i.e. tensor"="u.dot(s).dot(out)*Z
-
-    """
-
-
-    warnings.warn('prepareTensorSVD is deprecated; use prepareTruncate instead')
-    assert(direction!=0),'do NOT use direction=0!'
-    [l1,l2,d]=tensor.shape
-    if direction>0:
-        temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
-        [u,s,v]=svd(temp,full_matrices=False)
-        if fixphase==True:
-            phase=np.angle(np.diag(u))
-            unit=np.diag(np.exp(-1j*phase))
-            u=u.dot(herm(unit))
-            v=unit.dot(v)
-        Z=np.linalg.norm(s)            
-        s/=Z
-        [size1,size2]=u.shape
-        out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
-        return out,s,v,Z
-
-    if direction<0:
-        temp=np.reshape(tensor,(l1,d*l2))
-        [u,s,v]=svd(temp,full_matrices=False)
-        if fixphase==True:
-            phase=np.angle(np.diag(v))
-            unit=np.diag(np.exp(-1j*phase))
-            u=u.dot(herm(unit))
-            v=unit.dot(v)
-        Z=np.linalg.norm(s)                        
-        s/=Z
-        [size1,size2]=v.shape
-        out=np.reshape(v,(size1,l2,d))
-        return u,s,out,Z
-
     
 def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
     """
@@ -766,21 +580,12 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
     [l1,l2,d]=tensor.shape
     if direction>0:
         temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
-        try: 
-            [u,s,v]=np.linalg.svd(temp,full_matrices=False)
-        except LinAlgError:
-            [q,r]=np.linalg.qr(temp)
-            r[np.abs(r)<r_thresh]=0.0
-            u_,s,v=np.linalg.svd(r)
-            u=q.dot(u_)
-            warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
-            
+        [u,s,v]=temp.svd(full_matrices=False)
         Z=np.linalg.norm(s)            
         if thresh>1E-16:
             s=s[s>thresh]
 
         if D!=None:
-
             if D<len(s):
                 warnings.warn('mpsfunctions.py dir>0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
             s=s[0:min(D,len(s))]
@@ -794,21 +599,13 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
         s/=np.linalg.norm(s)            
         [size1,size2]=u.shape
         out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
-        return out,s,v,Z
+        return out,s.view(type(tensor)),v,Z
     if direction<0:
         temp=np.reshape(tensor,(l1,d*l2))
-        try:
-            [u,s,v]=np.linalg.svd(temp,full_matrices=False)
-        except LinAlgError:
-            [q,r]=np.linalg.qr(temp)
-            r[np.abs(r)<r_thresh]=0.0
-            u_,s,v=np.linalg.svd(r)
-            u=q.dot(u_)
-            warnings.warn('svd: prepareTruncate caught a LinAlgError with dir<0')
+        [u,s,v]=temp.svd(full_matrices=False)
         Z=np.linalg.norm(s)                        
         if thresh>1E-16:
             s=s[s>thresh]
-
         if D!=None:
             if D<len(s):
                 warnings.warn('mpsfunctions.py dir<0:prepareTruncate:desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
@@ -825,6 +622,7 @@ def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
         s/=np.linalg.norm(s)            
         [size1,size2]=v.shape
         out=np.reshape(v,(size1,l2,d))
+    s=s.view(type(tensor))        
     return u,s,out,Z
 
 
@@ -853,45 +651,43 @@ def prepareTensor(tensor,direction,fixphase=None):
          the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
     """
     
-    dtype=type(tensor[0,0,0])
-
+    dtype=tensor.dtype.type
     [l1,l2,d]=tensor.shape
     if direction in (1,'l','left'):
         temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
-        q,r=np.linalg.qr(temp)
+        q,r=temp.qr()
         #fix the phase freedom of the qr
         if fixphase=='r':
-            phase=np.angle(np.diag(r))
-            unit=np.diag(np.exp(-1j*phase))
-            q=q.dot(herm(unit))
-            r=unit.dot(r)
+            phase=np.angle(np.diag(r)).view(type(tensor))
+            unit=np.diag(np.exp(-1j*phase)).view(type(tensor))
+            q=q.dot(herm(unit)).view(type(tensor))
+            r=unit.dot(r).view(type(tensor))
         if fixphase=='q':
-            phase=np.angle(np.diag(q))
-            unit=np.diag(np.exp(-1j*phase))
-            q=q.dot(unit)
-            r=herm(unit).dot(r)
+            phase=np.angle(np.diag(q)).view(type(tensor))
+            unit=np.diag(np.exp(-1j*phase)).view(type(tensor))
+            q=q.dot(unit).view(type(tensor))
+            r=herm(unit).dot(r).view(type(tensor))
 
         #normalize the bond matrix
         Z=np.linalg.norm(r)        
         r/=Z
         [size1,size2]=q.shape
         out=np.transpose(np.reshape(q,(d,l1,size2)),(1,2,0))
-    
     elif direction in (-1,'r','right'):
         temp=np.conjugate(np.transpose(np.reshape(tensor,(l1,d*l2),order='F'),(1,0)))
-        q,r_=np.linalg.qr(temp)
+        q,r_=temp.qr()
         #fix the phase freedom of the qr        
         if fixphase=='r':
-            phase=np.angle(np.diag(r_))
-            unit=np.diag(np.exp(-1j*phase))
-            q=q.dot(herm(unit))
-            r_=unit.dot(r_)
+            phase=np.angle(np.diag(r_)).view(type(tensor))
+            unit=np.diag(np.exp(-1j*phase)).view(type(tensor))
+            q=q.dot(herm(unit)).view(type(tensor))
+            r_=unit.dot(r_).view(type(tensor))
 
         if fixphase=='q':
-            phase=np.angle(np.diag(q))
-            unit=np.diag(np.exp(-1j*phase))
-            q=q.dot(unit)
-            r_=herm(unit).dot(r_)
+            phase=np.angle(np.diag(q)).view(type(tensor))
+            unit=np.diag(np.exp(-1j*phase)).view(type(tensor))
+            q=q.dot(unit).view(type(tensor))
+            r_=herm(unit).dot(r_).view(type(tensor))
 
         [size1,size2]=q.shape
         out=np.conjugate(np.transpose(np.reshape(q,(l2,d,size2),order='F'),(2,0,1)))
@@ -905,16 +701,17 @@ def prepareTensor(tensor,direction,fixphase=None):
 
 #used in the lattice-cMPS context; ignore for the case of lattice MPS
 def prepareTensorfixA0(mps,direction):
+
     [D1,D2,d]=np.shape(mps)
-    dtype=type(mps[0,0,0])
+    dtype=mps.dtype.type
 
     if direction>0:
         mat=np.zeros((D1,D2,d),dtype=dtype)
         A0=np.copy(mps[:,:,0])
-        mat[:,:,0]=np.eye(D1)
-        mat[:,:,1]=mps[:,:,1].dot(np.linalg.pinv(A0))
+        mat[:,:,0]=np.eye(D1,dtype=dtype).view(mps)
+        mat[:,:,1]=mps[:,:,1].dot(np.linalg.pinv(A0)).view(type(mps))
         tensor,r,Z=prepareTensor(mat,1,fixphase='q')
-        matout=r.dot(A0)
+        matout=r.dot(A0).view(type(mps))
 
         return tensor,matout
         
@@ -922,11 +719,11 @@ def prepareTensorfixA0(mps,direction):
         mat=np.zeros((D1,D2,d),dtype=dtype)
         A0=np.copy(mps[:,:,0])
 
-        mat[:,:,0]=np.eye(D1)
-        mat[:,:,1]=np.linalg.pinv(A0).dot(mps[:,:,1])
+        mat[:,:,0]=np.eye(D1,dtype=dtype)
+        mat[:,:,1]=np.linalg.pinv(A0).dot(mps[:,:,1]).view(type(mps))
         
         tensor,r,Z=prepareTensor(mat,-1,fixphase='q')
-        matout=A0.dot(r)
+        matout=A0.dot(r).view(type(mps))
 
         return tensor,matout
 
@@ -968,44 +765,6 @@ def orthonormalizeQR(mps,direction,site1,site2):
             if site>0:
                 mps[site-1]=np.transpose(np.tensordot(mps[site-1],r,([1],[0])),(0,2,1))
     return r*Z
-
-def orthonormalizeSVD(mps,direction,site1,site2):
-    """
-    uses SVD decomposition to orthonormalize an mps from site1 to site2; 
-    routine returns the last computed "mat" matrix from the QR decomposition
-    
-    for direction>0 and site2<len(mps)-1 the mps is not altered
-    for direction>0 and site2=len(mps)-1, the original state is recovered by 
-    contracting "mat" into mps from the right 
-    
-    for direction<0 and site1>0 the mps is not altered
-    for direction<0 and site1=0, the original state is recovered by 
-    contracting "mat" into mps from the left
-    """
-    
-    assert(direction!=0),'do NOT use direction=0!'
-    N=len(mps)
-    Z=1
-    if direction>0:
-        for site in range(site1,site2+1):
-            tensor,lam,v,Z_=prepareTensorSVD(mps[site],direction)
-            mat=np.diag(lam).dot(v)
-            mps[site]=tensor
-            Z*=Z_
-            if site<(N-1):
-                mps[site+1]=np.tensordot(mat,mps[site+1],([1],[0]))
-
-    if direction<0:
-        for site in range(site2,site1-1,-1):
-            #tensor,lam,v,Z_=prepareTensorSVD(mps[site],direction)
-            u,lam,tensor,Z_=prepareTensorSVD(mps[site],direction)
-            mat=u.dot(np.diag(lam))
-            mps[site]=tensor
-            Z*=Z_            
-            if site>0:
-                mps[site-1]=np.transpose(np.tensordot(mps[site-1],mat,([1],[0])),(0,2,1))
-    return mat*Z
-
 
 def initializeLayer(A,x,B,mpo,direction):
     """
@@ -2979,7 +2738,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
     C=np.eye(mps.shape[0])
     if gauge in (1,'left','l'):
         while True:
-            A,s,v,z=prepareTensorSVD(tensor,direction=1,fixphase=False)
+            A,s,v,z=prepareTensor(tensor,direction=1,fixphase=False)
             Z=np.linalg.norm(s-sold)
             if Z<precision:
                 s/=(np.sum(s)/len(s))
@@ -2999,7 +2758,7 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
             sold=s            
     elif gauge in (-1,'r','right'):
         while True:
-            u,s,B,z=prepareTensorSVD(tensor,direction=-1,fixphase=False)
+            u,s,B,z=prepareTensor(tensor,direction=-1,fixphase=False)
             Z=np.linalg.norm(s-sold)
             if Z<precision:
                 s/=(np.sum(s)/len(s))
