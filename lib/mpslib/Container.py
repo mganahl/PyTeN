@@ -376,16 +376,17 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         """
         return iter(self._tensors)
     
-    def _ufunc_handler(self,tensors):
-        return TensorNetwor(tensors=tensors,shape=self.shape,name=None,z=self.Z)
     
     def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
         """
         implements np.ufuncs for the TensorNetwork
         for numpy compatibility
+        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        currently applied elementwise to the tensors in the tensor network
         """
+        #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
+        #__array_ufunc__ method which applies the division to the individual elements of TensorNetwork
         if ufunc==np.true_divide:
-            print('sdf')
             return self.__idiv__(inputs[1])
 
 
@@ -397,15 +398,15 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         if out:
             #takes care of in-place operations
             result=[]
-            for n in range(len(self)):
-                kwargs['out']=tuple(o[n] if isinstance(o,TensorNetwork) else o for o in out)
-                ipts=[ipt[n] if isinstance(ipt,TensorNetwork) else ipt for ipt in inputs]
+            for n,x in np.ndenumerate(self):
+                kwargs['out']=tuple(o[n] if isinstance(o,type(self)) else o for o in out)
+                ipts=[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs]
                 result.append(getattr(ufunc,method)(*ipts,**kwargs))
         else:
-            result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,TensorNetwork) else ipt for ipt in inputs],**kwargs)
-                    for n in range(len(self))]
+            result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs],**kwargs)
+                    for n,x in np.ndenumerate(self)]
+        return TensorNetwork(tensors=result,shape=self.shape,name=None,Z=self.Z)            
 
-        return self._ufunc_handler(tensors=result)
     
     def __mul__(self,num):
         """
@@ -457,8 +458,6 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         note that "num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
         """
-        print('calling truediv')
-        
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         new=self.copy()
@@ -508,7 +507,10 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     
 class MPS(TensorNetwork):
     
-    def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):    
+    def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
+        """
+        no checks are performed to see wheter the prived tensors can be contracted
+        """
         super(MPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
         if not Dmax:
             self._D=max(self.D)
@@ -529,69 +531,87 @@ class MPS(TensorNetwork):
         obj.__init__(tensors=self.tensors,Dmax=self.Dmax,name=self.name,Z=self.Z)
         return obj
         
-    # def __unary_operations__(self,operation,*args,**kwargs):
-    #     """
-    #     implements unary operations on MPS tensors
-    #     Parameters:
-    #     ----------------------------------------
-    #     operation: method
-    #                the operation to be applied to the mps tensors
-    #     *args,**kwargs: arguments of operation
+    def __in_place_unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements in-place unary operations on MPS._tensors and MPS.mat
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
 
-    #     Returns:
-    #     -------------------
-    #     MPS:  MPS object obtained from acting with operation on each individual MPS tensor
-    #     """
-    #     return MPS(tensor=[operation(self[n],*args,**kwargs) for n in range(len(self))],Dmax=self.Dmax,name=None,Z=1.0)
-
-    # def __mul__(self,num):
-    #     """
-    #     left-multiplies "num" with TensorNetwork, i.e. returns TensorNetwork*num;
-    #     note that "num" is not really multiplied into the mps matrices, but
-    #     instead multiplied into the internal field _Z which stores the norm of the state
-    #     Parameters:
-    #     -----------------------
-    #     num: float or complex
-    #          to be multiplied into the MPS
-    #     Returns:
-    #     ---------------
-    #     MPS:    the state obtained from multiplying ```num``` into MPS
-    #     """
-    #     if not np.isscalar(num):
-    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
-    #     return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z*num)
-    
-    # def __truediv__(self,num):
-    #     """
-    #     left-divides "num" with TensorNetwork, i.e. returns TensorNetwork/num;
-    #     note that "num" is not really multiplied into the mps matrices, but
-    #     instead multiplied into the internal field _Z which stores the norm of the state
-    #     """
-    #     if not np.isscalar(num):
-    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
-    #     return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z/num)        
-
-     
-    # def __rmul__(self,num):
-    #     """
-    #     right-multiplies "num" with TensorNetwork, i.e. returns num*TensorNetwork;
-    #     WARNING: if you are using numpy number types, i.e. np.float, np.int, ..., 
-    #     the right multiplication of num with TensorNetwork, i.e. num*TensorNetwork, returns 
-    #     an np.darray instead of an TensorNetwork. 
-    #     note that "num" is not really multiplied into the mps matrices, but
-    #     instead multiplied into the internal field _Z which stores the norm of the state
-
-    #     """
-    #     if not np.isscalar(num):
-    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
-        return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z*num)
+        Returns:
+        -------------------
+        None
+        """
+        super(MPS,self).__in_place_unary_operations__(operation,*args,**kwargs)
+        self.mat=operation(self.mat,*args,**kwargs)
         
-    def _ufunc_handler(self,tensors):
+    def __unary_operations__(self,operation,*args,**kwargs):
         """
-        subclasses of TensorNetwork should implement _ufunc_handler to ensure
-        that numpy ufunc calls are type preserving
+        implements unary operations on MPS tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        MPS:  MPS object obtained from acting with operation on each individual MPS tensor
         """
-        return MPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=1.0)
+        obj=self.copy()
+        obj.__in_place_unary_operations__(operation,*args,**kwargs)
+        return obj
+
+
+    def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
+        """
+        implements np.ufuncs for the TensorNetwork
+        for numpy compatibility
+        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        currently applied elementwise to the tensors in the tensor network
+        """
+        
+        if ufunc==np.true_divide:
+            #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
+            #__array_ufunc__ method which applies the division to the individual elements of TensorNetwork
+            return self.__idiv__(inputs[1])
+
+        out=kwargs.get('out',())
+        for arg in inputs+out:
+            if not isinstance(arg,self._HANDLED_UFUNC_TYPES+(type(self),)):
+                return NotImplemented
+
+        if out:
+            #takes care of in-place operations
+            result=[]
+            for n,x in np.ndenumerate(self):
+                kwargs['out']=tuple(o[n] if isinstance(o,type(self)) else o for o in out)
+                ipts=[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs]
+                result.append(getattr(ufunc,method)(*ipts,**kwargs))
+            matipts=[ipt.mat if isinstance(ipt,type(self)) else ipt for ipt in inputs]                
+            matresult=getattr(ufunc,method)(*matipts,**kwargs)
+        else:
+            result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs],**kwargs)
+                    for n,x in np.ndenumerate(self)]
+            matresult=getattr(ufunc,method)(*[ipt.mat if isinstance(ipt,type(self)) else ipt for ipt in inputs],**kwargs)
+            
+        if method=='reduce':
+            #reduce is not well defined for mps because the center matrix has different dimension than the other tensors
+            #furthermore, reduce weith axis==None reduces ndarrays to a number, not a tensor. This is nonsensical for
+            #MPS. Thus, if axis==None, reapply the ufunc to the list of obtained results and return the result
+            axis=kwargs.get('axis',())
+            if axis==None:
+                return getattr(ufunc,method)(result+[matresult])
+            else:
+                raise NotImplementedError('MPS.__array_ufunc__ with argument axis!=None not implemented')
+
+        else:
+            obj=MPS(tensors=result,Dmax=self.Dmax,name=None,Z=1.0)
+            obj.mat=matresult
+            return obj
+
 
     @property
     def D(self):
