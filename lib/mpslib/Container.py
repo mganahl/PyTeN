@@ -377,7 +377,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         return iter(self._tensors)
     
     def _ufunc_handler(self,tensors):
-        return TensorNetwor(tensors=tensors,name=None)
+        return TensorNetwor(tensors=tensors,shape=self.shape,name=None,z=self.Z)
     
     def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
         """
