@@ -1,10 +1,12 @@
 """
 @author: Martin Ganahl
 """
+from __future__ import division
 import pickle
 import warnings
 import os
 import operator as opr
+
 import copy
 import numbers
 import numpy as np
@@ -83,6 +85,11 @@ class Container(object):
         else:
             raise ValueError('Cotainer has no name; cannot save it')
 
+    def copy(self):
+        """
+        for now this does a deep copy using copy module
+        """
+        return copy.deepcopy(self)
             
     @classmethod
     def read(self,filename=None):
@@ -169,6 +176,52 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
             self._tensors.flat[n]=tensors[n].view(Tensor)
         self.Z=np.result_type(*self._tensors,Z).type(Z)
 
+    def view(self):
+        """
+        return a view of self
+        Parameters:
+        ----------------------------------------------
+        Return:   TensorNetwork
+        """
+        obj=self.__new__(type(self))
+        obj.__init__(tensors=self.tensors,shape=self.shape,name=self.name,Z=self.Z)
+        return obj
+    
+    def __in_place_unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements in-place unary operations on TensorNetwork tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        None
+        """
+        for n ,x in np.ndenumerate(self):
+            self[n]=operation(self[n],*args,**kwargs)
+
+
+    def __unary_operations__(self,operation,*args,**kwargs):
+        """
+        implements unary operations on TensorNetwork tensors
+        Parameters:
+        ----------------------------------------
+        operation: method
+                   the operation to be applied to the mps tensors
+        *args,**kwargs: arguments of operation
+
+        Returns:
+        -------------------
+        MPS:  MPS object obtained from acting with operation on each individual MPS tensor
+        """
+        obj=self.copy()
+        obj.__in_place_unary_operations__(operation,*args,**kwargs)
+        return obj
+
+    
     def __array__(self):
         return self._tensors
     
@@ -177,7 +230,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         returns a reshaped view of self
         compatible with np.reshape
         """
-        view=TensorNetwork.view(self)
+        view=self.view()
         view._tensors=np.reshape(view._tensors,newshape,order=order)
         return view
     
@@ -210,17 +263,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         return a list (view) of the tensors in TensorNetwork
         """
         return list(self._tensors.flat)
-    
-    @classmethod
-    def view(cls,other):
-        """
-        return a view of other
-        Parameters:
-        ----------------------------------------------
-        other:   TensorNetwork
-        """
-        return cls(tensors=other.tensors,shape=other.shape,name=other.name,Z=other.Z)
-        
+
     
     @classmethod
     def random(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -302,23 +345,6 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                    name=name,shape=shape,Z=1.0)
         
 
-    @classmethod
-    def fromList(cls,tensors,name=None):
-        """
-        generate an TN from a list of tensors
-
-        Parameters:
-        ----------------------------
-        tensors: list tensor objects 
-        name:    str or None
-                 name of the TensorNetwork
-        Returns:
-        ----------------------------------
-        TensorNetwork object with tensors initialized from ```tensors```
-        """
-        return cls(tensors=tensors,shape=(),name=name,Z=1)
-
-
     def __getitem__(self,n,**kwargs):
         return self._tensors[n]
 
@@ -332,7 +358,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         
         inds=np.unravel_index(range(len(self)),dims=self.shape)
         inds=list(zip(*inds))
-        return ''.join(['\n\n ']+['TN'+str(index)+' \n\n '+self[index].__str__()+' \n\n ' for index in inds]+['\n\n Z=',str(self.Z)])
+        return ''.join(['Name: ',str(self.name),'\n\n ']+['TN'+str(index)+' \n\n '+self[index].__str__()+' \n\n ' for index in inds]+['\n\n Z=',str(self.Z)])
 
     def __len__(self):
         """
@@ -349,11 +375,20 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         iterator:  an iterator over the tensors of the TensorNetwork
         """
         return iter(self._tensors)
+    
+    def _ufunc_handler(self,tensors):
+        return TensorNetwor(tensors=tensors,name=None)
+    
     def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
         """
         implements np.ufuncs for the TensorNetwork
         for numpy compatibility
         """
+        if ufunc==np.true_divide:
+            print('sdf')
+            return self.__idiv__(inputs[1])
+
+
         out=kwargs.get('out',())
         for arg in inputs+out:
             if not isinstance(arg,self._HANDLED_UFUNC_TYPES+(TensorNetwork,)):
@@ -370,7 +405,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
             result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,TensorNetwork) else ipt for ipt in inputs],**kwargs)
                     for n in range(len(self))]
 
-        return TensorNetwork(tensors=result,name=None)
+        return self._ufunc_handler(tensors=result)
     
     def __mul__(self,num):
         """
@@ -385,57 +420,70 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         ---------------
         MPS:    the state obtained from multiplying ```num``` into MPS
         """
-        if not np.isscalar(num):
-            raise TypeError("in MPS.__mul__(self,num): num is not a number")
-        return TensorNetwork(tensors=copy.deepcopy(self._tensors),name=None,Z=self.Z*num)
 
+        if not np.isscalar(num):
+            raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+        new=self.copy()
+        new.Z*=num
+        return new
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z*num)
 
     def __imul__(self,num):
         """
-        left-multiplies "num" with MPS, i.e. returns MPS*num;
+        left-multiplies "num" with TensorNetwork, i.e. returns TensorNetwork*num;
         note that "num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
         """
         if not np.isscalar(num):
-            raise TypeError("in MPS.__mul__(self,num): num is not a number")
+            raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         self.Z*=num
         return self
     
 
     def __idiv__(self,num):
         """
-        left-divides "num" with MPS, i.e. returns MPS*num;
+        left-divides "num" with TensorNetwork, i.e. returns TensorNetwork*num;
         note that "1./num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
         """
         if not np.isscalar(num):
-            raise TypeError("in MPS.__mul__(self,num): num is not a number")
+            raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         self.Z/=num
         return self
     
     def __truediv__(self,num):
         """
-        left-divides "num" with MPS, i.e. returns MPS/num;
+        left-divides "num" with TensorNetwork, i.e. returns TensorNetwork/num;
         note that "num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
         """
+        print('calling truediv')
+        
         if not np.isscalar(num):
-            raise TypeError("in MPS.__mul__(self,num): num is not a number")
-        return TensorNetwork(tensors=copy.deepcopy(self._tensors),name=None,Z=self.Z/num)        
-    
+            raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+        new=self.copy()
+        new.Z/=num
+        return new
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z/num)
+
+     
     def __rmul__(self,num):
         """
-        right-multiplies "num" with MPS, i.e. returns num*MPS;
+        right-multiplies "num" with TensorNetwork, i.e. returns num*TensorNetwork;
         WARNING: if you are using numpy number types, i.e. np.float, np.int, ..., 
-        the right multiplication of num with MPS, i.e. num*MPS, returns 
-        an np.darray instead of an MPS. 
+        the right multiplication of num with TensorNetwork, i.e. num*TensorNetwork, returns 
+        an np.darray instead of an TensorNetwork. 
         note that "num" is not really multiplied into the mps matrices, but
         instead multiplied into the internal field _Z which stores the norm of the state
 
         """
         if not np.isscalar(num):
-            raise TypeError("in MPS.__rmul__(self,num): num is not a number")
-        return TensorNetwork(tensors=copy.deepcopy(self._tensors),name=None,Z=self.Z*num)                
+            raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+        new=self.copy()
+        new.Z*=num
+        return new
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z*num)                
+
 
     def __add__(self,other):
         return NotImplemented
@@ -457,40 +505,6 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         return self.__array_ufunc__(np.imag,'__call__',self)        
     
         
-    def __in_place_unary_operations__(self,operation,*args,**kwargs):
-        """
-        implements in-place unary operations on TensorNetwork tensors
-        Parameters:
-        ----------------------------------------
-        operation: method
-                   the operation to be applied to the mps tensors
-        *args,**kwargs: arguments of operation
-
-        Returns:
-        -------------------
-        None
-        """
-        for n in range(len(res)):
-            self[n]=operation(self[n],*args,**kwargs)
-
-
-    def __unary_operations__(self,operation,*args,**kwargs):
-        """
-        implements unary operations on TensorNetwork tensors
-        Parameters:
-        ----------------------------------------
-        operation: method
-                   the operation to be applied to the mps tensors
-        *args,**kwargs: arguments of operation
-
-        Returns:
-        -------------------
-        MPS:  MPS object obtained from acting with operation on each individual MPS tensor
-        """
-        return TensorNetwork(tensor=[operation(self[n],*args,**kwargs) for n in range(len(self))],name=None)
-
-
-
     
 class MPS(TensorNetwork):
     
@@ -503,8 +517,81 @@ class MPS(TensorNetwork):
         self.mat=tensors[-1].eye(1)
         self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(herm(self.mat))))
         self._position=self.N
-        self.gammas=[]
-        self.lambdas=[]
+
+ 
+    def view(self):
+        """
+        return a view of self
+        Parameters:
+        ----------------------------------------------
+        """
+        obj= self.__new__(type(self))
+        obj.__init__(tensors=self.tensors,Dmax=self.Dmax,name=self.name,Z=self.Z)
+        return obj
+        
+    # def __unary_operations__(self,operation,*args,**kwargs):
+    #     """
+    #     implements unary operations on MPS tensors
+    #     Parameters:
+    #     ----------------------------------------
+    #     operation: method
+    #                the operation to be applied to the mps tensors
+    #     *args,**kwargs: arguments of operation
+
+    #     Returns:
+    #     -------------------
+    #     MPS:  MPS object obtained from acting with operation on each individual MPS tensor
+    #     """
+    #     return MPS(tensor=[operation(self[n],*args,**kwargs) for n in range(len(self))],Dmax=self.Dmax,name=None,Z=1.0)
+
+    # def __mul__(self,num):
+    #     """
+    #     left-multiplies "num" with TensorNetwork, i.e. returns TensorNetwork*num;
+    #     note that "num" is not really multiplied into the mps matrices, but
+    #     instead multiplied into the internal field _Z which stores the norm of the state
+    #     Parameters:
+    #     -----------------------
+    #     num: float or complex
+    #          to be multiplied into the MPS
+    #     Returns:
+    #     ---------------
+    #     MPS:    the state obtained from multiplying ```num``` into MPS
+    #     """
+    #     if not np.isscalar(num):
+    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+    #     return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z*num)
+    
+    # def __truediv__(self,num):
+    #     """
+    #     left-divides "num" with TensorNetwork, i.e. returns TensorNetwork/num;
+    #     note that "num" is not really multiplied into the mps matrices, but
+    #     instead multiplied into the internal field _Z which stores the norm of the state
+    #     """
+    #     if not np.isscalar(num):
+    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+    #     return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z/num)        
+
+     
+    # def __rmul__(self,num):
+    #     """
+    #     right-multiplies "num" with TensorNetwork, i.e. returns num*TensorNetwork;
+    #     WARNING: if you are using numpy number types, i.e. np.float, np.int, ..., 
+    #     the right multiplication of num with TensorNetwork, i.e. num*TensorNetwork, returns 
+    #     an np.darray instead of an TensorNetwork. 
+    #     note that "num" is not really multiplied into the mps matrices, but
+    #     instead multiplied into the internal field _Z which stores the norm of the state
+
+    #     """
+    #     if not np.isscalar(num):
+    #         raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
+        return MPS(tensors=copy.deepcopy(self._tensors),Dmax=self.Dmax,name=None,Z=self.Z*num)
+        
+    def _ufunc_handler(self,tensors):
+        """
+        subclasses of TensorNetwork should implement _ufunc_handler to ensure
+        that numpy ufunc calls are type preserving
+        """
+        return MPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=1.0)
 
     @property
     def D(self):
@@ -542,9 +629,55 @@ class MPS(TensorNetwork):
         """
         set Dmax to D
         """
+
+    def _mpsinitializer(self,numpy_func,D,d,Dmax,name,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        initializes the tensor network, using the ```initializer``` function
+        subclasses of MPS should implement _mpsinitializer to enable initialization via
+        classmethods random, ones, zeros and empty
+        
+        numpy_func:   callable: 
+                      numpy function\
+        D:            list of in 
+
+        d:            list of int
+
+        name:         str
+        
+        initializer:  callable
+                      signature: initializer(numpy_func,shapes=[],*args,**kwargs)
+                      returns a list of tensors
+        *args,**kwargs:  additional parameters to ```initializer```
+        """
+        return MPS(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                       *args,**kwargs),
+                   Dmax=Dmax,name=name,Z=1.0)
+    @classmethod
+    def random(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls._mpsinitializer(cls,numpy_func=np.random.random_sample,D=D,d=d,Dmax=Dmax,name=name,
+                                   initializer=ndarray_initializer,*args,**kwargs)
+
+    @classmethod
+    def zeros(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)+1:
+            raise ValueError('len(D)!=len(d)+1')
+        return cls._mpsinitializer(cls,numpy_func=np.zeros,D=D,d=d,Dmax=Dmax,name=name,
+                                   initializer=ndarray_initializer,*args,**kwargs)
         
     @classmethod
-    def random(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def ones(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -552,12 +685,11 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                       *args,**kwargs),
-                   name=name,Z=1.0)
+        return cls._mpsinitializer(cls,numpy_func=np.ones,D=D,d=d,Dmax=Dmax,name=name,
+                                   initializer=ndarray_initializer,*args,**kwargs)
 
     @classmethod
-    def zeros(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def empty(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -565,43 +697,16 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                       *args,**kwargs),
-                   name=name,Z=1.0)
-
-    @classmethod
-    def ones(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
-        """
-        generate a random TensorNetwork
-        Parameters:
-        ----------------------------------------------
-        """
-        if len(D)!=len(d)+1:
-            raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                       *args,**kwargs),
-                   name=name,Z=1.0)
-    @classmethod
-    def empty(cls,D=[10],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
-        """
-        generate a random TensorNetwork
-        Parameters:
-        ----------------------------------------------
-        """
-        if len(D)!=len(d)+1:
-            raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                       *args,**kwargs),
-                   name=name,Z=1.0)
-
+        return cls._mpsinitializer(cls,numpy_func=np.empty,D=D,d=d,Dmax=Dmax,name=name,
+                                   initializer=ndarray_initializer,*args,**kwargs)
 
     def __str__(self):
         """
         return a str representation of the TensorNetwork
         """
         inds=range(len(self))
-        s1=['\n\n ']+['TN['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos)]+\
-            ['center matrix \n\n ',self.mat.__str__()]+['\n\n TN['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
+        s1=['Name: ',str(self.name),'\n\n ']+['MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos)]+\
+            ['center matrix \n\n ',self.mat.__str__()]+['\n\n MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
         return ''.join(s1)
 
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
@@ -660,6 +765,9 @@ class MPS(TensorNetwork):
                 if n>bond:
                     self[n-1]=ncon.ncon([self[n-1],self.mat],[[-1,1,-3],[1,-2]])
         self._position=bond
+
+
+
         
     def ortho(self,sites,which):
         """
@@ -681,7 +789,10 @@ class MPS(TensorNetwork):
                 return np.linalg.norm(ncon.ncon([self[sites],np.conj(self[sites])],[[-1,1,2],[-2,1,2]])-self[sites].eye(0,dtype=self.dtype))
         else:
             raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
-                
+
+
+
+        
         
     def absorbCenterMatrix(self,direction):
         """
@@ -704,13 +815,11 @@ class MPS(TensorNetwork):
             self[self.pos-1]=ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
             self.mat=self.mat.eye(1,dtype=self.dtype)
         return self
+
     
-    ###########################  note yes finished #################################
     def localWaveFunction(self,length=0):
         
         """
-        returns the tensor at site="site" contracted with self._mat; self._position has to be either site or site+1
-        if clear=True, self._mat is replaced with a normalized identity matrix
         """
         if length==0:
             return copy.deepcopy(self.mat)
@@ -721,13 +830,85 @@ class MPS(TensorNetwork):
                 return ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
         elif length==2:
             if (self.pos<len(self)) and (self.pos>0):
-                shape=(self.D[self.pos-1],self.d[self.pos-1],self.d[self.pos],self.D[self.pos+1])
+                shape=(self.D[self.pos-1],self.D[self.pos+1],self.d[self.pos-1]*self.d[self.pos])
                 return ncon.ncon([self[self.pos-1],self.mat,self[self.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).reshape(shape)
             elif self.pos==len(self):
-                shape=(self.D[self.pos-2],self.d[self.pos-2],self.d[self.pos-1],self.D[self.pos])                
-                return ncon.ncon([self[self.pos-1],elf[self.pos],self.mat],[[-1,1,-3],[1,2,-4],[2,-2]]).reshape(shape)
+                shape=(self.D[self.pos-2],self.D[self.pos],self.d[self.pos-2]*self.d[self.pos-1])
+                return ncon.ncon([self[self.pos-2],self[self.pos-1],self.mat],[[-1,1,-3],[1,2,-4],[2,-2]]).reshape(shape)
             elif self.pos==0:
-                shape=(self.D[self.pos],self.d[self.pos],self.d[self.pos+1],self.D[self.pos+2])                
-                return ncon.ncon([self.mat,self[self.pos],elf[self.pos+1]],[[-1,1],[1,2,-3],[2,-2,-4]]).reshape(shape)
+                shape=(self.D[self.pos],self.D[self.pos+2],self.d[self.pos]*self.d[self.pos+1])                
+                return ncon.ncon([self.mat,self[self.pos],self[self.pos+1]],[[-1,1],[1,2,-3],[2,-2,-4]]).reshape(shape)
+        else:
+            return NotImplemented
+
+
         
+class FiniteMPS(MPS):
     
+    def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
+        if not np.sum(tensors[0].shape[0])==1:
+            raise ValueError('FiniteMPS got a wrong shape {0} for tensor[0]'.format(tensors[0].shape))
+        if not np.sum(tensors[-1].shape[1])==1:
+            raise ValueError('FiniteMPS got a wrong shape {0} for tensor[-1]'.format(tensors[-1].shape))
+        
+        super(FiniteMPS,self).__init__(tensors=tensors,Dmax=Dmax,name=name,Z=Z)
+        self.gammas=[]
+        self.lambdas=[]
+        
+    def _ufunc_handler(self,tensors):
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=1.0)
+
+    def _mpsinitializer(self,numpy_func,D,d,Dmax,name,initializer=ndarray_initializer,*args,**kwargs):
+        """
+        initializes the tensor network, using the ```initializer``` function
+        subclasses of MPS should implement _mpsinitializer to enable initialization via
+        classmethods random, ones, zeros and empty
+        
+        numpy_func:   callable: 
+                      numpy function\
+        D:            list of in 
+
+        d:            list of int
+
+        name:         str
+        
+        initializer:  callable
+                      signature: initializer(numpy_func,shapes=[],*args,**kwargs)
+                      returns a list of tensors
+        *args,**kwargs:  additional parameters to ```initializer```
+        """
+        return FiniteMPS(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
+                                             *args,**kwargs),
+                         Dmax=Dmax,name=name,Z=1.0)
+    
+    def __add__(self,other):
+        """
+        adds self with other;
+        returns an unnormalized mps
+        """
+        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=other.Z)]+\
+            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+             for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
+
+    def __iadd__(self,other):
+        """
+        adds self with other;
+        returns an unnormalized mps
+        """
+        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=other.Z)]+\
+            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+             for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
+        self=FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
+    
+    def __sub__(self,other):
+        """
+        subtracts other from self
+        returns an unnormalized mps
+        """
+        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=-other.Z)]+\
+            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+             for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
+
+

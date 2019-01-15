@@ -29,6 +29,7 @@ from scipy.sparse.linalg import eigs
 from scipy.sparse.linalg import lgmres
 from numpy.linalg.linalg import LinAlgError
 import lib.Lanczos.LanczosEngine as lanEn
+import lib.mpslib.Tensor as tnsr
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
@@ -149,27 +150,45 @@ def qr(mat,signfix):
         return q.dot(herm(unit)),unit.dot(r)
 
     
-def directsum(m1,m2):
+def mpsTensorAdder(A,B,boundary_type,ZA=1.0,ZB=1.0):
     """
-    calculates the direct sum of two matrices
-    Parameters:
-    ----------------
-    m1: np.ndarray of shape (D1,D2)
-    m2: np.ndarray of shape (D3,D4)
-
-    Returns: 
-    ----------------
-    np.ndarray of shape (D1+D3,D2+D4)
-    the direct sum of two matrices
+    adds to Tensors A and B in the MPS fashion
+    A,B:    Tensor objects
+    boundary_type:  str
+                    can be ('l','left',-1) or ('r','right',1) or ('b','bulk',0)
     """
-
-    dtype=type(m1[0,0])
-    out=np.zeros((list(map(sum,zip(m1.shape,m2.shape)))),dtype=dtype)
-    out[0:m1.shape[0],0:m1.shape[1]]=m1
-    out[m1.shape[0]:m1.shape[0]+m2.shape[0],m1.shape[1]:m1.shape[1]+m2.shape[1]]=m2
-    return out
+    dtype=np.result_type(A,B)
+    if A.shape[2]!=B.shape[2]:
+        raise ValueError('physical dimensions  of A and B are not compatible')
+    if len(A.shape)!=3:
+        raise ValueError('A is not an MPS tensor')
+    if len(B.shape)!=3:
+        raise ValueError('B is not an MPS tensor')
+    if not type(A)==type(B):
+        raise TypeError('type(A)!=type(B)')
+    if boundary_type in ('left','l',-1):
+        if np.sum(A.shape[0])!=1:
+            raise ValueError('A.shape[0] is not one dimensional; this is incompatible with left open boundary conditions')
+        if np.sum(B.shape[0])!=1:
+            raise ValueError('B.shape[0] is not one dimensional; this is incompatible with left open boundary conditions')
+        return A.concatenate([A*ZA,B*ZB],axis=1).view(type(A))
     
-
+    elif boundary_type in ('right','r',1):
+        if np.sum(A.shape[1])!=1:
+            raise ValueError('A.shape[1] is not one dimensional; this is incompatible with right open boundary conditions')
+        if np.sum(B.shape[1])!=1:
+            raise ValueError('B.shape[1] is not one dimensional; this is incompatible with rig open boundary conditions')
+        return A.concatenate([A*ZA,B*ZB],axis=0).view(type(A))
+        
+    elif boundary_type in (0,'b','bulk'):
+        if isinstance(A,tnsr.Tensor) and isinstance(B,tnsr.Tensor):
+            res=A.zeros((A.shape[0]+B.shape[0],A.shape[1]+B.shape[1],A.shape[2]),dtype=dtype)
+            for indx in range(A.shape[2]):
+                res[:,:,indx]=A.directSum(A[:,:,indx]*ZA,B[:,:,indx]*ZB)
+            return res
+        else:
+            return NotImplemented
+    
 def addMPS(mps1,mps2,obc=True):
     """
     addMPS(mps1,mps2,obc=True)
