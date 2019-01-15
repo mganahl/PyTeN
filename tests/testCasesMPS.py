@@ -8,6 +8,7 @@ import unittest
 import lib.mpslib.Container as CO
 import lib.mpslib.mpsfunctions as mf
 import copy
+import Tensor as tnsr
 import numpy as np
 import random
 
@@ -16,7 +17,9 @@ class TestTensorNetwork(unittest.TestCase):
         self.shape=tuple(np.random.randint(1,4,3))
         self.tshape=tuple(np.random.randint(3,4,3))        
         self.TN=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
-        
+    def testTypePreservation(self):
+        for n,x in np.ndenumerate(self.TN):
+            self.assertTrue(type(self.TN[n])==
     def testInit(self):
         tn1=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
         tn2=CO.TensorNetwork.ones(shape=self.shape,tensorshapes=self.tshape)

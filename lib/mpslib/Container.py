@@ -931,4 +931,23 @@ class FiniteMPS(MPS):
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
         return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
 
+    def SchmidtSpectrum(self,n):
+        """
+        SchmidtSpectrum(n):
+
+        return the Schmidt-values on bond n:
+        Parameters:
+        ---------------------------------
+        n: int
+           the bond number
+
+        Returns:
+        -------------------
+        S: np.ndarray of shape (D[n],)
+           the D[n] Schmidt values
+        """
+        self.position(n)
+        U,S,V=self.mat.svd()
+        print(type(mat))
+        return S
 
