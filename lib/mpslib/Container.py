@@ -175,7 +175,8 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         for n in range(len(tensors)):
             self._tensors.flat[n]=tensors[n].view(Tensor)
         self.Z=np.result_type(*self._tensors,Z).type(Z)
-
+        if tensors:
+            self.tensortype=type(tensors[0])
     def view(self):
         """
         return a view of self
@@ -729,6 +730,7 @@ class MPS(TensorNetwork):
             ['center matrix \n\n ',self.mat.__str__()]+['\n\n MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
         return ''.join(s1)
 
+    
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
         position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
@@ -761,10 +763,10 @@ class MPS(TensorNetwork):
             self[self._position]=ncon.ncon([self.mat,self[self._position]],[[-1,1],[1,-2,-3]])
             for n in range(self._position,bond):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=mf.prepareTensor(self[n],direction=1)
+                    tensor,self.mat,Z=self.tensortype.prepareTensor(self[n],direction=1)
                 else:
-                    tensor,s,v,Z=mf.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
-                                                    r_thresh=r_thresh)
+                    tensor,s,v,Z=self.tensortype.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
+                                                                    r_thresh=r_thresh)
                     self.mat=s.diag(s).dot(v)
                 self.Z*=Z                    
                 self[n]=tensor
@@ -775,10 +777,10 @@ class MPS(TensorNetwork):
 
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=mf.prepareTensor(self[n],direction=-1)
+                    tensor,self.mat,Z=self.tensortype.prepareTensor(self[n],direction=-1)
                 else:
-                    u,s,tensor,Z=mf.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
-                                                    r_thresh=r_thresh)
+                    u,s,tensor,Z=self.tensortype.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
+                                                                 r_thresh=r_thresh)
                     self.mat=u.dot(s.diag(s))
                 self.Z*=Z                                        
                 self[n]=tensor
@@ -840,6 +842,17 @@ class MPS(TensorNetwork):
     def localWaveFunction(self,length=0):
         
         """
+        return the local wavefunction over ```length``` sites
+        if length==0: self.mat is returned
+        if length==1: self.mat contracted with the next-right mps-tensor is returned, unless
+                      self.pos==len(self), in which case self.mat contracted with the next-left mps-tensor 
+                      is returned
+
+        if length==2: self.mat contracted with the nex-left and next-right mps-tensor is returned, unless:
+                      1) self.pos in (len(self)-1,len(self)), in which case self.mat contracted with the two leftmost 
+                         mps-tensors is returned
+                      2) self.pos in (0,1), in which case self.mat contracted with the two rightmost 
+                         mps-tensors is returned
         """
         if length==0:
             return copy.deepcopy(self.mat)
@@ -862,6 +875,72 @@ class MPS(TensorNetwork):
             return NotImplemented
 
 
+    def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
+        """
+        applies a two-site gate to the mps at site ```site```, 
+        and does a truncation with truncation threshold "thresh"
+        the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
+
+
+        Parameters:
+        --------------------------
+        gate:   np.ndarray of shape (dout1,dout2,din1,din2)
+                the gate to be applied to the mps.
+        site:   int
+                the left-hand site of the support of ```gate```
+        Dmax:   int
+                the maximally allowed bond dimension
+                bond dimension will never be larger than ```Dmax```, irrespecitive of ```thresh```
+        thresh: float  
+                truncation threshold; all schmidt values < ```thresh`` are discarded
+        Returns:
+        tuple (tw,D):
+        tw: float
+            the truncated weight
+        D:  int
+            the current bond dimension D on bond=site+1
+        
+        """
+        assert(len(gate.shape)==4)
+        assert(site<len(self)-1)
+        if preserve_position==True:
+            self.position(site)        
+            newState=ncon.ncon([self.localWaveFunction(length=1),self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
+            [Dl,d1,d2,Dr]=newState.shape
+            newState=newState.merge([0,1],[2,3])
+            U,S,V=newState.svd()
+        tw=0
+        Strunc=S[S>thresh]
+        tw=sum(S[min(len(Strunc),Dmax)::]**2)
+        Strunc=S[0:min(len(Strunc),Dmax)]
+        Strunc/=np.linalg.norm(Strunc)
+        U=U[:,0:len(Strunc)]
+        V=V[0:len(Strunc),:]
+        self._tensors[site]=np.transpose(np.reshape(U,(Dl,d1,len(Strunc))),(0,2,1))
+        self._tensors[site+1]=np.transpose(np.reshape(V,(len(Strunc),d2,Dr)),(0,2,1))
+        self._mat=np.diag(Strunc)
+        return tw,len(Strunc)
+
+    def applyOneSiteGate(self,gate,site,preserve_position=True):
+        """
+        applies a one-site gate to an mps at site "site"
+        the center bond is shifted to bond site+1 
+        the _Z norm of the mps is changed
+        """
+        assert(len(gate.shape)==2)
+        assert(site<len(self))
+        if preserve_position==True:
+            self.position(site)
+            tensor=ncon.ncon([self.localWaveFunction(length=1),gate],[[-1,-2,1],[-3,1]])
+            A,mat,Z=self.tensortype.prepareTensor(tensor,1)
+            self.Z*=Z
+            self[site]=A
+            self.mat=mat
+        else:
+            tensor=ncon.ncon([self[site],gate],[[-1,-2,1],[-3,1]])
+            self[site]=tensor
+        return self
+
         
 class FiniteMPS(MPS):
     
@@ -872,6 +951,8 @@ class FiniteMPS(MPS):
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[-1]'.format(tensors[-1].shape))
         
         super(FiniteMPS,self).__init__(tensors=tensors,Dmax=Dmax,name=name,Z=Z)
+        self.position(0)
+        self.position(len(self))
         self.gammas=[]
         self.lambdas=[]
         
@@ -900,7 +981,9 @@ class FiniteMPS(MPS):
         return FiniteMPS(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
                                              *args,**kwargs),
                          Dmax=Dmax,name=name,Z=1.0)
-    
+    @classmethod
+    def zeros(self,*args,**kwargs):
+        raise NotImplementedError('FiniteMPS.zeros(*args,**kwargs) not implemented')
     def __add__(self,other):
         """
         adds self with other;
@@ -948,6 +1031,30 @@ class FiniteMPS(MPS):
         """
         self.position(n)
         U,S,V=self.mat.svd()
-        print(type(mat))
         return S
+    
+    def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
+        """ 
+        a dedicated routine for truncating an mps (for obc, this can also be done using self.position(self,pos))
+        For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
+        schmidt_thresh: truncation threshold
+        D: maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
+        returned_gauge: 'left','right' or 'symmetric': the desired gauge after truncation
+        """
+        
+        if D and D>max(self.D):
+            return self
+        else:
+            pos=self.pos
+            if self.pos==0:
+                self.position(len(self),schmidt_thresh=schmidt_thresh,D=D)
+            elif self.pos==len(self):
+                self.position(0,schmidt_thresh=schmidt_thresh,D=D)                
+            else:
+                if presweep:
+                    self.position(0)
+                    self.position(self.N)
+                self.position(0,schmidt_thresh=schmidt_thresh,D=D)                                    
+                self.position(self.pos)
+            return self
 

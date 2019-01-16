@@ -8,7 +8,7 @@ import unittest
 import lib.mpslib.Container as CO
 import lib.mpslib.mpsfunctions as mf
 import copy
-import Tensor as tnsr
+import lib.mpslib.Tensor as tnsr
 import numpy as np
 import random
 
@@ -19,7 +19,7 @@ class TestTensorNetwork(unittest.TestCase):
         self.TN=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
     def testTypePreservation(self):
         for n,x in np.ndenumerate(self.TN):
-            self.assertTrue(type(self.TN[n])==
+            self.assertTrue(type(self.TN[n])==tnsr.Tensor)
     def testInit(self):
         tn1=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
         tn2=CO.TensorNetwork.ones(shape=self.shape,tensorshapes=self.tshape)
@@ -67,6 +67,13 @@ class TestMPS(TestTensorNetwork):
         self.d=[random.randint(2,4)]*N
         self.TN=CO.MPS.random(D=self.D,d=self.d)
         
+    def testTypePreservation(self):
+        self.TN.position(0)
+        self.TN.position(len(self.TN))
+        for n,x in np.ndenumerate(self.TN):
+            self.assertTrue(type(self.TN[n])==tnsr.Tensor)
+        self.assertTrue(type(self.TN.mat)==tnsr.Tensor)
+
     def testInit(self):
         tn1=CO.MPS.random(D=self.D,d=self.d)
         tn2=CO.MPS.ones(D=self.D,d=self.d)
@@ -83,6 +90,11 @@ class TestFiniteMPS(TestMPS):
         self.D=[1]+list(np.random.randint(1,10,N-1))+[1]
         self.d=[random.randint(2,4)]*N
         self.TN=CO.FiniteMPS.random(D=self.D,d=self.d)
+
+    def testTypePreservation(self):
+        super(TestFiniteMPS,self).testTypePreservation()
+        S=self.TN.SchmidtSpectrum(random.sample(range(len(self.TN)),1)[0])
+
         
     def testInit(self):
         tn1=CO.FiniteMPS.random(D=self.D,d=self.d)
