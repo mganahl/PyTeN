@@ -397,18 +397,31 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         for arg in inputs+out:
             if not isinstance(arg,self._HANDLED_UFUNC_TYPES+(TensorNetwork,)):
                 return NotImplemented
-
         if out:
             #takes care of in-place operations
             result=[]
-            for n,x in np.ndenumerate(self):
+            for n,x in np.ndenumerate(self._tensors):
                 kwargs['out']=tuple(o[n] if isinstance(o,type(self)) else o for o in out)
                 ipts=[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs]
                 result.append(getattr(ufunc,method)(*ipts,**kwargs))
         else:
             result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs],**kwargs)
-                    for n,x in np.ndenumerate(self)]
-        return TensorNetwork(tensors=result,shape=self.shape,name=None,Z=self.Z)            
+                    for n,x in np.ndenumerate(self._tensors)]
+
+        if method=='reduce':
+            #reduce is not well defined for mps because the center matrix has different dimension than the other tensors
+            #furthermore, reduce weith axis==None reduces ndarrays to a number, not a tensor. This is nonsensical for
+            #MPS. Thus, if axis==None, reapply the ufunc to the list of obtained results and return the result
+            axis=kwargs.get('axis',())
+            if axis==None:
+                return getattr(ufunc,method)(result)
+            else:
+                raise NotImplementedError('TensorNetwork.__array_ufunc__ with argument axis!=None not implemented')
+
+        else:
+            return TensorNetwork(tensors=result,shape=self.shape,name=None,Z=self.Z)            
+            
+
 
     
     def __mul__(self,num):
@@ -1040,43 +1053,14 @@ class FiniteMPS(MPS):
         self.position(len(self))
         self.position(0)
         Lambdas.append(self.mat.diag())                        
-        for n in range(1,len(self)):
-            self.position(n)
-            self.diagonalizeCenterMatrix()
-            print(t.shape)
-            print(self[n].shape)
-            Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n-1]],[[-1,1],[1,-2,-3]]))
-            Lambdas.append(self.mat.diag())
         for n in range(len(self)):
-            A=ncon.ncon([Lambdas[n],Gammas[n]],[[-1,1],[1,-2,-3]])
-            print(ncon.ncon([A,np.conj(A)],[[1,-1,2],[1,-2,2]])
+            self.position(n+1)
+            self.diagonalizeCenterMatrix()
+            Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n]],[[-1,1],[1,-2,-3]]))
+            Lambdas.append(self.mat.diag())
+        return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=None,Z=1.0)
         
-        # Lam=[None]*(len(Gamma)-1)
-        # for n in range(len(mps)):
-        #     #use QR decomposition on Gamma[n] to pruduce a left orthogonal tensor A 
-        #     #and an upper triangular matrix r (r is normalized inside the routine)
-        #     A,r,Z=prepareTensor(Gamma[n],1)
-        #     Gamma[n]=A
-        #     #multiply r to the right
-        #     if n<(len(Gamma)-1):
-        #         Gamma[n+1]=np.tensordot(r,Gamma[n+1],([1],[0]))
-        
-        # for n in range(len(Gamma)-1,-1,-1):
-        #     U,S,B,Z=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=tr_thresh,r_thresh=r_thresh)
-        #     if n==(len(Gamma)-1):
-        #         Gamma[n]=B
-        #     else:
-        #         Gamma[n]=np.transpose(np.tensordot(B,np.diag(1.0/Lam[n]),([1],[0])),(0,2,1))
-        #     if n>0:
-        #         Lam[n-1]=S
-        #         Gamma[n-1]=np.transpose(np.tensordot(Gamma[n-1],U.dot(np.diag(S)),([1],[0])),(0,2,1))
-
-        # Lam.append(np.ones(1))
-        # Lam.insert(0,np.ones(1))
-        # return Gamma,Lam
-        
-        # self.gammas,self.lambdas=mf.canonizeMPS(self)
-
+            
     def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
         """ 
         a dedicated routine for truncating an mps (for obc, this can also be done using self.position(self,pos))
@@ -1197,12 +1181,12 @@ class FiniteMPS(MPS):
     
                 
 class  CanonizedFiniteMPS(TensorNetwork):
-    def __init__(self,gammas=[],lambdas=[],name=None,Z=1.0):
+    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,Z=1.0):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
         assert((len(gammas)+1)==len(lambdas))
-        tensor=[lambdas[0]]
+        tensors=[lambdas[0]]
         for n in range(len(gammas)):
             tensors.append(gammas[n])
             tensors.append(lambdas[n+1])
@@ -1211,29 +1195,57 @@ class  CanonizedFiniteMPS(TensorNetwork):
         if not np.sum(gammas[-1].shape[1])==1:
             raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(gammas[-1].shape))
 
-        super(CanonizedMPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
+        super(CanonizedFiniteMPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
         if not Dmax:
             self._D=max(self.D)
         else:
             self._D=Dmax
-        self._lambdas
+            
+    @classmethod
+    def fromList(cls,tensors=[],Dmax=None,name=None,Z=1.0):
+        """
+        no checks are performed to see wheter the prived tensors can be contracted
+        """
+        if not np.sum(tensors[0].shape[0])==1:
+            raise ValueError('CanonizedFiniteMPS.fromList(tensors) got a wrong shape {0} for tensors[0]'.format(tensors[0].shape))
+        if not np.sum(tensors[-1].shape[0])==1:
+            raise ValueError('CanonizedFiniteMPS.fromList(tensors) got a wrong shape {0} for tensors[-1]'.format(tensors[-1].shape))
+        assert(len(tensors)%2)
+        return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name,Z=Z)
         
     def __len__(self):
         return int((len(self._tensors)-1)/2)
-    def __getitem__(self):
-        raise NotImplementedError('CanonizeFiniteMPS.__getitem__() not implemented')
-    def __setitem__(self):
-        raise NotImplementedError('CanonizeFiniteMPS.__setitem__() not implemented')
     
     def Gamma(self,site):
         if site>=len(self):
-            raise IndexError('CanonizeFiniteMPS.Gamma(): index out of bounds')
-        return self[int(2*site+1)]
+            raise IndexError('CanonizedFiniteMPS.Gammas(index): index {0} out of bounds or CanonizedFiniteMPS of length {1}'.format(bond,len(self)))
+        return super(CanonizedFiniteMPS,self).__getitem__(int(2*site+1))
+                             
     def Lambda(self,bond):
-        return self[int(2*site)]
+        if bond>len(self):
+            raise IndexError('CanonizediniteMPS.Lambda(index): index {0} out of bounds or CanonizedFiniteMPS of length {1}'.format(bond,len(self)))
+        
+        return super(CanonizedFiniteMPS,self).__getitem__(int(2*bond))        
+
     @property
     def D(self):
         return [self.Gamma(n).shape[0] for n in range(len(self))]+[self.Gamma(len(self)-1).shape[1]]
+    @property
+    def d(self):
+        return [self.Gamma(n).shape[2] for n in range(len(self))]
+    
+    @property
+    def Dmax(self):
+        """
+        Dmax is the maximally allowed bond dimension of the MPS
+        """
+        return self._D
+    
+    @Dmax.setter
+    def Dmax(self,D):
+        """
+        set Dmax to D
+        """
     
     @classmethod
     def random(cls,D=[1,2,1],d=[2,2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):    
@@ -1241,5 +1253,80 @@ class  CanonizedFiniteMPS(TensorNetwork):
         return mps.canonize()
         
 
+    def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
+        """
+        implements np.ufuncs for the TensorNetwork
+        for numpy compatibility
+        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        currently applied elementwise to the tensors in the tensor network
+        """
+        #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
+        #__array_ufunc__ method which applies the division to the individual elements of TensorNetwork
+        if ufunc==np.true_divide:
+            return self.__idiv__(inputs[1])
+
+
+        out=kwargs.get('out',())
+        for arg in inputs+out:
+            if not isinstance(arg,self._HANDLED_UFUNC_TYPES+(TensorNetwork,)):
+                return NotImplemented
+        if out:
+            #takes care of in-place operations
+            result=[]
+            for n,x in np.ndenumerate(self._tensors):
+                kwargs['out']=tuple(o[n] if isinstance(o,type(self)) else o for o in out)
+                ipts=[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs]
+                result.append(getattr(ufunc,method)(*ipts,**kwargs))
+        else:
+            result=[getattr(ufunc,method)(*[ipt[n] if isinstance(ipt,type(self)) else ipt for ipt in inputs],**kwargs)
+                    for n,x in np.ndenumerate(self._tensors)]
+        if method=='reduce':
+            #reduce is not well defined for mps because the center matrix has different dimension than the other tensors
+            #furthermore, reduce weith axis==None reduces ndarrays to a number, not a tensor. This is nonsensical for
+            #MPS. Thus, if axis==None, reapply the ufunc to the list of obtained results and return the result
+            axis=kwargs.get('axis',())
+            if axis==None:
+                return getattr(ufunc,method)(result)
+            else:
+                raise NotImplementedError('CanonizedFiniteMPS.__array_ufunc__ with argument axis!=None not implemented')
+
+        else:
+            return CanonizedFiniteMPS.fromList(tensors=result,Dmax=self.Dmax,name=None,Z=self.Z)                        
+        
+    def toMPS(self):
+        tensors=[ncon.ncon([self.Lambda(n).diag(),self.Gamma(n)],[[-1,1],[1,-2,-3]]) for n in range(len(self))]
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=self.Z)
 
         
+    
+    def canonize(self):
+        return self.toMPS().canonize()
+    
+    def ortho(self,sites,which):
+        """
+        checks if the orthonormalization of the mps is OK
+        prints out some stuff
+        """
+        if which in (1,'l','left'):
+            if hasattr(sites,'__iter__'):
+                tensors=[ncon.ncon([self.Lambda(site).diag(),self.Gamma(site)],[[-1,1],[1,-2,-3]]) for site in sites]
+                return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[1,-1,2],[1,-2,2]])-\
+                                       tensors[n].eye(1,dtype=self.dtype)) for n in range(len(tensors))]
+            else:
+                tensor=ncon.ncon([self.Lambda(sites).diag(),self.Gamma(sites)],[[-1,1],[1,-2,-3]])
+                return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[1,-1,2],[1,-2,2]])-\
+                                      tensor.eye(1,dtype=self.dtype))
+
+        elif which in (-1,'r','right'):
+            if hasattr(sites,'__iter__'):
+                tensors=[ncon.ncon([self.Lambda(site+1).diag(),self.Gamma(site)],[[1,-2],[-1,1,-3]]) for site in sites]
+                return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[-1,1,2],[-2,1,2]])-\
+                                       tensors[n].eye(0,dtype=self.dtype)) for n in range(len(tensors))]
+
+            else:
+                tensor=ncon.ncon([self.Lambda(sites+1).diag(),self.Gamma(sites)],[[1,-2],[-1,1,-3]])
+                return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[-1,1,2],[-2,1,2]])-\
+                                      tensor.eye(0,dtype=self.dtype))
+
+        else:
+            raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
