@@ -177,6 +177,8 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         self.Z=np.result_type(*self._tensors,Z).type(Z)
         if tensors:
             self.tensortype=type(tensors[0])
+
+        
     def view(self):
         """
         return a view of self
@@ -243,7 +245,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         ----------------
         int: the length of the MPS
         """
-        return len(self._tensors)
+        return np.prod(self._tensors.shape)
     
     @property
     def dtype(self):
@@ -505,9 +507,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         return self.__array_ufunc__(np.imag,'__call__',self)        
     
         
-    
 class MPS(TensorNetwork):
-    
     def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
         """
         no checks are performed to see wheter the prived tensors can be contracted
@@ -520,6 +520,11 @@ class MPS(TensorNetwork):
         self.mat=tensors[-1].eye(1)
         self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(herm(self.mat))))
         self._position=self.N
+        
+    def normalize(self):
+        self.position(len(self))
+        self.position(0)        
+        self.Z=self.dtype.type(1)
 
  
     def view(self):
@@ -651,28 +656,6 @@ class MPS(TensorNetwork):
         set Dmax to D
         """
 
-    def _mpsinitializer(self,numpy_func,D,d,Dmax,name,initializer=ndarray_initializer,*args,**kwargs):
-        """
-        initializes the tensor network, using the ```initializer``` function
-        subclasses of MPS should implement _mpsinitializer to enable initialization via
-        classmethods random, ones, zeros and empty
-        
-        numpy_func:   callable: 
-                      numpy function\
-        D:            list of in 
-
-        d:            list of int
-
-        name:         str
-        
-        initializer:  callable
-                      signature: initializer(numpy_func,shapes=[],*args,**kwargs)
-                      returns a list of tensors
-        *args,**kwargs:  additional parameters to ```initializer```
-        """
-        return MPS(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                       *args,**kwargs),
-                   Dmax=Dmax,name=name,Z=1.0)
     @classmethod
     def random(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
@@ -682,8 +665,8 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls._mpsinitializer(cls,numpy_func=np.random.random_sample,D=D,d=d,Dmax=Dmax,name=name,
-                                   initializer=ndarray_initializer,*args,**kwargs)
+
+        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
 
     @classmethod
     def zeros(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -694,8 +677,7 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls._mpsinitializer(cls,numpy_func=np.zeros,D=D,d=d,Dmax=Dmax,name=name,
-                                   initializer=ndarray_initializer,*args,**kwargs)
+        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
         
     @classmethod
     def ones(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -706,9 +688,8 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls._mpsinitializer(cls,numpy_func=np.ones,D=D,d=d,Dmax=Dmax,name=name,
-                                   initializer=ndarray_initializer,*args,**kwargs)
-
+        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+        
     @classmethod
     def empty(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
@@ -718,8 +699,8 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls._mpsinitializer(cls,numpy_func=np.empty,D=D,d=d,Dmax=Dmax,name=name,
-                                   initializer=ndarray_initializer,*args,**kwargs)
+        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+
 
     def __str__(self):
         """
@@ -730,7 +711,6 @@ class MPS(TensorNetwork):
             ['center matrix \n\n ',self.mat.__str__()]+['\n\n MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
         return ''.join(s1)
 
-    
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
         position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
@@ -767,7 +747,7 @@ class MPS(TensorNetwork):
                 else:
                     tensor,s,v,Z=self.tensortype.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                                     r_thresh=r_thresh)
-                    self.mat=s.diag(s).dot(v)
+                    self.mat=s.diag().dot(v)
                 self.Z*=Z                    
                 self[n]=tensor
                 if (n+1)<bond:
@@ -781,7 +761,7 @@ class MPS(TensorNetwork):
                 else:
                     u,s,tensor,Z=self.tensortype.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
-                    self.mat=u.dot(s.diag(s))
+                    self.mat=u.dot(s.diag())
                 self.Z*=Z                                        
                 self[n]=tensor
                 if n>bond:
@@ -875,7 +855,7 @@ class MPS(TensorNetwork):
             return NotImplemented
 
 
-    def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
+    def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16,preserve_position=True):
         """
         applies a two-site gate to the mps at site ```site```, 
         and does a truncation with truncation threshold "thresh"
@@ -903,23 +883,32 @@ class MPS(TensorNetwork):
         """
         assert(len(gate.shape)==4)
         assert(site<len(self)-1)
+        if type(gate)!=type(self[site]):
+            raise TypeError('MPS.applyTwoSiteGate(): provided gate has to be of same type as MPS tensors')
         if preserve_position==True:
-            self.position(site)        
+            self.position(site)
             newState=ncon.ncon([self.localWaveFunction(length=1),self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
             [Dl,d1,d2,Dr]=newState.shape
             newState=newState.merge([0,1],[2,3])
-            U,S,V=newState.svd()
-        tw=0
-        Strunc=S[S>thresh]
-        tw=sum(S[min(len(Strunc),Dmax)::]**2)
-        Strunc=S[0:min(len(Strunc),Dmax)]
-        Strunc/=np.linalg.norm(Strunc)
-        U=U[:,0:len(Strunc)]
-        V=V[0:len(Strunc),:]
-        self._tensors[site]=np.transpose(np.reshape(U,(Dl,d1,len(Strunc))),(0,2,1))
-        self._tensors[site+1]=np.transpose(np.reshape(V,(len(Strunc),d2,Dr)),(0,2,1))
-        self._mat=np.diag(Strunc)
-        return tw,len(Strunc)
+            U,S,V=newState.svd(full_matrices=False)
+            Strunc=S.truncate([Dmax]).squeeze(thresh)
+            tw=float(np.sum(S**2)-np.sum(Strunc**2))
+            Strunc/=Strunc.norm()
+            U=U.truncate([U.shape[0],Strunc.shape[0]]) 
+            V=V.truncate([Strunc.shape[0],V.shape[1]])
+            self[site]=np.transpose(np.reshape(U,(Dl,d1,Strunc.shape[0])),(0,2,1))
+            self[site+1]=np.transpose(np.reshape(V,(Strunc.shape[0],d2,Dr)),(0,2,1))
+            self.mat=Strunc.diag()
+            self._position=site+1
+            return tw,Strunc.shape[0]
+        else:
+            newState=ncon.ncon([self[site],self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
+            [Dl,d1,d2,Dr]=newState.shape
+            newState=newState.merge([0,1],[2,3])
+            U,S,V=newState.svd(full_matrices=False)
+            self[site]=np.transpose(np.reshape(ncon.ncon([U,S.diag()],[[-1,1],[1,-2]]),(Dl,d1,S.shape[0])),(0,2,1))
+            self[site+1]=np.transpose(np.reshape(V,(S.shape[0],d2,Dr)),(0,2,1))
+            return 0.0,S.shape[0]
 
     def applyOneSiteGate(self,gate,site,preserve_position=True):
         """
@@ -941,7 +930,6 @@ class MPS(TensorNetwork):
             self[site]=tensor
         return self
 
-        
 class FiniteMPS(MPS):
     
     def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
@@ -956,34 +944,24 @@ class FiniteMPS(MPS):
         self.gammas=[]
         self.lambdas=[]
         
-    def _ufunc_handler(self,tensors):
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=1.0)
-
-    def _mpsinitializer(self,numpy_func,D,d,Dmax,name,initializer=ndarray_initializer,*args,**kwargs):
+    def diagonalizeCenterMatrix(self):
         """
-        initializes the tensor network, using the ```initializer``` function
-        subclasses of MPS should implement _mpsinitializer to enable initialization via
-        classmethods random, ones, zeros and empty
-        
-        numpy_func:   callable: 
-                      numpy function\
-        D:            list of in 
-
-        d:            list of int
-
-        name:         str
-        
-        initializer:  callable
-                      signature: initializer(numpy_func,shapes=[],*args,**kwargs)
-                      returns a list of tensors
-        *args,**kwargs:  additional parameters to ```initializer```
+        diagonalizes the center matrix and pushes U and V onto the left and right MPS tensors
         """
-        return FiniteMPS(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],
-                                             *args,**kwargs),
-                         Dmax=Dmax,name=name,Z=1.0)
+
+        if self.pos==0:
+            return 
+        elif self.pos==len(self):
+            return
+        else:
+            U,S,V=self.mat.svd()
+            self[self.pos-1]=ncon.ncon([self[self.pos-1],U],[[-1,1,-3],[1,-2]])
+            self[self.pos]=ncon.ncon([V,self[self.pos]],[[-1,1],[1,-2,-3]])
+            self.mat=S.diag()
     @classmethod
     def zeros(self,*args,**kwargs):
         raise NotImplementedError('FiniteMPS.zeros(*args,**kwargs) not implemented')
+    
     def __add__(self,other):
         """
         adds self with other;
@@ -1030,9 +1008,75 @@ class FiniteMPS(MPS):
            the D[n] Schmidt values
         """
         self.position(n)
-        U,S,V=self.mat.svd()
+        U,S,V=self.mat.svd(full_matrices=False)
         return S
-    
+
+    def canonize(self):
+        """
+        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in
+        mps.gammas and mps.lambdas member lists;
+        len(mps.lambdas) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; 
+        for obc, these are just [1.0]
+        The mps is left in a left orthogonal state
+
+        Parameters:
+        ------------------------------
+        nmaxit:      int
+                     maximum iteration number of sparse solver
+        tol:         float
+                     desired precision of eigenvalues/eigenvectors returned by sparse solver
+        ncv:         int
+                     number of krylov vectors used in sparse sovler
+        pinv:        float
+                     pseudo inverse cutoff
+        numeig:      number of eigenvalue-eigenvector pairs to be calculated in sparse solver (hyperparameter)
+
+        Returns:
+        -------------------------
+        None
+        """
+        Lambdas,Gammas=[],[]
+        
+        self.position(len(self))
+        self.position(0)
+        Lambdas.append(self.mat.diag())                        
+        for n in range(1,len(self)):
+            self.position(n)
+            self.diagonalizeCenterMatrix()
+            print(t.shape)
+            print(self[n].shape)
+            Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n-1]],[[-1,1],[1,-2,-3]]))
+            Lambdas.append(self.mat.diag())
+        for n in range(len(self)):
+            A=ncon.ncon([Lambdas[n],Gammas[n]],[[-1,1],[1,-2,-3]])
+            print(ncon.ncon([A,np.conj(A)],[[1,-1,2],[1,-2,2]])
+        
+        # Lam=[None]*(len(Gamma)-1)
+        # for n in range(len(mps)):
+        #     #use QR decomposition on Gamma[n] to pruduce a left orthogonal tensor A 
+        #     #and an upper triangular matrix r (r is normalized inside the routine)
+        #     A,r,Z=prepareTensor(Gamma[n],1)
+        #     Gamma[n]=A
+        #     #multiply r to the right
+        #     if n<(len(Gamma)-1):
+        #         Gamma[n+1]=np.tensordot(r,Gamma[n+1],([1],[0]))
+        
+        # for n in range(len(Gamma)-1,-1,-1):
+        #     U,S,B,Z=prepareTruncate(Gamma[n],direction=-1,D=Gamma[n].shape[0],thresh=tr_thresh,r_thresh=r_thresh)
+        #     if n==(len(Gamma)-1):
+        #         Gamma[n]=B
+        #     else:
+        #         Gamma[n]=np.transpose(np.tensordot(B,np.diag(1.0/Lam[n]),([1],[0])),(0,2,1))
+        #     if n>0:
+        #         Lam[n-1]=S
+        #         Gamma[n-1]=np.transpose(np.tensordot(Gamma[n-1],U.dot(np.diag(S)),([1],[0])),(0,2,1))
+
+        # Lam.append(np.ones(1))
+        # Lam.insert(0,np.ones(1))
+        # return Gamma,Lam
+        
+        # self.gammas,self.lambdas=mf.canonizeMPS(self)
+
     def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
         """ 
         a dedicated routine for truncating an mps (for obc, this can also be done using self.position(self,pos))
@@ -1058,3 +1102,144 @@ class FiniteMPS(MPS):
                 self.position(self.pos)
             return self
 
+    def applyMPO(self,mpo):
+        """
+        applies an mpo to an mps; no truncation is done
+        """
+        assert(len(mpo)==len(self))
+        res=self.copy()
+        res.position(0)
+        res.absorbCenterMatrix(1)
+        for n in range(len(res)):
+            Ml,Mr,din,dout=mpo[n].shape 
+            Dl,Dr,d=res[n].shape
+            res[n]=ncon.ncon([res[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]).merge([0,1],[2,3],[4])
+        res.mat=res[0].eye(0,dtype=res.dtype)
+        return res
+            
+
+
+    def dot(self,mps):
+        """
+        calculate the overlap of self with mps 
+        mps: MPS
+        returns: float
+                 overlap of self with mps
+        """
+        if not len(self)==len(mps):
+            raise ValueError('FiniteMPS.dot(other): len(other)!=len(self)')
+        if not isinstance(mps,FiniteMPS):
+            raise TypeError('can only calculate overlaps with FiniteMPS')
+        O=self[0].eye(0,dtype=np.result_type(self.dtype,mps.dtype))
+        for site in range(min(self.pos,mps.pos)):
+            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
+        if self.pos<mps.pos:
+            O=ncon.ncon([O,self.mat],[[1,-2],[1,-1]])
+        elif self.pos==mps.pos:
+            O=ncon.ncon([O,self.mat,np.conj(mps.mat)],[[1,2],[1,-1],[2,-2]])
+        elif self.pos>mps.pos:
+            O=ncon.ncon([O,np.conj(mps.mat)],[[-1,1],[1,-2]])
+            
+        for site in range(min(self.pos,mps.pos),max(self.pos,mps.pos)):
+            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
+            
+        if self.pos<mps.pos:
+            O=ncon.ncon([O,np.conj(mps.mat)],[[-1,1],[1,-2]])
+        elif self.pos>mps.pos:
+            O=ncon.ncon([O,self.mat],[[1,-2],[1,-1]])            
+        for site in range(max(self.pos,mps.pos),len(self)):
+            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
+        return O.dtype.type(O)
+
+
+    def measureMatrixElement(self,mps,op,site,preserve_position=True):
+        pos1=self._position
+        pos2=mps._position        
+        self.position(site)
+        mps.position(site)                        
+        t1=self.localWaveFunction(length=1)
+        t2=mps.localWaveFunction(length=1)        
+        if np.abs(self.Z-1.0)>1E-10:
+            warnings.warn('MPS.measureMatrixElement(): norm self.Z != 1; discarding it anyway')
+        if np.abs(mps.Z-1.0)>1E-10:
+            warnings.warn('MPS.measureMatrixElement(): norm mps.Z != 1; discarding it anyway')
+            
+        if preserve_position:
+            self.position(pos1)
+            self.position(pos2)            
+            
+        return ncon.ncon([t1,np.conj(t2),op],[[1,3,2],[1,3,4],[4,2]])
+        
+    def measureList(self,ops):
+        """
+        measure a list of N local operators "ops", where N=len(ops)=len(self)
+        the routine moves the centersite to the right boundary, measures and moves
+        it back to its original position; this might cause some overhead
+
+        Parameters:
+        --------------------------------
+        ops:           list of np.ndarrays of shape (d,d)
+                       local operators to be measured
+        Returns:  np.ndarray containing the matrix elements
+        """
+        assert(len(self)==len(ops))
+        return [self.measureLocal(ops[site],site,preserve_position=False) for site in range(len(self))]
+
+
+    def measureLocal(self,op,site,preserve_position=False):
+
+        """
+        measure a local operator "op" at site "site"
+        the routine moves the centersite to "site" and measures the operator
+        if preserve_position=True, the center site is moved back to its original position
+        """
+        return self.measureMatrixElement(self,op=op,site=site,preserve_position=preserve_position)
+    
+                
+class  CanonizedFiniteMPS(TensorNetwork):
+    def __init__(self,gammas=[],lambdas=[],name=None,Z=1.0):
+        """
+        no checks are performed to see wheter the prived tensors can be contracted
+        """
+        assert((len(gammas)+1)==len(lambdas))
+        tensor=[lambdas[0]]
+        for n in range(len(gammas)):
+            tensors.append(gammas[n])
+            tensors.append(lambdas[n+1])
+        if not np.sum(gammas[0].shape[0])==1:
+            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[0]'.format(gammas[0].shape))
+        if not np.sum(gammas[-1].shape[1])==1:
+            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(gammas[-1].shape))
+
+        super(CanonizedMPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
+        if not Dmax:
+            self._D=max(self.D)
+        else:
+            self._D=Dmax
+        self._lambdas
+        
+    def __len__(self):
+        return int((len(self._tensors)-1)/2)
+    def __getitem__(self):
+        raise NotImplementedError('CanonizeFiniteMPS.__getitem__() not implemented')
+    def __setitem__(self):
+        raise NotImplementedError('CanonizeFiniteMPS.__setitem__() not implemented')
+    
+    def Gamma(self,site):
+        if site>=len(self):
+            raise IndexError('CanonizeFiniteMPS.Gamma(): index out of bounds')
+        return self[int(2*site+1)]
+    def Lambda(self,bond):
+        return self[int(2*site)]
+    @property
+    def D(self):
+        return [self.Gamma(n).shape[0] for n in range(len(self))]+[self.Gamma(len(self)-1).shape[1]]
+    
+    @classmethod
+    def random(cls,D=[1,2,1],d=[2,2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):    
+        mps=FiniteMPS.random(D=D,d=d,Dmax=Dmax,name=name,initialize=initializer,*args,**kwargs)
+        return mps.canonize()
+        
+
+
+        

@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-
+import lib.ncon as ncon
 class TensorBase(object):
     @classmethod
     def random(cls,*args,**kwargs):
@@ -25,11 +25,20 @@ class TensorBase(object):
     
     @staticmethod
     def directSum(*args,**kwargs):
-        pass
+        return NotImplementedError('TensorBase.directSum: not implemented')
     @staticmethod
     def concatenate(arrs,*args,**kwargs):
-        print('wll hello')
-        pass
+        return NotImplementedError('TensorBase.concatenate: not implemented')        
+    @staticmethod
+    def prepareTensors(*args,**kwargs):
+        return NotImplementedError('TensorBase.concatenate: not implemented')
+    @staticmethod    
+    def prepareTruncate(*args,**kwargs):
+        return NotImplementedError('TensorBase.concatenate: not implemented')
+
+    def squeeze(*args,**kwargs):
+        return NotImplementedError('TensorBase.concatenate: not implemented')        
+
     
 class Tensor(np.ndarray,TensorBase):
     
@@ -38,52 +47,6 @@ class Tensor(np.ndarray,TensorBase):
         note: np.ndarray has no __init__, only __new__
         """
         return super(Tensor,cls).__new__(cls,*args,**kwargs)
-    
-    # def merge(self,*indices):
-    #     """
-    #     merges indices in the list ```indices```, respecting the order of the elements of ```indices```,
-    #     array is transposed such that: all indices smaller or equal to the smalles element in ```indices``` remain at their positions;
-    #     these indices are followed by all elements of ```indices``, followed by all indices larger than ```min(indices)``` and not contained in ```indices```.
-    #     Parameters:
-    #     ----------------------
-    #     indices:   list of int
-    #                the indices which should be merged
-    #     Returns:
-    #     ----------------------
-    #     Tensor:    the tensor with merged indices
-    #     """
-    #     inds=list(indices[0])
-    #     [inds.extend(n) for n in indices[1:]]
-    #     print(inds)
-    #     if len(set(inds))<len(inds):
-    #         elems,cnts=np.unique(np.asarray(inds),return_counts=True)
-    #         raise ValueError('Tensor.merge(): indices {0} are appearing more than once!'.format(elems[cnts>1]))
-
-    #     if max(indices[0])>=len(self.shape):
-    #         raise ValueError("Tensor.merge(indices): max(indices)>=len(shape)")
-    #     left=list(range(0,min(indices[0])))
-    #     complement=sorted(list(set(range(len(self.shape))).difference(set(left+list(indices[0])))))
-    #     neworder=left+list(indices[0])+complement
-    #     newshape=tuple([self.shape[l] for l in left]+[np.prod([self.shape[l] for l in indices[0]])]+[self.shape[l] for l in complement])
-    #     if len(indices)==1:        
-    #         return np.reshape(np.transpose(self,neworder),newshape).view(Tensor)
-    #     else:
-    #         print(indices[1::])
-    #         for otherindices in indices[1::]:
-    #             for m in range(len(otherindices)):
-    #                 cnt=0
-    #                 indx=otherindices[m]
-    #                 for n in sorted(indices[0]):
-    #                     if n<indx:
-    #                         cnt+=1
-
-    #                 otherindices[m]-=(cnt-1)
-    #         newshape=tuple([self.shape[l] for l in left]+[np.prod([self.shape[l] for l in indices[0]])]+[self.shape[l] for l in complement])
-
-    #         print(indices[1::])
-    #         out=np.reshape(np.transpose(self,neworder),newshape).view(Tensor)
-    #         return out.merge(*indices[1:])
-
 
     def merge(self,*indices):
         """
@@ -138,20 +101,21 @@ class Tensor(np.ndarray,TensorBase):
         """
         return numpy_func(*args,**kwargs).view(Tensor)
     
-    def eye(self,index,*args,**kwargs):
+    def eye(self,rank_index,*args,**kwargs):
         """
         returns an identity matrix of shape matching with ```self.shape[index]```
         """
-        if index>=len(self.shape):
-            raise IndexError("index out of range")
-        return np.eye(self.shape[index],*args,**kwargs).view(type(self))
+        if rank_index>=len(self.shape):
+            raise IndexError("rank_index out of range")
+        return np.eye(self.shape[rank_index],*args,**kwargs).view(type(self))
 
     
-    def diag(self,*args,**kwargs):
+    def diag(self,**kwargs):
         """
         wrapper for np.diag
+        returns either a diagonal of self, or constructs a matrix from self, if self is a vector
         """
-        return np.diag(*args,**kwargs).view(type(self))
+        return np.diag(self,**kwargs).view(type(self))
         
     def svd(self,*args,**kwargs):
         try:        
@@ -167,7 +131,33 @@ class Tensor(np.ndarray,TensorBase):
 
     def qr(self,**kwargs):
         return np.linalg.qr(self,**kwargs)
+
+    def squeeze(self,thresh):
+        
+        """
+        truncate a one-dimension array
+        """
+        
+        if len(self.shape)!=1:
+            raise ValueError('Tensors.truncate works only on rank 1 tensors')
+        return self[self>=thresh]
     
+
+    def norm(self,**kwargs):
+        """
+        the norm of the state
+        """
+        return np.linalg.norm(self,**kwargs)
+    
+    def truncate(self,newshape):
+        
+        """
+        truncate a one-dimensional array
+        """
+        if not len(newshape)==len(self.shape):
+            raise ValueError('Tensor.truncate(newshape): newshape has different rank than self')
+        shape=[slice(0,newshape[n],1) if newshape[n]!=None else slice(0,self.shape[n],1) for n in range(len(newshape))]
+        return self[shape]
     @staticmethod
     def directSum(A,B):
         if len(A.shape)!=2:
@@ -216,8 +206,7 @@ class Tensor(np.ndarray,TensorBase):
         [l1,l2,d]=tensor.shape
         if direction in (1,'l','left'):
             temp=tensor.merge([0,2],[1])
-            temp1=np.reshape(np.transpose(tensor,(0,2,1)),(d*l1,l2))
-            print(temp-temp1)
+            #temp=np.reshape(np.transpose(tensor,(0,2,1)),(d*l1,l2))
             q,r=temp.qr()
             #fix the phase freedom of the qr
             if fixphase=='r':
@@ -235,11 +224,10 @@ class Tensor(np.ndarray,TensorBase):
             Z=np.linalg.norm(r)        
             r/=Z
             [size1,size2]=q.shape
-            out=np.transpose(np.reshape(q,(l1,d,size2)),(1,2,0))
+            out=np.transpose(np.reshape(q,(l1,d,size2)),(0,2,1))
         elif direction in (-1,'r','right'):
             temp=np.conj(tensor.merge([1,2],[0]))
-            #temp=np.conjugate(np.transpose(np.reshape(tensor,(l1,l2*d)),(1,0)))
-
+            #temp1=np.conjugate(np.transpose(np.reshape(tensor,(l1,l2*d)),(1,0)))
             q,r_=temp.qr()
             #fix the phase freedom of the qr        
             if fixphase=='r':
@@ -260,6 +248,7 @@ class Tensor(np.ndarray,TensorBase):
             #normalize the bond matrix
             Z=np.linalg.norm(r)
             r/=Z
+
         else:
             raise ValueError("unkown value {} for input parameter direction".format(direction))
         return out,r,Z
@@ -301,8 +290,8 @@ class Tensor(np.ndarray,TensorBase):
         assert(direction!=0),'do NOT use direction=0!'
         [l1,l2,d]=tensor.shape
         if direction in (1,'l','left'):
-            temp=tensor.merge([2,0],[1])
-            #temp=np.reshape(np.transpose(tensor,(2,0,1)),(d*l1,l2))
+            temp=tensor.merge([0,2],[1])
+            #temp=np.reshape(np.transpose(tensor,(0,2,1)),(l1*d,l2))
             [u,s,v]=temp.svd(full_matrices=False)
             Z=np.linalg.norm(s)            
             if thresh>1E-16:
@@ -321,7 +310,9 @@ class Tensor(np.ndarray,TensorBase):
     
             s/=np.linalg.norm(s)            
             [size1,size2]=u.shape
-            out=np.transpose(np.reshape(u,(d,l1,size2)),(1,2,0))
+            out=np.transpose(np.reshape(u,(l1,d,size2)),(0,2,1))
+            
+
             return out,s.view(type(tensor)),v,Z
 
         if direction in (-1,'r','right'):
@@ -347,5 +338,5 @@ class Tensor(np.ndarray,TensorBase):
             s/=np.linalg.norm(s)            
             [size1,size2]=v.shape
             out=np.reshape(v,(size1,l2,d))
-        s=s.view(type(tensor))        
+        s=s.view(type(tensor))
         return u,s,out,Z
