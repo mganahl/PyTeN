@@ -970,8 +970,8 @@ class VUMPSengine(Container):
         self._r=(r+herm(r))/2.0            
 
 
-        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0],dtype=self.dtype))
-        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1],dtype=self.dtype))
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0],dtype=self.dtype)
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1],dtype=self.dtype)
                               
         self._lb=mf.initializeLayer(self._A,np.eye(self.mps.D[0],dtype=self.dtype),self._A,self._mpo[0],1)
 
