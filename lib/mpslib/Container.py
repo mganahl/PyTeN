@@ -28,7 +28,7 @@ def generate_unary_deferer(op_func):
 
 def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     """
-    initializer function for numpy.npdaarys
+    initializer to create a list fo tensors of type Tensor
     Parameters:
     ---------------------
     numpy_func:       callable
@@ -39,7 +39,7 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
 
     Returns:
     -------------------------
-    list of np.ndarrays of shape ```shapes```, initialized with numpy_func
+    list of Tensor objects of shape ```shapes```, initialized with numpy_func
     """
     mean=kwargs.get('mean',0.5)
     scale=kwargs.get('scale',0.1)
@@ -59,7 +59,9 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
         
     
 class Container(object):
-
+    """
+    Base class for all tensor networks; implements loading, saving and copying
+    """
     def __init__(self,name=None):
         """
         Base class for holdig all objects
@@ -148,8 +150,7 @@ class Container(object):
         
 class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     _HANDLED_UFUNC_TYPES=(numbers.Number,np.ndarray)
-    _order='C'
-    def __init__(self,tensors=[],shape=(),name=None,Z=1.0):
+    def __init__(self,tensors=[],shape=(),name=None,fromview=False):
         """
         initialize an unnormalized TensorNetwork from a list of tensors
         Parameters
@@ -161,24 +162,36 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                  tensors usually have
         """
         #TODO: add attribute checks for the elements of tensors
-        super(TensorNetwork,self).__init__(name) #initialize the Container base class            
-        if shape:
-            if not np.prod(shape)==len(tensors):
-                raise ValueError('shape={0} incompatible with len(tensors)={1}'.format(shape,len(tensors)))
-            if not isinstance(shape,tuple):
-                raise TypeError('TensorNetwor.__init__(): got wrong type for shape; only tuples are allowed')
-            _shape=shape
+        super(TensorNetwork,self).__init__(name) #initialize the Container base class
+        if isinstance(tensors,np.ndarray):
+            if not fromview:
+                self._tensors=copy.deepcopy(tensors)
+            else:
+                self._tensors=tensors.view()
+            self.Z=np.result_type(*tensors.ravel()).type(1.0)
+            self.tensortype=type(tensors.ravel()[0])
+        elif isinstance(tensors,list):
+            N=len(tensors)
+            if shape!=():
+                if not (np.prod(shape)==N):
+                    raise ValueError('shape={0} incompatible with len(tensors)={1}'.format(shape,N))
+                if not isinstance(shape,tuple):
+                    raise TypeError('TensorNetwor.__init__(): got wrong type for shape; only tuples are allowed')
+                _shape=shape
+            else:
+                _shape=tuple([N])
+            if tensors!=[]:
+                self.tensortype=type(tensors[0])
+            else:
+                self.tensortype=object
+                
+            self._tensors=np.empty(_shape,dtype=self.tensortype)
+            for n in range(len(tensors)):
+                self._tensors.flat[n]=tensors[n].view(Tensor)
+            self.Z=np.result_type(*self._tensors).type(1.0)
         else:
-            _shape=tuple([len(tensors)])
+            raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
 
-        self._tensors=np.empty(_shape,dtype=Tensor)
-        for n in range(len(tensors)):
-            self._tensors.flat[n]=tensors[n].view(Tensor)
-        self.Z=np.result_type(*self._tensors,Z).type(Z)
-        if tensors:
-            self.tensortype=type(tensors[0])
-
-        
     def view(self):
         """
         return a view of self
@@ -187,7 +200,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         Return:   TensorNetwork
         """
         obj=self.__new__(type(self))
-        obj.__init__(tensors=self.tensors,shape=self.shape,name=self.name,Z=self.Z)
+        obj.__init__(tensors=self._tensors,shape=self.shape,name=self.name,fromview=True)
+        print('calling view with ',type(self))
+
         return obj
     
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
@@ -263,9 +278,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     @property
     def tensors(self):
         """
-        return a list (view) of the tensors in TensorNetwork
+        return a flat np.ndarray view of the tensors in TensorNetwork
         """
-        return list(self._tensors.flat)
+        return self._tensors.ravel().view()
 
     
     @classmethod
@@ -285,7 +300,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
         return cls(tensors=initializer(np.random.random_sample,np.prod(shape)*[tensorshapes],*args,**kwargs),
-                   name=name,shape=shape,Z=1.0)
+                   name=name,shape=shape)
 
         
     @classmethod
@@ -306,7 +321,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                         
         """
         return cls(tensors=initializer(np.zeros,np.prod(shape)*[tensorshapes],*args,**kwargs),
-                   name=name,shape=shape,Z=1.0)
+                   name=name,shape=shape)
 
     @classmethod
     def ones(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -326,7 +341,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                         
         """
         return cls(tensors=initializer(np.ones,np.prod(shape)*[tensorshapes],*args,**kwargs),
-                   name=name,shape=shape,Z=1.0)
+                   name=name,shape=shape)
     
     @classmethod
     def empty(cls,shape=(),tensorshapes=(),name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -345,7 +360,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
         return cls(tensors=initializer(np.empty,np.prod(shape)*[tensorshapes],*args,**kwargs),
-                   name=name,shape=shape,Z=1.0)
+                   name=name,shape=shape)
         
 
     def __getitem__(self,n,**kwargs):
@@ -419,7 +434,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                 raise NotImplementedError('TensorNetwork.__array_ufunc__ with argument axis!=None not implemented')
 
         else:
-            return TensorNetwork(tensors=result,shape=self.shape,name=None,Z=self.Z)            
+            return TensorNetwork(tensors=result,shape=self.shape,name=None)            
             
 
 
@@ -521,11 +536,11 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     
         
 class MPS(TensorNetwork):
-    def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
+    def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
-        super(MPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
+        super(MPS,self).__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
         if not Dmax:
             self._D=max(self.D)
         else:
@@ -547,7 +562,8 @@ class MPS(TensorNetwork):
         ----------------------------------------------
         """
         obj= self.__new__(type(self))
-        obj.__init__(tensors=self.tensors,Dmax=self.Dmax,name=self.name,Z=self.Z)
+        obj.__init__(tensors=self._tensors,Dmax=self.Dmax,name=self.name,fromview=True)
+        print('calling view with ',type(self))        
         return obj
         
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
@@ -627,7 +643,7 @@ class MPS(TensorNetwork):
                 raise NotImplementedError('MPS.__array_ufunc__ with argument axis!=None not implemented')
 
         else:
-            obj=MPS(tensors=result,Dmax=self.Dmax,name=None,Z=1.0)
+            obj=MPS(tensors=result,Dmax=self.Dmax,name=None)
             obj.mat=matresult
             return obj
 
@@ -679,7 +695,7 @@ class MPS(TensorNetwork):
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
 
-        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
 
     @classmethod
     def zeros(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -690,7 +706,7 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
         
     @classmethod
     def ones(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -701,7 +717,7 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
         
     @classmethod
     def empty(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -712,7 +728,7 @@ class MPS(TensorNetwork):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name,Z=1.0)
+        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
 
 
     def __str__(self):
@@ -945,17 +961,15 @@ class MPS(TensorNetwork):
 
 class FiniteMPS(MPS):
     
-    def __init__(self,tensors=[],Dmax=None,name=None,Z=1.0):
+    def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
         if not np.sum(tensors[0].shape[0])==1:
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[0]'.format(tensors[0].shape))
         if not np.sum(tensors[-1].shape[1])==1:
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[-1]'.format(tensors[-1].shape))
         
-        super(FiniteMPS,self).__init__(tensors=tensors,Dmax=Dmax,name=name,Z=Z)
+        super(FiniteMPS,self).__init__(tensors=tensors,Dmax=Dmax,name=name,fromview=fromview)
         self.position(0)
         self.position(len(self))
-        self.gammas=[]
-        self.lambdas=[]
         
     def diagonalizeCenterMatrix(self):
         """
@@ -1003,7 +1017,7 @@ class FiniteMPS(MPS):
         tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=-other.Z)]+\
             [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax) #out is an unnormalized MPS
 
     def SchmidtSpectrum(self,n):
         """
@@ -1058,7 +1072,7 @@ class FiniteMPS(MPS):
             self.diagonalizeCenterMatrix()
             Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n]],[[-1,1],[1,-2,-3]]))
             Lambdas.append(self.mat.diag())
-        return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=None,Z=1.0)
+        return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=None)
         
             
     def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
@@ -1178,80 +1192,159 @@ class FiniteMPS(MPS):
         if preserve_position=True, the center site is moved back to its original position
         """
         return self.measureMatrixElement(self,op=op,site=site,preserve_position=preserve_position)
-    
-                
-class  CanonizedFiniteMPS(TensorNetwork):
-    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,Z=1.0):
+
+
+class  CanonizedMPS(TensorNetwork):
+    class GammaTensors(object):
+        """
+        helper class to implement calls such as camps.Gamma[site]
+        camps.Gamma[site]=Tensor
+        GammaTensors holds a view of the tensors in CanonizedMPS
+        
+        """
+        def __init__(self,tensors):
+            self._data=tensors
+        def __getitem__(self,site):
+            N=np.prod(self._data.shape)
+            if site>=N:
+                raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
+            return self._data[int(2*site+1)]
+        
+        def __setitem__(self,site,val):
+            N=np.prod(self._data.shape)
+            if site>=N:
+                raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
+            self._data[int(2*site+1)]=val
+
+    class LambdaTensors(object):
+        """
+        helper class to implement calls such as camps.Lambda[site]
+        camps.Lambda[site]=Tensor
+        LambdaTensors holds a view of the tensors in CanonizedMPS
+        """
+        
+        def __init__(self,tensors):
+            self._data=tensors
+        def __getitem__(self,site):
+            N=np.prod(self._data.shape)
+            if site>=N:
+                raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
+            return self._data[int(2*site)]
+        
+        def __setitem__(self,site,val):
+            N=np.prod(self._data.shape)
+            if site>=N:
+                raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
+            self._data[int(2*site)]=val
+
+            
+    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
+
         assert((len(gammas)+1)==len(lambdas))
         tensors=[lambdas[0]]
         for n in range(len(gammas)):
             tensors.append(gammas[n])
             tensors.append(lambdas[n+1])
-        if not np.sum(gammas[0].shape[0])==1:
-            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[0]'.format(gammas[0].shape))
-        if not np.sum(gammas[-1].shape[1])==1:
-            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(gammas[-1].shape))
-
-        super(CanonizedFiniteMPS,self).__init__(tensors=tensors,shape=(),name=name,Z=1.0)
+        super(CanonizedMPS,self).__init__(tensors=tensors,shape=(),name=name)
+        self.Gamma=self.GammaTensors(self._tensors.view())
+        self.Lambda=self.LambdaTensors(self._tensors.view())                        
         if not Dmax:
             self._D=max(self.D)
         else:
             self._D=Dmax
-            
+
+
     @classmethod
-    def fromList(cls,tensors=[],Dmax=None,name=None,Z=1.0):
+    def fromList(cls,tensors,Dmax=None,name=None):
         """
-        no checks are performed to see wheter the prived tensors can be contracted
+        construct a CanonizedMPS from a list containing Gamma and Lambda matrices
+        Parameters:
+        ------------
+        tensors:   list of Tensors
+                   is a list of Tensor objects which alternates between ```Lambda`` and ```Gamma``` tensors,
+                   starting and stopping with a boundary ```Lambda```
+                   ```Lambda``` are in vector-format (i.e. it is the diagonal), ```Gamma``` is a full matrix.
+        Dmax:      int
+                   maximally allowed bond dimension
+        name:      str or None
+                   name of the CanonizedMPS
+        Returns:
+        CanonizeMPS or subclass 
+        
         """
         if not np.sum(tensors[0].shape[0])==1:
             raise ValueError('CanonizedFiniteMPS.fromList(tensors) got a wrong shape {0} for tensors[0]'.format(tensors[0].shape))
         if not np.sum(tensors[-1].shape[0])==1:
             raise ValueError('CanonizedFiniteMPS.fromList(tensors) got a wrong shape {0} for tensors[-1]'.format(tensors[-1].shape))
         assert(len(tensors)%2)
-        return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name,Z=Z)
+        return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name)
+
+    
+    def view(self):
+        """
+        return a view of self
+        Parameters:
+        ----------------------------------------------
+        """
+        #this is a bit of a hack; if I have more time I should fix this
+        obj= self.__new__(type(self))
+        super(CanonizedMPS,obj).__init__(self._tensors,shape=(),name=self.name,fromview=True)
+        obj.Gamma=self.GammaTensors(obj._tensors.view())
+        obj.Lambda=self.LambdaTensors(obj._tensors.view())                        
+        obj._D=self._D
+        return obj
         
     def __len__(self):
+        """
+        return the length of the CanonizedMPS, i.e. the number of physical sites
+
+        Parameters: None
+        --------------
+        Returns:
+        int
+        """
+
         return int((len(self._tensors)-1)/2)
     
-    def Gamma(self,site):
-        if site>=len(self):
-            raise IndexError('CanonizedFiniteMPS.Gammas(index): index {0} out of bounds or CanonizedFiniteMPS of length {1}'.format(bond,len(self)))
-        return super(CanonizedFiniteMPS,self).__getitem__(int(2*site+1))
-                             
-    def Lambda(self,bond):
-        if bond>len(self):
-            raise IndexError('CanonizediniteMPS.Lambda(index): index {0} out of bounds or CanonizedFiniteMPS of length {1}'.format(bond,len(self)))
-        
-        return super(CanonizedFiniteMPS,self).__getitem__(int(2*bond))        
-
     @property
     def D(self):
-        return [self.Gamma(n).shape[0] for n in range(len(self))]+[self.Gamma(len(self)-1).shape[1]]
+        """
+        return a list of bond dimensions for each bond
+        """
+        return [self.Gamma[n].shape[0] for n in range(len(self))]+[self.Gamma[len(self)-1].shape[1]]
     @property
     def d(self):
-        return [self.Gamma(n).shape[2] for n in range(len(self))]
+        """
+        return a list of physicsl dimensions for each site
+        """
+        return [self.Gamma[n].shape[2] for n in range(len(self))]
     
     @property
     def Dmax(self):
         """
-        Dmax is the maximally allowed bond dimension of the MPS
+        Return the maximally allowed bond dimension of the CanonizedMPS
         """
         return self._D
     
     @Dmax.setter
     def Dmax(self,D):
         """
-        set Dmax to D
+        Set the maximally allowed bond dimension of the CanonizedMPS
         """
+    @classmethod
+    def random(*args,**kwargs):
+        raise NotImplementedError('CanonizedMPS.random() only implemented in subclasses')
     
     @classmethod
-    def random(cls,D=[1,2,1],d=[2,2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):    
-        mps=FiniteMPS.random(D=D,d=d,Dmax=Dmax,name=name,initialize=initializer,*args,**kwargs)
-        return mps.canonize()
-        
+    def zeros(*args,**kwargs):
+        raise NotImplementedError('CanonizedMPS.zeros() only implemented in subclasses')        
+    
+    @classmethod
+    def ones(*args,**kwargs):
+        raise NotImplementedError('CanonizedMPS.ones() only implemented in subclasses')                
 
     def __array_ufunc__(self,ufunc,method,*inputs,**kwargs):
         """
@@ -1260,9 +1353,9 @@ class  CanonizedFiniteMPS(TensorNetwork):
         note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
         currently applied elementwise to the tensors in the tensor network
         """
-        #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
-        #__array_ufunc__ method which applies the division to the individual elements of TensorNetwork
         if ufunc==np.true_divide:
+            #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
+            #__array_ufunc__ method which applies the division to the individual elements of TensorNetwork
             return self.__idiv__(inputs[1])
 
 
@@ -1291,40 +1384,96 @@ class  CanonizedFiniteMPS(TensorNetwork):
                 raise NotImplementedError('CanonizedFiniteMPS.__array_ufunc__ with argument axis!=None not implemented')
 
         else:
-            return CanonizedFiniteMPS.fromList(tensors=result,Dmax=self.Dmax,name=None,Z=self.Z)                        
-        
-    def toMPS(self):
-        tensors=[ncon.ncon([self.Lambda(n).diag(),self.Gamma(n)],[[-1,1],[1,-2,-3]]) for n in range(len(self))]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None,Z=self.Z)
+            return self.fromList(tensors=result,Dmax=self.Dmax,name=None)                        
 
         
+class  CanonizedFiniteMPS(CanonizedMPS):
+    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=False):
+        """
+        no checks are performed to see wheter the prived tensors can be contracted
+        """
+        if not np.sum(gammas[0].shape[0])==1:
+            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[0]'.format(gammas[0].shape))
+        if not np.sum(gammas[-1].shape[1])==1:
+            raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(gammas[-1].shape))
+
+        super(CanonizedFiniteMPS,self).__init__(gammas=gammas,lambdas=lambdas,Dmax=None,name=name)
+            
+    
+    @classmethod
+    def random(cls,D=[1,2,1],d=[2,2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):    
+        mps=FiniteMPS.random(D=D,d=d,Dmax=Dmax,name=name,initialize=initializer,*args,**kwargs)
+        return mps.canonize()
+    
+    @classmethod
+    def zeros(*args,**kwargs):
+        raise NotImplementedError
+    
+    @classmethod
+    def ones(*args,**kwargs):
+        raise NotImplementedError
+        
+    @classmethod
+    def empty(*args,**kwargs):
+        raise NotImplementedError
+        
+
+    def toMPS(self):
+        """
+        cast the CanonizedFiniteMPS to a FiniteMPS
+        Returns:
+        ----------------
+        FiniteMPS
+        """
+        tensors=[ncon.ncon([self.Lambda[n].diag(),self.Gamma[n]],[[-1,1],[1,-2,-3]]) for n in range(len(self))]
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None)
+
     
     def canonize(self):
+        """
+        re-canonize the CanonizedFiniteMPS
+        Returns:
+        ---------------
+        CanonizedFiniteMPS
+        """
         return self.toMPS().canonize()
-    
+
+    def iscanonized(self,thresh=1E-10):
+        left=[self.ortho(n,'l')<thresh for n in range(len(self))]
+        right=[self.ortho(n,'r')<thresh for n in range(len(self))]
+        if np.all(left) and np.all(right):
+            return True
+        if not np.all(right):
+            right=[self.ortho(n,'r')>=thresh for n in range(len(self))]
+            print('{1} is not right canonized at site(s) {0} within {2}'.format(np.nonzero(right)[0][:],type(self),thresh))
+
+        if not np.all(left):
+            left=[self.ortho(n,'l')>=thresh for n in range(len(self))]
+            print('{1} is not left canonized at site(s) {0} within {2}'.format(np.nonzero(left)[0][:],type(self),thresh))
+        return False
+        
     def ortho(self,sites,which):
         """
-        checks if the orthonormalization of the mps is OK
-        prints out some stuff
+        checks if the orthonormalization of the CanonizedMPS is OK
         """
         if which in (1,'l','left'):
             if hasattr(sites,'__iter__'):
-                tensors=[ncon.ncon([self.Lambda(site).diag(),self.Gamma(site)],[[-1,1],[1,-2,-3]]) for site in sites]
+                tensors=[ncon.ncon([self.Lambda[site].diag(),self.Gamma[site]],[[-1,1],[1,-2,-3]]) for site in sites]
                 return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[1,-1,2],[1,-2,2]])-\
                                        tensors[n].eye(1,dtype=self.dtype)) for n in range(len(tensors))]
             else:
-                tensor=ncon.ncon([self.Lambda(sites).diag(),self.Gamma(sites)],[[-1,1],[1,-2,-3]])
+                tensor=ncon.ncon([self.Lambda[sites].diag(),self.Gamma[sites]],[[-1,1],[1,-2,-3]])
                 return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[1,-1,2],[1,-2,2]])-\
                                       tensor.eye(1,dtype=self.dtype))
 
         elif which in (-1,'r','right'):
             if hasattr(sites,'__iter__'):
-                tensors=[ncon.ncon([self.Lambda(site+1).diag(),self.Gamma(site)],[[1,-2],[-1,1,-3]]) for site in sites]
+                tensors=[ncon.ncon([self.Lambda[site+1].diag(),self.Gamma[site]],[[1,-2],[-1,1,-3]]) for site in sites]
                 return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[-1,1,2],[-2,1,2]])-\
                                        tensors[n].eye(0,dtype=self.dtype)) for n in range(len(tensors))]
 
             else:
-                tensor=ncon.ncon([self.Lambda(sites+1).diag(),self.Gamma(sites)],[[1,-2],[-1,1,-3]])
+                tensor=ncon.ncon([self.Lambda[sites+1].diag(),self.Gamma[sites]],[[1,-2],[-1,1,-3]])
                 return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[-1,1,2],[-2,1,2]])-\
                                       tensor.eye(0,dtype=self.dtype))
 

@@ -18,15 +18,16 @@ import lib.mpslib.mps as mpslib
 import lib.Lanczos.LanczosEngine as LZ
 import lib.utils.utilities as utils
 import lib.ncon as ncon
+import Container as CO
 from scipy.sparse.linalg import ArpackNoConvergence
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 
-class Container(object):
+class MPSSimulation(CO.Container):
 
-    def __init__(self,mps,mpo,filename,lb=None,rb=None):
+    def __init__(self,mps,mpo,filename=None,lb=None,rb=None):
         """
         Base class for simulation objects;
         mps:      MPS object
@@ -44,33 +45,34 @@ class Container(object):
                   rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
                   if None, obc are assumed, and rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
-        self._filename=filename        
-        self._mps=mps
-        self._mpo=mpo
+        super(MPSSimulation,self).__init__(name=filename)
+        self.mps=mps
+        self.mpo=mpo
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
         
-        #TODO: make checks for verbose
-        if (np.all(lb)!=None) and (np.all(rb)!=None):
-            assert(mps[0].shape[0]==lb.shape[0])
-            assert(mps[-1].shape[1]==rb.shape[0])
-            assert(mpo[0].shape[0]==lb.shape[2])
-            assert(mpo[-1].shape[1]==rb.shape[2])
-            #if not np.issubdtype(lb.dtype.type,self.dtype):
-            #    raise TypeError('Container.__init__: lb.dtype={0} is not a subdtype of self.dtype={1}'.format(lb.dtype.type,self.dtype))
-            #if not np.issubdtype(rb.dtype,self.dtype):
-            #    raise TypeError('Container.__init__: rb.dtype={0} is not a subdtype of self.dtype={1}'.format(rb.dtype,self.dtype))
-            self._lb=lb
-            self._rb=rb
+
+        if (np.all(lb!=None)) and (np.all(rb!=None)):
+            if not np.sum(mps[0].shape[0])==np.sum(lb.shape[0]):
+                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): shape of lb is incompatible with the shape of mps[0]')
+            if not np.sum(mps[-1].shape[1])==np.sum(rb.shape[0]):
+                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): shape of rb is incompatible with the shape of mps[-1]')
+            if lb.shape[0]!=lb.shape[1]:
+                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): lb has to be square')
+            if rb.shape[0]!=rb.shape[1]:
+                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): rb has to be square')
+
+            self.lb=lb
+            self.rb=rb
         else:
-            self._lb=np.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
-            self._rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
+            self.lb=self.mps.tensortype.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
+            self.rb=self.mps.tensortype.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
         
     def __len__(self):
         """
         return the length of the MPS/MPO
         """
-        return len(self._mps)
+        return len(self.mps)
     
     @property
     def dtype(self):
@@ -79,68 +81,8 @@ class Container(object):
         type is obtained from applying np.result_type 
         to the mps and mpo objects
         """
-        return np.result_type(self.mps.dtype,self.mpo.dtype).type        
+        return np.result_type(self.mps.dtype,self.mpo.dtype)
         
-    def save(self,filename):
-        """
-        dumps a simulation into a pickle file named "filename"
-        Parameters:
-        -----------------------------------
-        filename: str
-                  the filename of the file
-        """
-        with open(filename+'.pickle', 'wb') as f:
-            pickle.dump(self,f)
-
-            
-    @classmethod
-    def read(self,filename):
-        """
-        reads a simulation from a pickle file "filename".pickle
-        and returns a container object
-        Parameters:
-        -----------------------------------
-        filename: str
-                  the filename of the object to be loaded
-        """
-        with open(filename, 'rb') as f:
-            out=pickle.load(f)
-        return out
-
-    
-    def load(self,filename):
-        """
-        Container.load(filename):
-        unpickles a Container object from a file "filename".pickle
-        and stores the result in self
-        """
-        with open(filename, 'rb') as f:
-            cls=pickle.load(f)
-        #delete all attributes of self which are not present in cls
-        todelete=[attr for attr in vars(self) if not hasattr(cls,attr)]
-        for attr in todelete:
-            delattr(self,attr)
-            
-        for attr in cls.__dict__.keys():
-            setattr(self,attr,getattr(cls,attr))
-
-            
-    @property
-    def mps(self):
-        """
-        Container.mps:
-        return the underlying MPS object
-        """
-        return self._mps
-
-    @property
-    def mpo(self):
-        """
-        Container.mps:
-        return the underlying MPS object
-        """
-        return self._mpo
-
     
     def measureLocal(self,operators):
         """
