@@ -970,8 +970,8 @@ class VUMPSengine(Container):
         self._r=(r+herm(r))/2.0            
 
 
-        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0],dtype=self.dtype)
-        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1],dtype=self.dtype)
+        leftn=np.linalg.norm(np.tensordot(self._A,np.conj(self._A),([0,2],[0,2]))-np.eye(self.mps.D[0],dtype=self.dtype))
+        rightn=np.linalg.norm(np.tensordot(self._B,np.conj(self._B),([1,2],[1,2]))-np.eye(self.mps.D[-1],dtype=self.dtype))
                               
         self._lb=mf.initializeLayer(self._A,np.eye(self.mps.D[0],dtype=self.dtype),self._A,self._mpo[0],1)
 
@@ -984,8 +984,8 @@ class VUMPSengine(Container):
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0],dtype=self.dtype)
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1],dtype=self.dtype)
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0],dtype=self.dtype))
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1],dtype=self.dtype))
         
         self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
                                            maxiteration=Nmaxlgmres,direction=1)

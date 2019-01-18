@@ -5,7 +5,7 @@
 
 import sys,os
 import unittest
-import lib.mpslib.Container as CO
+import lib.mpslib.TensorNetwork as TN
 import lib.mpslib.mpsfunctions as mf
 import copy
 import lib.mpslib.Tensor as tnsr
@@ -16,15 +16,15 @@ class TestTensorNetwork(unittest.TestCase):
     def setUp(self):
         self.shape=tuple(np.random.randint(1,4,3))
         self.tshape=tuple(np.random.randint(3,4,3))        
-        self.TN=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
+        self.TN=TN.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
     def testTypePreservation(self):
         for n,x in np.ndenumerate(self.TN):
             self.assertTrue(type(self.TN[n])==tnsr.Tensor)
     def testInit(self):
-        tn1=CO.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
-        tn2=CO.TensorNetwork.ones(shape=self.shape,tensorshapes=self.tshape)
-        tn3=CO.TensorNetwork.zeros(shape=self.shape,tensorshapes=self.tshape)
-        tn4=CO.TensorNetwork.empty(shape=self.shape,tensorshapes=self.tshape)
+        tn1=TN.TensorNetwork.random(shape=self.shape,tensorshapes=self.tshape)
+        tn2=TN.TensorNetwork.ones(shape=self.shape,tensorshapes=self.tshape)
+        tn3=TN.TensorNetwork.zeros(shape=self.shape,tensorshapes=self.tshape)
+        tn4=TN.TensorNetwork.empty(shape=self.shape,tensorshapes=self.tshape)
         
         self.assertTrue(np.all(tn2==1))
         self.assertTrue(np.all(tn3==0))
@@ -82,7 +82,7 @@ class TestMPS(TestTensorNetwork):
         N=random.randint(10,20)
         self.D=np.random.randint(1,10,N+1)
         self.d=[random.randint(2,4)]*N
-        self.TN=CO.MPS.random(D=self.D,d=self.d)
+        self.TN=TN.MPS.random(D=self.D,d=self.d)
         
         
     def testTypePreservation(self):
@@ -93,9 +93,9 @@ class TestMPS(TestTensorNetwork):
         self.assertTrue(type(self.TN.mat)==tnsr.Tensor)
 
     def testInit(self):
-        tn1=CO.MPS.random(D=self.D,d=self.d)
-        tn2=CO.MPS.ones(D=self.D,d=self.d)
-        tn3=CO.MPS.empty(D=self.D,d=self.d)
+        tn1=TN.MPS.random(D=self.D,d=self.d)
+        tn2=TN.MPS.ones(D=self.D,d=self.d)
+        tn3=TN.MPS.empty(D=self.D,d=self.d)
 
 
 
@@ -104,7 +104,7 @@ class TestFiniteMPS(TestMPS):
         N=random.randint(10,20)
         self.D=[1]+list(np.random.randint(1,10,N-1))+[1]
         self.d=[random.randint(2,4)]*N
-        self.TN=CO.FiniteMPS.random(D=self.D,d=self.d)
+        self.TN=TN.FiniteMPS.random(D=self.D,d=self.d)
 
     def testTypePreservation(self):
         super(TestFiniteMPS,self).testTypePreservation()
@@ -112,9 +112,9 @@ class TestFiniteMPS(TestMPS):
 
         
     def testInit(self):
-        tn1=CO.FiniteMPS.random(D=self.D,d=self.d)
-        tn2=CO.FiniteMPS.ones(D=self.D,d=self.d)
-        tn3=CO.FiniteMPS.empty(D=self.D,d=self.d)
+        tn1=TN.FiniteMPS.random(D=self.D,d=self.d)
+        tn2=TN.FiniteMPS.ones(D=self.D,d=self.d)
+        tn3=TN.FiniteMPS.empty(D=self.D,d=self.d)
 
 
 class TestCanonizedFiniteMPS(TestTensorNetwork):
@@ -122,7 +122,7 @@ class TestCanonizedFiniteMPS(TestTensorNetwork):
         N=random.randint(10,20)
         self.D=[1]+list(np.random.randint(1,10,N-1))+[1]
         self.d=[random.randint(2,4)]*N
-        self.TN=CO.FiniteMPS.random(D=self.D,d=self.d).canonize()
+        self.TN=TN.FiniteMPS.random(D=self.D,d=self.d).canonize()
     def testInit(self):
         pass
 

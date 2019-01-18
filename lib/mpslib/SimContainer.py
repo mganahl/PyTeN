@@ -18,23 +18,23 @@ import lib.mpslib.mps as mpslib
 import lib.Lanczos.LanczosEngine as LZ
 import lib.utils.utilities as utils
 import lib.ncon as ncon
-import Container as CO
+from lib.mpslib.Container import Container
 from scipy.sparse.linalg import ArpackNoConvergence
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 
-class MPSSimulation(CO.Container):
+class MPSSimulation(Container):
 
-    def __init__(self,mps,mpo,filename=None,lb=None,rb=None):
+    def __init__(self,mps,mpo,name=None,lb=None,rb=None):
         """
         Base class for simulation objects;
         mps:      MPS object
                   the initial mps
         mpo:      MPO object
                   Hamiltonian in MPO format
-        filename: str
+        name: str
                   the name of the simulation
         lb:       np.ndarray of shape (D,D,M), or None
                   the left environment; 
@@ -45,29 +45,31 @@ class MPSSimulation(CO.Container):
                   rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
                   if None, obc are assumed, and rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
-        super(MPSSimulation,self).__init__(name=filename)
+        super(MPSSimulation,self).__init__(name=name)
         self.mps=mps
         self.mpo=mpo
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
-        
+        self.L=[None]*(len(self)+1)
+        self.R=[None]*(len(self)+1)
 
         if (np.all(lb!=None)) and (np.all(rb!=None)):
             if not np.sum(mps[0].shape[0])==np.sum(lb.shape[0]):
-                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): shape of lb is incompatible with the shape of mps[0]')
+                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): shape of lb is incompatible with the shape of mps[0]')
             if not np.sum(mps[-1].shape[1])==np.sum(rb.shape[0]):
-                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): shape of rb is incompatible with the shape of mps[-1]')
+                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): shape of rb is incompatible with the shape of mps[-1]')
             if lb.shape[0]!=lb.shape[1]:
-                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): lb has to be square')
+                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): lb has to be square')
             if rb.shape[0]!=rb.shape[1]:
-                raise ValueError('MPSSimulation.__init__(mps,mpo,filename,lb,rb): rb has to be square')
+                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): rb has to be square')
 
             self.lb=lb
             self.rb=rb
         else:
             self.lb=self.mps.tensortype.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
             self.rb=self.mps.tensortype.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
-        
+        self.computeL()
+        self.computeR()        
     def __len__(self):
         """
         return the length of the MPS/MPO
@@ -102,9 +104,8 @@ class MPSSimulation(CO.Container):
         """
         return self.mps.measureList(operators)
     
-    def truncateMPS(self,truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
+    def truncate(self,*args,**kwargs):
         """
-        Container.truncateMPS(truncation_threshold=1E-10,D=None,tol=1E-10,ncv=20,pinv=1E-200):
         truncates the mps. After truncation, the mps is in right-orthogonal form, 
         i.e. the mps.pos attribute is mps.pos=0. left and right Hamiltonian environments
         are recalculated as well using the truncated msp, with self._L (left environment)
@@ -131,20 +132,56 @@ class MPSSimulation(CO.Container):
 
         returns: self
         """
-        self._mps.truncate(schmidt_thresh=truncation_threshold,D=D,nmaxit=100000,tol=tol,ncv=ncv,pinv=pinv,r_thresh=1E-14)
-        self._mps.position(0)
-        self._L=[]*len(self._mps)
-        self._L.insert(0,self._lb)
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,self._rb)
+        self.mps.truncate(*args,**kwargs)
+        self.mps.position(0)
+        self.L=[]*len(self.mps)
+        self.L.insert(0,self.lb)
+        self.R=mf.getR(self.mps.tensors,self.mpo,self.rb)
+        self.R.insert(0,self.rb)
         return self
+
+    @staticmethod
+    def addLayer(B,mps,mpo,conjmps,direction):
+        """
+        adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
+        environments
+        Parameters:
+        ---------------------------
+        B: a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
+        mps: (D1,D2,d) shaped mps tensor
+        mpo: a tensor of dimension (M1,M2,d,d')
+        conjmps: (D1',D2',d') shaped mps tensor on the conjugated side
+        direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
+        returns: E' of shape (D2,D2',M2) for direction>0
+        E' of shape (D1,D1',M1) for direction<0
+        """
         
+        if direction in ('l','left',1):
+            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
+        if direction in ('r','right',-1):
+            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
+        
+    def computeL(self):
+        assert(len(self.L)==(len(self)+1))
+        self.L=[None]*(len(self)+1)
+        self.L[0]=self.lb
+        for n in range(self.mps.pos):
+            self.L[n+1]=self.addLayer(B=self.L[n],mps=self.mps[n],mpo=self.mpo[n],conjmps=self.mps[n],direction=1)
+            #self.L[n+1]=ncon.ncon([self.L[n],self.mps[n],self.mpo[n],np.conj(self.mps[n])],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
+
+    def computeR(self):
+        assert(len(self.R)==(len(self)+1))
+        self.R=[None]*(len(self)+1)        
+        self.R[0]=self.rb
+        for n in range(len(self)-1,self.mps.pos-1,-1):
+            self.R[len(self.mps)-n]=self.addLayer(B=self.R[len(self.mps)-1-n],mps=self.mps[n],mpo=self.mpo[n],conjmps=self.mps[n],direction=-1)            
+            #self.R[len(self.mps)-n]=ncon.ncon([self.R[len(self.mps)-1-n],self.mps[n],self.mpo[n],np.conj(self.mps[n])],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
+
+    
     def position(self,n):
 
         """
-
-        Container.position(n)
-        shifts the center position of Container.mps to bond n, updates left and right environments
+        shifts the center position of to bond n, updates left and right environments
         accordingly
         Parameters:
         ------------------------------------
@@ -154,20 +191,30 @@ class MPSSimulation(CO.Container):
         returns: self
         """
         if n>len(self.mps):
-            raise IndexError("Container.position(n): n>len(mps)")
+            raise IndexError("MPSSimulation.position(n): n>len(mps)")
         if n<0:
-            raise IndexError("Container.position(n): n<0")
+            raise IndexError("MPSSimulation.position(n): n<0")
         
         if n>=self.mps.pos:
             pos=self.mps.pos            
             self.mps.position(n)
             for m in range(pos,n):
-                self._L[m+1]=mf.addLayer(self._L[m],self._mps[m],self._mpo[m],self._mps[m],1)
+                self.L[m+1]=self.addLayer(self.L[m],self.mps[m],self.mpo[m],self.mps[m],1)
+            for m in range(n+1,len(self.L)):
+                self.L[m]=None
+            for m in range(n-1,-1,-1):
+                self.R[len(self.mps)-m]=None
+                
         if n<self.mps.pos:
             pos=self.mps.pos            
             self.mps.position(n)
             for m in range(pos-1,n-1,-1):
-                self._R[len(self.mps)-m]=mf.addLayer(self._R[len(self.mps)-1-m],self._mps[m],self._mpo[m],self._mps[m],-1)                
+                self.R[len(self.mps)-m]=mf.addLayer(self.R[len(self.mps)-1-m],self.mps[m],self.mpo[m],self.mps[m],-1)
+                
+            for m in range(n-1,-1,-1):
+                self.R[len(self.mps)-m]=None
+            for m in range(n+1,len(self.L)):
+                self.L[m]=None
                 
         return self
         
@@ -185,29 +232,26 @@ class MPSSimulation(CO.Container):
 
         returns: self
         """
-        self._mps.position(0)
-        self._L=[]*len(self._mps)        
-        self._L.insert(0,self._lb)
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,self._rb)
+        self.mps.position(0)
+        self.computeL()
+        self.computeR()
         return self
         
     
-class DMRGengine(Container):
+class DMRGengine(MPSSimulation):
     """
     DMRGengine
     simulation container for density matrix renormalization group optimization
 
     """
-    #left/rightboundary are boundary mpo expressions; pass lb=rb=np.ones((1,1,1)) for obc simulation
-    def __init__(self,mps,mpo,filename='DMRG',lb=None,rb=None):
+    def __init__(self,mps,mpo,name='DMRG',lb=None,rb=None):
         """
         initialize an MPS object
         mps:      MPS object
                   the initial mps
         mpo:      MPO object
                   Hamiltonian in MPO format
-        filename: str
+        name: str
                   the name of the simulation
         lb,rb:    None or np.ndarray
                   left and right environment boundary conditions
@@ -215,17 +259,11 @@ class DMRGengine(Container):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-        super(DMRGengine,self).__init__(mps,mpo,filename,lb,rb)
-        self._mps.position(0)
-        self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-        self._L.insert(0,np.copy(self._lb))
-        self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-        self._R.insert(0,np.copy(self._rb))
+        super(DMRGengine,self).__init__(mps,mpo,name,lb,rb)
 
-        
     def optimize(self,n,tol=1E-6,ncv=40,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,verbose=0):
         if solver=='LOBPCG':
-            e,opt=mf.lobpcg(self._L[n],self._mpo[n],self._R[len(self._mps)-1-n],self._mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
+            e,opt=mf.lobpcg(self.L[n],self.mpo[n],self.R[len(self._mps)-1-n],self.mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
         elif solver=='AR':
             e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[len(self._mps)-1-n],self._mps.tensor(n,clear=True),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
         elif solver=='LAN':
@@ -926,8 +964,8 @@ class VUMPSengine(Container):
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0],dtype=self.dtype)
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1],dtype=self.dtype)
+        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self.mps.D[0],dtype=self.dtype))
+        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self.mps.D[-1],dtype=self.dtype))
         
         self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
                                            maxiteration=Nmaxlgmres,direction=1)
