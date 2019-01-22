@@ -29,21 +29,22 @@ class MPSSimulation(Container):
 
     def __init__(self,mps,mpo,name=None,lb=None,rb=None):
         """
-        Base class for simulation objects;
+        Base class for simulation objects; upon initialization, creates all 
+        left and right envvironment blocks
         mps:      MPS object
                   the initial mps
         mpo:      MPO object
                   Hamiltonian in MPO format
         name: str
                   the name of the simulation
-        lb:       np.ndarray of shape (D,D,M), or None
+        lb:       Tensor of shape (D,D,M), or None
                   the left environment; 
                   lb has to have shape (mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0])
-                  if None, obc are assumed, and lb=np.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]))
-        rb:       np.ndarray of shape (D,D,M), or None
+                  if None, obc are assumed, and lb=ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]))
+        rb:       Tensor of shape (D,D,M), or None
                   the right environment
                   rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
-                  if None, obc are assumed, and rb=np.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
+                  if None, obc are assumed, and rb=ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
         super(MPSSimulation,self).__init__(name=name)
         self.mps=mps
@@ -69,17 +70,19 @@ class MPSSimulation(Container):
             self.lb=self.mps.tensortype.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
             self.rb=self.mps.tensortype.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
         self.computeL()
-        self.computeR()        
+        self.computeR()
+        
     def __len__(self):
         """
-        return the length of the MPS/MPO
+        return the length of the MPS 
         """
         return len(self.mps)
     
     @property
     def dtype(self):
         """
-        return the data-type of the Container
+        return the data-type of the MPSSimulation
+
         type is obtained from applying np.result_type 
         to the mps and mpo objects
         """
@@ -88,7 +91,6 @@ class MPSSimulation(Container):
     
     def measureLocal(self,operators):
         """
-        Container.measure(operators):
         measures the expectation values of a list of local operators;
         len(operators) has to be the same as len(self.mps) 
         Parameters:
@@ -132,6 +134,7 @@ class MPSSimulation(Container):
 
         returns: self
         """
+        raise NotImplementedError('')
         self.mps.truncate(*args,**kwargs)
         self.mps.position(0)
         self.L=[]*len(self.mps)
@@ -147,13 +150,21 @@ class MPSSimulation(Container):
         environments
         Parameters:
         ---------------------------
-        B: a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
-        mps: (D1,D2,d) shaped mps tensor
-        mpo: a tensor of dimension (M1,M2,d,d')
-        conjmps: (D1',D2',d') shaped mps tensor on the conjugated side
-        direction (int): if >0 add a layer to the right of "E", if <0 add a layer to the left of "E"
-        returns: E' of shape (D2,D2',M2) for direction>0
-        E' of shape (D1,D1',M1) for direction<0
+        B:        Tensor object  
+                  a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
+        mps:      Tensor object of shape =(Dl,Dr,d)
+        mpo:      Tensor object of shape = (Ml,Mr,d,d')
+        conjmps: Tensor object of shape =(Dl',Dr',d')
+                 the mps tensor on the conjugated side
+                 this tensor will be complex conjugated inside the routine; usually, the user will like to pass 
+                 the unconjugated tensor
+        direction: int or str
+                  direction in (1,'l','left'): add a layer to the right of ```B```
+                  direction in (-1,'r','right'): add a layer to the left of ```B```
+        Return:
+        -----------------
+        Tensor of shape (Dr,Dr',Mr) for direction in (1,'l','left')
+        Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
         
         if direction in ('l','left',1):
@@ -162,6 +173,10 @@ class MPSSimulation(Container):
             return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
         
     def computeL(self):
+        """
+        compute all left environment blocks
+        up to self.mps.position; all blocks for site > self.mps.position are set to None
+        """
         assert(len(self.L)==(len(self)+1))
         self.L=[None]*(len(self)+1)
         self.L[0]=self.lb
@@ -170,6 +185,10 @@ class MPSSimulation(Container):
             #self.L[n+1]=ncon.ncon([self.L[n],self.mps[n],self.mpo[n],np.conj(self.mps[n])],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
 
     def computeR(self):
+        """
+        compute all right environment blocks
+        up to self.mps.position; all blocks for site < self.mps.position are set to None
+        """
         assert(len(self.R)==(len(self)+1))
         self.R=[None]*(len(self)+1)        
         self.R[0]=self.rb
@@ -181,8 +200,10 @@ class MPSSimulation(Container):
     def position(self,n):
 
         """
-        shifts the center position of to bond n, updates left and right environments
-        accordingly
+        shifts the center position of mps to bond n, and updates left and right environments
+        accordingly; Left blocks at site > n are None, and right blocks at site < n are None
+        Note that the index convention for R blocks is reversed, i.e. self.R[0] is self.rb, 
+        self.R[1] is the second right most R-block, a.s.o
         Parameters:
         ------------------------------------
         n: int
@@ -220,17 +241,7 @@ class MPSSimulation(Container):
         
     def update(self):
         """
-        Container.update():
-        make the Container internally consistent after e.g. changing the mps object.
-        The mps.pos attribute after update() is mps.pos=0 (i.e. mps.position(0) is called)
-        The left and right Hamiltonian bulk-environments are recalculated using self._mps, 
-        with self._L (left environments) being a list of length len(mps)+1 with the only non-empty 
-        element being the first one: self._L[0]=self._lb, where self._lb is unchanged. 
-        self._lb is the left bundary condition of the simulation
-        self._R is a list of length len(mps)+1 holding all right-environment for all bipartitions
-        of the chain (again with self._R[0]=self._rb unchanged).
-
-        returns: self
+        shift center site of the MPSSimulation to 0 and recalculate all left and right blocks
         """
         self.mps.position(0)
         self.computeL()
@@ -259,11 +270,12 @@ class DMRGengine(MPSSimulation):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-        super(DMRGengine,self).__init__(mps,mpo,name,lb,rb)
+        super(DMRGengine,self).__init__(mps=mps,mpo=mpo,name=name,lb=lb,rb=rb)
 
     def optimize(self,n,tol=1E-6,ncv=40,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,verbose=0):
         if solver=='LOBPCG':
-            e,opt=mf.lobpcg(self.L[n],self.mpo[n],self.R[len(self._mps)-1-n],self.mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
+            #e,opt=mf.lobpcg(self.L[n],self.mpo[n],self.R[len(self._mps)-1-n],self.mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()
+            raise NotImplementedError
         elif solver=='AR':
             e,opt=mf.eigsh(self._L[n],self._mpo[n],self._R[len(self._mps)-1-n],self._mps.tensor(n,clear=True),tol,numvecs,ncv)#mps._mat set to 11 during call of __tensor__()
         elif solver=='LAN':
@@ -277,14 +289,11 @@ class DMRGengine(MPSSimulation):
             stdout.flush()
         if verbose>1:
             print("")
-            
             #print ('at iteration {2} optimization at site {0} returned E={1}'.format(n,e,it))
         return e,opt
-    
-                
-    def simulate(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
+
+    def runOneSite(self,Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         """
-        DMRGengine.simulate(Nmax=4,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5):
         performs a single site DMRG optimization
         Nmax: maximum number of sweeps
         Econv: desired convergence of energy

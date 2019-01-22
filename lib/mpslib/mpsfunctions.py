@@ -936,32 +936,48 @@ def lanczosbond(L,mpo,mps,R,mat0,position,Ndiag=10,nmax=500,numeig=1,delta=1E-10
             vs.append(np.reshape(v[n],(chi1p,chi2p)))
         return es,vs
 
+#L is a chi,chi,D tensor, where D is the MPO bond dimension
+#mps is a single mps matrix
+#mpo is a single mpo matrix
+#the order fo the returned vector is correct, i.e. no fortran like ordering
+# def HAproductSingleSite(L,mpo,R,vec):
+#     #print 'calling HAproduct'
+#     chi1=np.shape(L)[0]
+#     chi2=np.shape(R)[0]
+#     d=np.shape(mpo)[2]
+#     mps=np.reshape(vec,(chi1,chi2,d))#,order='f')
+#     term1=np.tensordot(L,mps,([0],[0]))
+#     term2=np.tensordot(term1,mpo,([1,3],[0,3]))
+#     term3=np.tensordot(term2,R,([1,2],[0,2]))
+#     return np.reshape(np.transpose(term3,[0,2,1]),chi1*chi2*d)
+
+def contractionHelper(L,mpo,R,mps):
+    return np.reshape(ncon.ncon([L,np.reshape(mps,(L.shape[0],R.shape[0],mpo.shape[2])),mpo,R],[[1,-1,3],[1,4,2],[3,5,-3,2],[4,-2,5]]),mps.shape)
 
 def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
-    
     """
-    calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
-    of the4 effective DMRG hamiltonian as given by L, mpo and R
-    L (np.ndarray of shape (Dl,Dl',d)): left hamiltonian environment
-    R (np.ndarray of shape (Dr,Dr',d)): right hamiltonian environment
-    mpo (np.ndarray of shape (Ml,Mr,d)): MPO
-    mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
+    sparse diagonalization of DMRG local hamiltonian
+    L:    Tensor object of shape (Dl,Dl',Ml)
+    mpo:  Tensor object of shape (Ml,Mr,d,d')
+    L:    Tensor object of shape (Dr,Dr',Mr)
+    mps0: Tensor object of shape (Dl,Dd,d)
     see scipy eigsh documentation for details on the other parameters
     """
-    
-    dtype=np.result_type(L,mpo,R,mps0).type
-    [chi1,chi2,d]=np.shape(mps0)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    dp=np.shape(mpo)[3]
-    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
-    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=1000000,tol=tolerance,v0=np.reshape(mps0,chi1*chi2*d),ncv=numcv)
-    #return [e,np.reshape(v,(chi1p,chi2p,dp))]    
+    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,mps0.dtype)
+    chil=np.sum(L.shape[0])
+    chir=np.sum(R.shape[0])
+    chilp=np.sum(L.shape[1])
+    chirp=np.sum(R.shape[1])
+    d=mpo.shape[2]
+    dp=mpo.shape[3]
+
+    mv=fct.partial(contractionHelper,*[L,mpo,R])
+    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',maxiter=1000000,tol=tolerance,v0=mps0.merge([0,1,2]),ncv=numcv)
+
     if numvecs_returned==1:
         ind=np.nonzero(e==min(e))
-        #return [e,np.reshape(v,(chi1p,chi2p,dp))]
-        return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp))
+        return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chilp,chirp,dp))        
 
     elif numvecs_returned>1:
         if (numvecs_returned>numvecs):
@@ -973,7 +989,7 @@ def eigsh(L,mpo,R,mps0,tolerance=1e-6,numvecs=1,numcv=10,numvecs_returned=1):
         for n in range(numvecs_returned):
             es.append(esorted[n])
             ind=np.nonzero(e==esorted[n])
-            vs.append(np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp)))
+            vs.append(np.reshape(v[:,ind[0][0]],(chilp,chirp,dp)))
         return es,vs
 
 def lobpcg(L,mpo,R,mps0,tolerance=1e-6,numvecs_returned=1):
@@ -987,18 +1003,22 @@ def lobpcg(L,mpo,R,mps0,tolerance=1e-6,numvecs_returned=1):
     mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
     see scipy eigsh documentation for details on the other parameters
     """
-    
-    dtype=np.result_type(L,mpo,R,mps0).type
-    [chi1,chi2,d]=np.shape(mps0)
-    chi1p=np.shape(L)[1]
-    chi2p=np.shape(R)[1]
-    dp=np.shape(mpo)[3]
-    mv=fct.partial(HAproductSingleSite,*[L,mpo,R])
-    LOP=LinearOperator((chi1*chi2*d,chi1*chi2*d),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
-    X=np.random.random_sample((chi1*chi2*d,numvecs_returned)).astype(dtype)
-    X[:,0]=np.reshape(mps0,(chi1*chi2*d))
+    if not isinstance(mps0,tnsr.Tensor):
+        raise TypeError('lobpcg currently only implemented for np.ndarray or derived types')
+    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,mps0.dtype)
+    chil=np.sum(L.shape[0])
+    chir=np.sum(R.shape[0])
+    chilp=np.sum(L.shape[1])
+    chirp=np.sum(R.shape[1])
+    d=mpo.shape[2]
+    dp=mpo.shape[3]
+
+    mv=fct.partial(contractionHelper,*[L,mpo,R])    
+    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,rmatvec=None,matmat=None,dtype=dtype)
+    X=mps0.random((chil*chir*d,numvecs_returned),dtype=dtype)
+    X[:,0]=mps0.merge([0,1,2])
     e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False)
-    #return [e,np.reshape(v,(chi1p,chi2p,dp))]    
+
     if numvecs_returned==1:
         ind=np.nonzero(e==min(e))
         return e[ind[0][0]],np.reshape(v[:,ind[0][0]],(chi1p,chi2p,dp))
