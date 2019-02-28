@@ -2981,17 +2981,18 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
         while True:
             A,s,v,z=prepareTensorSVD(tensor,direction=1,fixphase=False)
             Z=np.linalg.norm(s-sold)
-            if Z<precision:
+            if False:#Z<precision:
                 s/=(np.sum(s)/len(s))
-                assert(np.linalg.norm(s-np.ones(s.shape))<(100*precision))
                 A_=ncon.ncon([C,mps,np.linalg.inv(C)],[[-1,1],[1,2,-3],[2,-2]])
                 F=1.0/np.sqrt(np.sum(np.diag(np.tensordot(A_,np.conj(A_),([0,2],[0,2]))))/A_.shape[1])
+                #print(Z,n,nmax)
                 return ncon.ncon([A,v],[[-1,1,-3],[1,-2]]),C,F,True
             n+=1
             if n>=nmax:
                 s/=(np.sum(s)/len(s))
                 A_=ncon.ncon([C,mps,np.linalg.inv(C)],[[-1,1],[1,2,-3],[2,-2]])
                 F=1.0/np.sqrt(np.sum(np.diag(np.tensordot(A_,np.conj(A_),([0,2],[0,2]))))/A_.shape[1])
+                #print(Z,n,nmax)
                 return tensor,C,F,False            
             C=np.diag(s).dot(v).dot(C)
             C/=np.linalg.norm(C)            
@@ -3001,9 +3002,8 @@ def regaugeSingleLayer(mps,gauge,precision=1E-10,nmax=1000):
         while True:
             u,s,B,z=prepareTensorSVD(tensor,direction=-1,fixphase=False)
             Z=np.linalg.norm(s-sold)
-            if Z<precision:
+            if False:#Z<precision:
                 s/=(np.sum(s)/len(s))
-                assert(np.linalg.norm(s-np.ones(s.shape))<(100*precision))
                 B_=ncon.ncon([np.linalg.inv(C),mps,C],[[-1,1],[1,2,-3],[2,-2]])
                 F=1.0/np.sqrt(np.sum(np.diag(np.tensordot(B_,np.conj(B_),([1,2],[1,2]))))/B_.shape[0])
                 return ncon.ncon([u,B],[[-1,1],[1,-2,-3]]),C,F,True
