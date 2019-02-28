@@ -50,9 +50,6 @@ class LanczosEngine(object):
         verbose: verbosity flag
         """
         dtype=np.result_type(self._matvec(initialstate))
-        Dim=1
-        for d in initialstate.shape:
-            Dim*=d
         #initialization:
         xn=copy.deepcopy(initialstate)
         xn/=np.sqrt(self._dot(xn.conjugate(),xn))

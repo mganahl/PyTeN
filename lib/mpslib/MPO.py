@@ -370,9 +370,6 @@ class XXZ(MPO):
     """    
     def __init__(self,Jz,Jxy,Bz,obc=True,dtype=float):
         self.obc=obc
-        self._Jz=Jz
-        self._Jxy=Jxy
-        self._Bz=Bz
         N=len(Bz)
         if obc==True:
             mpo=[]
@@ -478,14 +475,15 @@ class XXZ(MPO):
                 mpo.append(np.copy(temp))
             super(XXZ,self).__init__(mpo)
 
+            
 class XXZIsing(MPO):
     """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
     def __init__(self,J,w,obc=True):
         self.obc=obc
-        self._J=J
-        self._w=w
+        self.J=J
+        self.w=w
         N=len(w)
         sig_x=np.asarray([[0,1],[1,0]]).astype(complex)
         sig_y=np.asarray([[0,-1j],[1j,0]]).astype(complex)
@@ -496,10 +494,10 @@ class XXZIsing(MPO):
             
             mpo=[]
             temp=Tensor.zeros((1,5,2,2),complex)
-            temp[0,0,:,:]=self._w[0]*sig_z
-            temp[0,1,:,:]=self._J[0]*sig_x
-            temp[0,2,:,:]=self._J[0]*sig_y
-            temp[0,3,:,:]=self._J[0]*sig_z                
+            temp[0,0,:,:]=self.w[0]*sig_z
+            temp[0,1,:,:]=self.J[0]*sig_x
+            temp[0,2,:,:]=self.J[0]*sig_y
+            temp[0,3,:,:]=self.J[0]*sig_z                
             temp[0,4,:,:]=np.eye(2)
             
             mpo.append(np.copy(temp))
@@ -509,10 +507,10 @@ class XXZIsing(MPO):
                 temp[1,0,:,:]=sig_x
                 temp[2,0,:,:]=sig_y
                 temp[3,0,:,:]=sig_z                
-                temp[4,0,:,:]=self._w[n]*sig_z
-                temp[4,1,:,:]=self._J[n]*sig_x
-                temp[4,2,:,:]=self._J[n]*sig_y
-                temp[4,3,:,:]=self._J[n]*sig_z                
+                temp[4,0,:,:]=self.w[n]*sig_z
+                temp[4,1,:,:]=self.J[n]*sig_x
+                temp[4,2,:,:]=self.J[n]*sig_y
+                temp[4,3,:,:]=self.J[n]*sig_z                
                 temp[4,4,:,:]=np.eye(2)
                 mpo.append(np.copy(temp))
 
@@ -521,7 +519,7 @@ class XXZIsing(MPO):
             temp[1,0,:,:]=sig_x
             temp[2,0,:,:]=sig_y
             temp[3,0,:,:]=sig_z                
-            temp[4,0,:,:]=self._w[-1]*sig_z
+            temp[4,0,:,:]=self.w[-1]*sig_z
             mpo.append(np.copy(temp))
             super(XXZIsing,self).__init__(mpo)
             
@@ -533,7 +531,7 @@ class XXZflipped(MPO):
     
     def __init__(self,Delta,J,obc=True,dtype=float):
         self._Delta=Delta
-        self._J=J
+        self.J=J
         self.obc=obc
         mpo=[]
         if obc==True:
@@ -552,7 +550,7 @@ class XXZflipped(MPO):
             #11
             temp[0,4,0,0]=1.0
             temp[0,4,1,1]=1.0
-            mpo.append(np.copy(temp))
+            mpo.append(temp)
             for site in range(1,N-1):
                 temp=Tensor.zeros((5,5,2,2)).astype(dtype)
                 #11
@@ -583,7 +581,7 @@ class XXZflipped(MPO):
                 #11
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
-                mpo.append(np.copy(temp))
+                mpo.append(temp)
             
             temp=Tensor.zeros((5,1,2,2)).astype(dtype)
             #11
@@ -600,7 +598,7 @@ class XXZflipped(MPO):
             temp[3,0,1,1]=+1.0
 
 
-            mpo.append(np.copy(temp))
+            mpo.append(temp)
             super(XXZflipped,self).__init__(mpo)
         if obc==False:
             N=len(Delta)
@@ -633,7 +631,7 @@ class XXZflipped(MPO):
                 #11
                 temp[4,4,0,0]=1.0
                 temp[4,4,1,1]=1.0
-                mpo.append(np.copy(temp))
+                mpo.append(temp)
             super(XXZflipped,self).__init__(mpo)
 
 

@@ -272,6 +272,8 @@ class DMRGengine(MPSSimulation):
         """
         super(DMRGengine,self).__init__(mps=mps,mpo=mpo,name=name,lb=lb,rb=rb)
 
+        
+    ###################################### Stopped working here!    #################################
     def optimize(self,n,tol=1E-6,ncv=40,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,verbose=0):
         if solver=='LOBPCG':
             #e,opt=mf.lobpcg(self.L[n],self.mpo[n],self.R[len(self._mps)-1-n],self.mps.tensor(n,clear=True),tol)#mps._mat set to 11 during call of __tensor__()

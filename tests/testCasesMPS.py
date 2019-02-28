@@ -6,7 +6,6 @@
 import sys,os
 import unittest
 import lib.mpslib.TensorNetwork as TN
-import lib.mpslib.mpsfunctions as mf
 import copy
 import lib.mpslib.Tensor as tnsr
 import numpy as np
