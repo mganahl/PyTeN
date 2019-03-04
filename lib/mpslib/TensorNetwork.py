@@ -62,7 +62,7 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
 
 class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     _HANDLED_UFUNC_TYPES=(numbers.Number,np.ndarray)
-    def __init__(self,tensors=[],shape=(),name=None,fromview=False):
+    def __init__(self,tensors=[],shape=(),name=None,fromview=True):
         """
         initialize an unnormalized TensorNetwork from a list of tensors
         Parameters
@@ -72,6 +72,8 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                  a list containing the tensors of the network
                  the entries in tensors should have certain properties that
                  tensors usually have
+        shape:   tuple
+                 the shape of the tensor networl
         """
         #TODO: add attribute checks for the elements of tensors
         super(TensorNetwork,self).__init__(name) #initialize the Container base class
@@ -104,18 +106,17 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         else:
             raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
 
-    def view(self):
-        """
-        return a view of self
-        Parameters:
-        ----------------------------------------------
-        Return:   TensorNetwork
-        """
-        obj=self.__new__(type(self))
-        obj.__init__(tensors=self._tensors,shape=self.shape,name=self.name,fromview=True)
-        print('calling view with ',type(self))
-
-        return obj
+    # def view(self):
+    #     """
+    #     return a view of self
+    #     Parameters:
+    #     ----------------------------------------------
+    #     Return:   TensorNetwork
+    #     """
+        
+    #     obj=self.__new__(type(self))
+    #     obj.__init__(tensors=self._tensors,shape=self.shape,name=self.name,fromview=True)
+    #     return obj
     
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
@@ -448,9 +449,116 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
     
         
 class MPS(TensorNetwork):
+
+    @staticmethod
+    def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
+        """
+        prepares and truncates an mps tensor using svd
+        Parameters:
+        ---------------------
+        tensor: np.ndarray of shape(D1,D2,d)
+                an mps tensor
+        direction: int
+                   if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
+        thresh: float
+                cutoff of schmidt-value truncation
+        r_thresh: float
+                  only used when svd throws an exception.
+        D:        int or None
+                  the maximum bond-dimension to keep (hard cutoff); if None, no truncation is applied
+    
+        Returns:
+        ----------------------------
+        direction>0: out,s,v,Z
+                     out: a left isometric tensor of dimension (D1,D,d)
+                     s  : the singular values of length D
+                     v  : a right isometric matrix of dimension (D,D2)
+                     Z  : the norm of tensor, i.e. tensor"="out.dot(s).dot(v)*Z
+        direction<0: u,s,out,Z
+                     u  : a left isometric matrix of dimension (D1,D)
+                     s  : the singular values of length D
+                     out: a right isometric tensor of dimension (D,D2,d)
+                     Z  : the norm of tensor, i.e. tensor"="u.dot(s).dot(out)*Z
+    
+        """
+
+        assert(direction!=0),'do NOT use direction=0!'
+        [l1,l2,d]=tensor.shape
+        if direction in (1,'l','left'):
+            temp,merge_data=tensor.merge([[0,2],[1]])
+            [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
+            Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
+            s/=Z
+            [size1,size2]=u.shape
+            out=u.split([merge_data[0],[size2]]).transpose(0,2,1)
+            return out,s,v,Z
+
+        if direction in (-1,'r','right'):
+            temp,merge_data=tensor.merge([[0],[1,2]])
+            [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
+            Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
+            s/=Z
+            [size1,size2]=v.shape
+            out=v.split([[size1],merge_data[1]])
+            return u,s,out,Z
+    
+    @staticmethod
+    def prepareTensor(tensor,direction):
+        """
+        orthogonalizes an mps tensor using qr decomposition 
+    
+        Parameters:
+        ----------------------------------
+        tensor: np.ndarray of shape(D1,D2,d)
+                an mps tensor
+    
+        direction: int
+                   direction in {1,'l','left'}: returns left orthogonal decomposition, 
+                   direction in {-1,'r','right'}: returns right orthogonal decomposition, 
+        fixphase:  str
+                  fixphase can be in {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+        Returns: 
+        -------------------------------------
+        (out,r,Z)
+        out: np.ndarray
+             a left or right isometric mps tensor
+        r:   np.ndarray
+             an upper or lower triangular matrix
+        Z:   float
+             the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
+        """
+        
+        if len(tensor.shape)!=3:
+            raise ValueError('prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'.format(len(tensor.shape)))
+        [l1,l2,d]=tensor.shape
+        if direction in (1,'l','left'):
+            temp,merge_data=tensor.merge([[0,2],[1]])
+            q,r=temp.qr()
+            #normalize the bond matrix
+            Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
+            r/=Z
+            [size1,size2]=q.shape
+            out=q.split([merge_data[0],[size2]]).transpose(0,2,1)
+        elif direction in (-1,'r','right'):
+            temp,merge_data=tensor.merge([[1,2],[0]])
+            temp=np.conj(temp)
+            q,r_=temp.qr()
+
+            [size1,size2]=q.shape
+            out=np.conj(q.split([merge_data[0],[size2]]).transpose(2,0,1))
+            r=np.conj(np.transpose(r_,(1,0)))
+            #normalize the bond matrix
+            Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
+            r/=Z
+
+        else:
+            raise ValueError("unkown value {} for input parameter direction".format(direction))
+        return out,r,Z
+
+    
     def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
         """
-        no checks are performed to see wheter the prived tensors can be contracted
+        no checks are performed to see wheter the provided tensors can be contracted
         """
         super(MPS,self).__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
         if not Dmax:
@@ -467,16 +575,15 @@ class MPS(TensorNetwork):
         self.Z=self.dtype.type(1)
 
  
-    def view(self):
-        """
-        return a view of self
-        Parameters:
-        ----------------------------------------------
-        """
-        obj= self.__new__(type(self))
-        obj.__init__(tensors=self._tensors,Dmax=self.Dmax,name=self.name,fromview=True)
-        print('calling view with ',type(self))        
-        return obj
+    # def view(self):
+    #     """
+    #     return a view of self
+    #     Parameters:
+    #     ----------------------------------------------
+    #     """
+    #     obj= self.__new__(type(self))
+    #     obj.__init__(tensors=self._tensors,Dmax=self.Dmax,name=self.name,fromview=True)
+    #     return obj
         
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
@@ -669,6 +776,7 @@ class MPS(TensorNetwork):
         r_thresh: float
                   internal parameter, has no relevance 
         """
+
         assert(bond<=self.N)
         assert(bond>=0)
         """
@@ -684,9 +792,9 @@ class MPS(TensorNetwork):
             self[self._position]=ncon.ncon([self.mat,self[self._position]],[[-1,1],[1,-2,-3]])
             for n in range(self._position,bond):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=self.tensortype.prepareTensor(self[n],direction=1)
+                    tensor,self.mat,Z=self.prepareTensor(self[n],direction=1)
                 else:
-                    tensor,s,v,Z=self.tensortype.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
+                    tensor,s,v,Z=self.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                                     r_thresh=r_thresh)
                     self.mat=s.diag().dot(v)
                 self.Z*=Z                    
@@ -698,9 +806,9 @@ class MPS(TensorNetwork):
 
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=self.tensortype.prepareTensor(self[n],direction=-1)
+                    tensor,self.mat,Z=self.prepareTensor(self[n],direction=-1)
                 else:
-                    u,s,tensor,Z=self.tensortype.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
+                    u,s,tensor,Z=self.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
                     self.mat=u.dot(s.diag())
                 self.Z*=Z                                        
@@ -774,6 +882,14 @@ class MPS(TensorNetwork):
                          mps-tensors is returned
                       2) self.pos in (0,1), in which case self.mat contracted with the two rightmost 
                          mps-tensors is returned
+
+        Returns:
+        --------------------------
+        a Tensor object with following dimensions (n=self.pos):
+        length==0: (D[n],D[n])
+        length==1: (D[n],D[n+1],d[n])
+        length==2: (D[n],D[n2],d[n]*d[n+1]) (exceptions apply a the boundaries)
+
         """
         if length==0:
             return copy.deepcopy(self.mat)
@@ -830,7 +946,7 @@ class MPS(TensorNetwork):
             self.position(site)
             newState=ncon.ncon([self.localWaveFunction(length=1),self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
             [Dl,d1,d2,Dr]=newState.shape
-            newState=newState.merge([0,1],[2,3])
+            newState=newState.merge([[0,1],[2,3]])
             U,S,V=newState.svd(full_matrices=False)
             Strunc=S.truncate([Dmax]).squeeze(thresh)
             tw=float(np.sum(S**2)-np.sum(Strunc**2))
@@ -845,7 +961,7 @@ class MPS(TensorNetwork):
         else:
             newState=ncon.ncon([self[site],self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
             [Dl,d1,d2,Dr]=newState.shape
-            newState=newState.merge([0,1],[2,3])
+            newState=newState.merge([[0,1],[2,3]])
             U,S,V=newState.svd(full_matrices=False)
             self[site]=np.transpose(np.reshape(ncon.ncon([U,S.diag()],[[-1,1],[1,-2]]),(Dl,d1,S.shape[0])),(0,2,1))
             self[site+1]=np.transpose(np.reshape(V,(S.shape[0],d2,Dr)),(0,2,1))
@@ -862,7 +978,7 @@ class MPS(TensorNetwork):
         if preserve_position==True:
             self.position(site)
             tensor=ncon.ncon([self.localWaveFunction(length=1),gate],[[-1,-2,1],[-3,1]])
-            A,mat,Z=self.tensortype.prepareTensor(tensor,1)
+            A,mat,Z=self.prepareTensor(tensor,1)
             self.Z*=Z
             self[site]=A
             self.mat=mat
@@ -873,7 +989,7 @@ class MPS(TensorNetwork):
 
 class FiniteMPS(MPS):
     
-    def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
+    def __init__(self,tensors=[],Dmax=None,name=None,fromview=True):
         if not np.sum(tensors[0].shape[0])==1:
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[0]'.format(tensors[0].shape))
         if not np.sum(tensors[-1].shape[1])==1:
@@ -950,7 +1066,7 @@ class FiniteMPS(MPS):
         U,S,V=self.mat.svd(full_matrices=False)
         return S
 
-    def canonize(self):
+    def canonize(self,name=None):
         """
         canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in
         mps.gammas and mps.lambdas member lists;
@@ -984,16 +1100,22 @@ class FiniteMPS(MPS):
             self.diagonalizeCenterMatrix()
             Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n]],[[-1,1],[1,-2,-3]]))
             Lambdas.append(self.mat.diag())
-        return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=None)
+        return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=name)
         
             
     def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
         """ 
-        a dedicated routine for truncating an mps (for obc, this can also be done using self.position(self,pos))
-        For the case of obc==True (infinite system with finite unit-cell), the function modifies self._connector
-        schmidt_thresh: truncation threshold
-        D: maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
-        returned_gauge: 'left','right' or 'symmetric': the desired gauge after truncation
+        truncates the mps
+        Parameters
+        ---------------------------------
+        schmidt_thresh: float 
+                        truncation threshold
+        D:              int 
+                        maximum bond dimension; if None, the bond dimension is adapted to match schmidt_thresh
+        presweep:       bool
+                        if True, the routine sweeps the center site through the MPS once prior to truncation (extra cost)
+                        this ensures that the  truncation is done in the optimal basis; use False only if the 
+                        state is in standard form
         """
         
         if D and D>max(self.D):
@@ -1023,7 +1145,7 @@ class FiniteMPS(MPS):
         for n in range(len(res)):
             Ml,Mr,din,dout=mpo[n].shape 
             Dl,Dr,d=res[n].shape
-            res[n]=ncon.ncon([res[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]).merge([0,1],[2,3],[4])
+            res[n]=ncon.ncon([res[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]).merge([[0,1],[2,3],[4]])
         res.mat=res[0].eye(0,dtype=res.dtype)
         return res
             
@@ -1195,19 +1317,19 @@ class  CanonizedMPS(TensorNetwork):
         return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name)
 
     
-    def view(self):
-        """
-        return a view of self
-        Parameters:
-        ----------------------------------------------
-        """
-        #this is a bit of a hack; if I have more time I should fix this
-        obj= self.__new__(type(self))
-        super(CanonizedMPS,obj).__init__(self._tensors,shape=(),name=self.name,fromview=True)
-        obj.Gamma=self.GammaTensors(obj._tensors.view())
-        obj.Lambda=self.LambdaTensors(obj._tensors.view())                        
-        obj._D=self._D
-        return obj
+    # def view(self):
+    #     """
+    #     return a view of self
+    #     Parameters:
+    #     ----------------------------------------------
+    #     """
+    #     #this is a bit of a hack; if I have more time I should fix this
+    #     obj= self.__new__(type(self))
+    #     super(CanonizedMPS,obj).__init__(self._tensors,shape=(),name=self.name,fromview=True)
+    #     obj.Gamma=self.GammaTensors(obj._tensors.view())
+    #     obj.Lambda=self.LambdaTensors(obj._tensors.view())                        
+    #     obj._D=self._D
+    #     return obj
         
     def __len__(self):
         """
@@ -1300,7 +1422,7 @@ class  CanonizedMPS(TensorNetwork):
 
         
 class  CanonizedFiniteMPS(CanonizedMPS):
-    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=False):
+    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=True):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
@@ -1330,7 +1452,19 @@ class  CanonizedFiniteMPS(CanonizedMPS):
         raise NotImplementedError
         
 
-    def toMPS(self):
+    def __str__(self):
+        """
+        return a str representation of the TensorNetwork
+        """
+        inds=range(len(self))
+        s1=['Name: ',str(self.name),'\n\n ']+\
+            ['Lambda[0] of shape '+str(self.Lambda[0].shape)+'\n\n '+self.Lambda[0].__str__()+' \n\n ']+\
+            ['Gamma['+str(ind)+'] of shape '+str(self.Gamma[ind].shape)+'\n\n '+self.Gamma[ind].__str__()+' \n\n '+'Lambda['+str(ind+1)+'] of shape '+str(self.Lambda[ind+1].shape)+'\n\n '+self.Lambda[ind+1].__str__()+' \n\n ' for ind in range(len(self))]
+
+
+        return ''.join(s1)
+
+    def toMPS(self,name=None):
         """
         cast the CanonizedFiniteMPS to a FiniteMPS
         Returns:
@@ -1338,17 +1472,17 @@ class  CanonizedFiniteMPS(CanonizedMPS):
         FiniteMPS
         """
         tensors=[ncon.ncon([self.Lambda[n].diag(),self.Gamma[n]],[[-1,1],[1,-2,-3]]) for n in range(len(self))]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=None)
+        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=name)
 
     
-    def canonize(self):
+    def canonize(self,name=None):
         """
         re-canonize the CanonizedFiniteMPS
         Returns:
         ---------------
         CanonizedFiniteMPS
         """
-        return self.toMPS().canonize()
+        return self.toMPS().canonize(name=self.name)
 
     def iscanonized(self,thresh=1E-10):
         left=[self.ortho(n,'l')<thresh for n in range(len(self))]

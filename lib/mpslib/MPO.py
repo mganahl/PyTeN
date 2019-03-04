@@ -51,7 +51,7 @@ class MPO(TensorNetwork):
     """
 
     def __init__(self,tensors=[],name=None,fromview=False,which=Tensor):
-        super(MPO,self).__init__(tensors=tensors,shape=(),name=None,fromview=fromview)
+        super(MPO,self).__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
     
     def getTwositeMPO(self,site1,site2,obc):
         if site2<site1:
