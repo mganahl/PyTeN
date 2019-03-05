@@ -539,6 +539,7 @@ class MPS(TensorNetwork):
             r/=Z
             [size1,size2]=q.shape
             out=q.split([merge_data[0],[size2]]).transpose(0,2,1)
+            return out,r,Z            
         elif direction in (-1,'r','right'):
             temp,merge_data=tensor.merge([[1,2],[0]])
             temp=np.conj(temp)
@@ -550,10 +551,10 @@ class MPS(TensorNetwork):
             #normalize the bond matrix
             Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
             r/=Z
-
+            return r,out,Z
         else:
             raise ValueError("unkown value {} for input parameter direction".format(direction))
-        return out,r,Z
+
 
     
     def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
@@ -806,7 +807,7 @@ class MPS(TensorNetwork):
 
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=self.prepareTensor(self[n],direction=-1)
+                    self.mat,tensor,Z=self.prepareTensor(self[n],direction=-1)
                 else:
                     u,s,tensor,Z=self.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
@@ -1068,27 +1069,6 @@ class FiniteMPS(MPS):
 
     def canonize(self,name=None):
         """
-        canonizes the mps, i.e. brings it into Gamma,Lambda form; Gamma and Lambda are stored in
-        mps.gammas and mps.lambdas member lists;
-        len(mps.lambdas) is len(mps)+1, i.e. there are boundary lambdas to the left and right of the mps; 
-        for obc, these are just [1.0]
-        The mps is left in a left orthogonal state
-
-        Parameters:
-        ------------------------------
-        nmaxit:      int
-                     maximum iteration number of sparse solver
-        tol:         float
-                     desired precision of eigenvalues/eigenvectors returned by sparse solver
-        ncv:         int
-                     number of krylov vectors used in sparse sovler
-        pinv:        float
-                     pseudo inverse cutoff
-        numeig:      number of eigenvalue-eigenvector pairs to be calculated in sparse solver (hyperparameter)
-
-        Returns:
-        -------------------------
-        None
         """
         Lambdas,Gammas=[],[]
         

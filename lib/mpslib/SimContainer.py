@@ -331,9 +331,10 @@ class FiniteDMRGengine(MPSSimulation):
             stdout.flush()
         if verbose>1:
             print("")
-        A,mat,Z=self.mps.prepareTensor(opt[0],direction='r')
+        mat,B,Z=self.mps.prepareTensor(opt[0],direction='r')
         self.mps.mat=mat
-        self.mps[self.mps.pos]=A
+        self.mps[self.mps.pos]=B
+        self.R[len(self.mps)-self.mps.pos]=self.addLayer(B=self.R[len(self.mps)-self.mps.pos-1],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
         return e
     
     

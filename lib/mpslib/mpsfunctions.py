@@ -139,11 +139,11 @@ def mpsTensorAdder(A,B,boundary_type,ZA=1.0,ZB=1.0):
             return NotImplemented
     
 
-def TransferOperator(mps,direction,reduced_density):
-    """
-    computes the action of the MPS Transfer Operators on reduced_density
-    """
-    for n in range(len(mps)):
+# def TransferOperator(mps,direction,reduced_density):
+#     """
+#     computes the action of the MPS Transfer Operators on reduced_density
+#     """
+#     for n in range(len(mps)):
         
 
 
