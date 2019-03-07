@@ -31,7 +31,7 @@ def generate_unary_deferer(op_func):
 
 def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     """
-    initializer to create a list fo tensors of type Tensor
+    initializer to create a list of tensors of type Tensor
     Parameters:
     ---------------------
     numpy_func:       callable
@@ -44,16 +44,27 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     -------------------------
     list of Tensor objects of shape ```shapes```, initialized with numpy_func
     """
-    mean=kwargs.get('mean',0.5)
-    scale=kwargs.get('scale',0.1)
-    dtype=kwargs.get('dtype',np.float64)
 
-    if numpy_func in (np.random.random_sample,np.random.rand,np.random.randn):
+    minval=kwargs.get('mean',-0.5)
+    maxval=kwargs.get('std',0.5)
+
+    mean=kwargs.get('mean',0.0)
+    std=kwargs.get('std',0.1)
+    dtype=kwargs.get('dtype',np.float64)
+    if numpy_func in (np.random.random_sample,np.random.rand):
         if np.issubdtype(dtype,np.complexfloating):
-            return [(numpy_func(shape).view(Tensor)-mean+1j*(numpy_func(shape).view(Tensor)-mean)).astype(dtype)*scale for shape in shapes]
+            return [((maxval-minval)*numpy_func(shape).view(Tensor)+minval+1j*((maxval-minval)*numpy_func(shape).view(Tensor)+minval)).astype(dtype) for shape in shapes]
 
         elif np.issubdtype(dtype,np.floating):
-           return [(numpy_func(shape).view(Tensor)-mean).astype(dtype)*scale for shape in shapes]
+           return [((maxval-minval)*numpy_func(shape).view(Tensor)+minval).astype(dtype)*std for shape in shapes]
+       
+    elif numpy_func ==np.random.randn:
+        if np.issubdtype(dtype,np.complexfloating):
+            return [(std*numpy_func(*shape).view(Tensor)+mean+1j*std*(numpy_func(*shape).view(Tensor)+1j*mean)).astype(dtype) for shape in shapes]
+
+        elif np.issubdtype(dtype,np.floating):
+           return [(std*numpy_func(*shape).view(Tensor)+mean).astype(dtype) for shape in shapes]
+       
     else:
         if np.issubdtype(dtype,np.complexfloating):
             return [numpy_func(shape,*args,**kwargs).view(Tensor)+1j*numpy_func(shape,*args,**kwargs).view(Tensor) for shape in shapes]
@@ -553,7 +564,7 @@ class MPS(TensorNetwork):
         """
         super(MPS,self).__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
         if not Dmax:
-            self._D=max(self.D)
+            self._D=max([tensors[0].shape[0]]+[t.shape[1] for t in tensors])
         else:
             self._D=Dmax
         self.mat=tensors[-1].eye(1)
@@ -688,13 +699,14 @@ class MPS(TensorNetwork):
             obj.mat=matresult
             return obj
 
-
     @property
     def D(self):
-        """
-        returns a list containig the bond-dimensions of the MPS
-        """
-        return [m.shape[0] for m in self]+[self[-1].shape[1]]
+        """Returns a vector of all bond dimensions.
+        The vector will have length `N+1`, where `N == num_sites`."""
+        return (
+            [self.get_tensor(0).shape[0]] + 
+            [self.get_tensor(n).shape[2] for n in range(len(self))]
+        )
 
     
     @property
@@ -727,7 +739,7 @@ class MPS(TensorNetwork):
         """
 
     @classmethod
-    def random(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def random(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,numpy_func=np.random.random_sample,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -736,7 +748,7 @@ class MPS(TensorNetwork):
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
 
-        return cls(tensors=initializer(numpy_func=np.random.random_sample,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
+        return cls(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
 
     @classmethod
     def zeros(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
@@ -889,74 +901,6 @@ class MPS(TensorNetwork):
         raise NotImplementedError()
         
         
-        
-    def absorbCenterMatrix(self,direction):
-        """
-        merges self.mat into the MPS. self.mat is merged into either the left (direction in (-1,'l','left')) or 
-        the right (direction in (1,'r','right')) tensor at bond self.pos
-        changes self.mat to be the identity: self.mat=11
-        """
-        assert(direction!=0)
-        if (self.pos==len(self)) and (direction in (1,'r','right')):
-            direction=-1
-            warnings.warn('mps.absorbCenterMatrix(self,direction): self.pos=len(self) and direction>0; cannot contract bond-matrix to the right because there is no right tensor; absorbing into the left tensor')
-        elif (self.pos==0) and (direction in (-1,'l','left')):
-            direction=1                
-            warnings.warn('mps.absorbCenterMatrix(self,direction): self.pos=0 and direction<0; cannot contract bond-matrix to the left tensor because there is no left tensor; absorbing into right tensor')
-
-        if (direction in (1,'r','right')):
-            self[self.pos]=ncon.ncon([self.mat,self[self.pos]],[[-1,1],[1,-2,-3]])
-            self.mat=self.mat.eye(0,dtype=self.dtype)
-        elif (direction in (-1,'l','left')):
-            self[self.pos-1]=ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
-            self.mat=self.mat.eye(1,dtype=self.dtype)
-        return self
-
-    
-    def localWaveFunction(self,length=0):
-        
-        """
-        return the local wavefunction over ```length``` sites
-        if length==0: self.mat is returned
-        if length==1: self.mat contracted with the next-right mps-tensor is returned, unless
-                      self.pos==len(self), in which case self.mat contracted with the next-left mps-tensor 
-                      is returned
-
-        if length==2: self.mat contracted with the nex-left and next-right mps-tensor is returned, unless:
-                      1) self.pos in (len(self)-1,len(self)), in which case self.mat contracted with the two leftmost 
-                         mps-tensors is returned
-                      2) self.pos in (0,1), in which case self.mat contracted with the two rightmost 
-                         mps-tensors is returned
-
-        Returns:
-        --------------------------
-        a Tensor object with following dimensions (n=self.pos):
-        length==0: (D[n],D[n])
-        length==1: (D[n],D[n+1],d[n])
-        length==2: (D[n],D[n2],d[n]*d[n+1]) (exceptions apply a the boundaries)
-
-        """
-        if length==0:
-            return copy.deepcopy(self.mat)
-        elif length==1:
-            if self.pos<len(self):
-                return ncon.ncon([self.mat,self[self.pos]],[[-1,1],[1,-2,-3]])
-            elif self.pos==len(self):
-                return ncon.ncon([self[self.pos-1],self.mat],[[-1,1,-3],[1,-2]])
-        elif length==2:
-            if (self.pos<len(self)) and (self.pos>0):
-                shape=(self.D[self.pos-1],self.D[self.pos+1],self.d[self.pos-1]*self.d[self.pos])
-                return ncon.ncon([self[self.pos-1],self.mat,self[self.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).reshape(shape)
-            elif self.pos==len(self):
-                shape=(self.D[self.pos-2],self.D[self.pos],self.d[self.pos-2]*self.d[self.pos-1])
-                return ncon.ncon([self[self.pos-2],self[self.pos-1],self.mat],[[-1,1,-3],[1,2,-4],[2,-2]]).reshape(shape)
-            elif self.pos==0:
-                shape=(self.D[self.pos],self.D[self.pos+2],self.d[self.pos]*self.d[self.pos+1])                
-                return ncon.ncon([self.mat,self[self.pos],self[self.pos+1]],[[-1,1],[1,2,-3],[2,-2,-4]]).reshape(shape)
-        else:
-            return NotImplemented
-
-
     def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16,preserve_position=True):
         """
         applies a two-site gate to the mps at site ```site```, 
