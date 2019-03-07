@@ -241,6 +241,9 @@ class Tensor(np.ndarray,TensorBase):
         dtype=np.result_type(*[a.dtype for a in arrs])
         return np.concatenate(arrs,axis,out)
 
-    
+    def herm(self):
+        return np.conj(self.T)
+    def inv(self):
+        return np.linalg.inv(self)
 
 

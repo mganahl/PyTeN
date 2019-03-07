@@ -19,6 +19,7 @@ herm=lambda x:np.conj(np.transpose(x))
 from lib.mpslib.Tensor import TensorBase, Tensor
 
 
+
 def generate_unary_deferer(op_func):
     def deferer(cls, *args, **kwargs):
         try:
@@ -106,17 +107,6 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         else:
             raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
 
-    # def view(self):
-    #     """
-    #     return a view of self
-    #     Parameters:
-    #     ----------------------------------------------
-    #     Return:   TensorNetwork
-    #     """
-        
-    #     obj=self.__new__(type(self))
-    #     obj.__init__(tensors=self._tensors,shape=self.shape,name=self.name,fromview=True)
-    #     return obj
     
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
@@ -567,25 +557,56 @@ class MPS(TensorNetwork):
         else:
             self._D=Dmax
         self.mat=tensors[-1].eye(1)
-        self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(herm(self.mat))))
+        self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(self.mat.herm())))
+        self.connector=self.mat.inv()
         self._position=self.N
-        
-    def normalize(self):
-        self.position(len(self))
-        self.position(0)        
-        self.Z=self.dtype.type(1)
 
+
+    def normalize(self):
+        pos=self.pos
+        if self.pos==len(self):
+            self.position(0)
+        elif self.pos==0:
+            self.position(len(self))
+        else:
+            self.position(0)
+            self.position(len(self))
+        self.position(self.pos)                        
+        self.Z=self.dtype.type(1)
  
-    # def view(self):
-    #     """
-    #     return a view of self
-    #     Parameters:
-    #     ----------------------------------------------
-    #     """
-    #     obj= self.__new__(type(self))
-    #     obj.__init__(tensors=self._tensors,Dmax=self.Dmax,name=self.name,fromview=True)
-    #     return obj
+
+    def transfer_op(self,site,direction,x):
+        """
+        """
+        A = self.get_tensor(site)
+        return mf.TransferOperator(A,A,direction=direction, x=x)
+
+    def unitcell_transfer_op(self,direction,x):
+        """
+        FIXME: absorbing self.connector and self.mat each time
+               is suboptimal when using unitcell_transfer_op within a sparse solver
+        """
         
+        if direction in ('l','left',1):
+            if not x.shape[0]==self.D[0]:
+                raise ValueError('shape of x[0] does not match the shape of mps.D[0]')
+            if not x.shape[1]==self.D[0]:
+                raise ValueError('shape of x[1] does not match the shape of mps.D[0]')
+                
+            l=x
+            for n in range(len(self)):
+                l=self.transfer_op(n,direction='l',x=l)
+            return l
+        if direction in ('r','right',-1):
+            if not x.shape[0]==self.D[-1]:
+                raise ValueError('shape of x[0] does not match the shape of mps.D[-1]')
+            if not x.shape[1]==self.D[-1]:
+                raise ValueError('shape of x[1] does not match the shape of mps.D[-1]')
+            r=x
+            for n in range(len(self)-1,-1,-1):
+                r=self.transfer_op(n,direction='r',x=r)
+            return r
+
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
         implements in-place unary operations on MPS._tensors and MPS.mat
@@ -844,6 +865,29 @@ class MPS(TensorNetwork):
 
 
 
+    def get_tensor(self, n):
+        """
+        get_tensor returns an mps tensors, possibly contracted with the center matrix
+        by convention, the center matrix is contracted if n==self.pos
+        """
+
+        if (n != self.pos) and (self.pos<len(self)):
+            out = self._tensors[n]
+        elif (n == self.pos)  and (self.pos<len(self)):
+            out = ncon([self.centermatrix,self._tensors[n]],[[-1,1],[1,-2,-3]])
+        elif (n != (self.pos-1))  and (self.pos==len(self)):
+            out = self._tensors[n]
+        elif (n == (self.pos-1))  and (self.pos==len(self)):
+            out = ncon([self._tensors[n],self.centermatrix],[[-1,-2,1],[1,-3]])
+        
+        if n==(len(self)-1):
+            return ncon([out,self.connector],[[-1,-2,1],[1,-3]])
+        else:
+            return out
+            
+    def set_tensor(self, n, tensor):
+        raise NotImplementedError()
+        
         
         
     def absorbCenterMatrix(self,direction):
@@ -1000,7 +1044,7 @@ class FiniteMPS(MPS):
         self.position(0)
         self.position(len(self))
         
-    def diagonalizeCenterMatrix(self):
+    def diagonalize_center_matrix(self):
         """
         diagonalizes the center matrix and pushes U and V onto the left and right MPS tensors
         """
@@ -1048,9 +1092,9 @@ class FiniteMPS(MPS):
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
         return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax) #out is an unnormalized MPS
 
-    def SchmidtSpectrum(self,n):
+    def schmidt_spectrum(self,n):
         """
-        SchmidtSpectrum(n):
+        schmidt_spectrum(n):
 
         return the Schmidt-values on bond n:
         Parameters:
@@ -1077,7 +1121,7 @@ class FiniteMPS(MPS):
         Lambdas.append(self.mat.diag())                        
         for n in range(len(self)):
             self.position(n+1)
-            self.diagonalizeCenterMatrix()
+            self.diagonalize_center_matrix()
             Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n]],[[-1,1],[1,-2,-3]]))
             Lambdas.append(self.mat.diag())
         return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=name)
@@ -1114,7 +1158,7 @@ class FiniteMPS(MPS):
                 self.position(self.pos)
             return self
 
-    def applyMPO(self,mpo):
+    def apply_MPO(self,mpo):
         """
         applies an mpo to an mps; no truncation is done
         """
@@ -1296,21 +1340,6 @@ class  CanonizedMPS(TensorNetwork):
         assert(len(tensors)%2)
         return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name)
 
-    
-    # def view(self):
-    #     """
-    #     return a view of self
-    #     Parameters:
-    #     ----------------------------------------------
-    #     """
-    #     #this is a bit of a hack; if I have more time I should fix this
-    #     obj= self.__new__(type(self))
-    #     super(CanonizedMPS,obj).__init__(self._tensors,shape=(),name=self.name,fromview=True)
-    #     obj.Gamma=self.GammaTensors(obj._tensors.view())
-    #     obj.Lambda=self.LambdaTensors(obj._tensors.view())                        
-    #     obj._D=self._D
-    #     return obj
-        
     def __len__(self):
         """
         return the length of the CanonizedMPS, i.e. the number of physical sites
