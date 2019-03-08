@@ -331,7 +331,7 @@ class FiniteDMRGengine(MPSSimulation):
             stdout.flush()
         if verbose>1:
             print("")
-        mat,B,Z=self.mps.prepareTensor(opt[0],direction='r')
+        mat,B,Z=mf.prepare_tensor_QR(opt[0],direction='r')
         self.mps.mat=mat
         self.mps[self.mps.pos]=B
         self.R[len(self.mps)-self.mps.pos]=self.addLayer(B=self.R[len(self.mps)-self.mps.pos-1],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
@@ -809,7 +809,7 @@ class IDMRGengine(FiniteDMRGengine):
         
 #             self._normgradold=self._normgrad
 #             self._lamold=np.copy(self._lam)
-#         A_,s,v,Z=mf.prepareTruncate(self._mps,direction=1,thresh=1E-14)
+#         A_,s,v,Z=mf.prepare_tensor_SVD(self._mps,direction=1,thresh=1E-14)
 #         s=s/np.linalg.norm(s)
 #         self._mps=np.transpose(np.tensordot(A_,np.diag(s).dot(v),([1],[0])),(0,2,1))
 #         if self._normgrad<self._epsilon:
@@ -1629,7 +1629,7 @@ class IDMRGengine(FiniteDMRGengine):
 #                 self._mps.position(n+1)
 #                 #evolve tensor forward
 #                 evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)                
-#                 tensor,mat,Z=mf.prepareTensor(evTen,1)
+#                 tensor,mat,Z=mf.prepare_tensor_QR(evTen,1)
 #                 self._mps[n]=tensor
 #                 self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
 #                 self._mps._mat=mat
@@ -1652,7 +1652,7 @@ class IDMRGengine(FiniteDMRGengine):
 #                 evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
                 
 #                 #split off a center matrix 
-#                 tensor,mat,Z=mf.prepareTensor(evTen,-1) #mat is already normalized (happens in prepareTensor)
+#                 tensor,mat,Z=mf.prepare_tensor_QR(evTen,-1) #mat is already normalized (happens in prepare_tensor_QR)
 #                 self._mps[n]=tensor
 
 #                 self._mps._mat=mat
@@ -1773,7 +1773,7 @@ class IDMRGengine(FiniteDMRGengine):
 #                     elif solver=='SEXPMV':                    
 #                         evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[len(self._mps)-2-n],self._mps.tensor(n+1,clear=True),-dt_)
                 
-#                     tensor,mat,Z=mf.prepareTensor(evTen,1)
+#                     tensor,mat,Z=mf.prepare_tensor_QR(evTen,1)
 #                     self._mps[n+1]=tensor
 #                     self._mps._mat=mat
 #                     self._mps._position=n+2
@@ -1790,7 +1790,7 @@ class IDMRGengine(FiniteDMRGengine):
 #                 elif solver=='SEXPMV':                    
 #                     evTen=mf.evolveTensorSexpmv(self._L[n+1],self._mpo[n+1],self._R[len(self._mps)-2-n],self._mps.tensor(n+1,clear=True),-dt_)
 
-#                 tensor,mat,Z=mf.prepareTensor(evTen,-1) 
+#                 tensor,mat,Z=mf.prepare_tensor_Q(evTen,-1) 
 #                 self._mps[n+1]=tensor
 #                 self._mps._mat=mat
 

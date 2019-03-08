@@ -1836,19 +1836,11 @@ def pseudoUnitcellTransferOperator(direction,mps,ldens,rdens,vector):
 
 
 def TDVPGMRESUC(mps,ldens,rdens,inhom,x0,tolerance=1e-10,maxiteration=2000,datatype=np.dtype(float),direction=1):
-    if direction>0:
-        [D1l,D2l,d]=np.shape(mps[0])
-        [D1r,D2r,d]=np.shape(mps[-1])
-        mv=fct.partial(OneMinusPseudoUnitcellTransferOperator,*[direction,mps,ldens,rdens])
-        LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,dtype=datatype)
-        return sp.sparse.linalg.lgmres(LOP,inhom,x0,tol=tolerance,maxiter=maxiteration)
-    if direction<0:
-        [D1l,D2l,d]=np.shape(mps[0])
-        [D1r,D2r,d]=np.shape(mps[-1])
-        mv=fct.partial(OneMinusPseudoUnitcellTransferOperator,*[direction,mps,ldens,rdens])
-        LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,dtype=datatype)
-        return sp.sparse.linalg.lgmres(LOP,inhom,x0,tol=tolerance,maxiter=maxiteration)
-
+    [D1l,D2l,d]=np.shape(mps[0])
+    [D1r,D2r,d]=np.shape(mps[-1])
+    mv=fct.partial(OneMinusPseudoUnitcellTransferOperator,*[direction,mps,ldens,rdens])
+    LOP=LinearOperator((D1l*D1l,D2r*D2r),matvec=mv,dtype=datatype)
+    return sp.sparse.linalg.lgmres(LOP,inhom,x0,tol=tolerance,maxiter=maxiteration)
 
 
 def regaugeIMPS(mps,gauge,ldens=None,rdens=None,truncate=1E-16,D=None,nmaxit=1000,tol=1E-10,ncv=30,pinv=1E-200,thresh=1E-8,numeig=6):

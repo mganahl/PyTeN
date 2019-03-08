@@ -10,6 +10,7 @@ import copy
 import numbers
 import numpy as np
 import lib.mpslib.mpsfunctions as mf
+from scipy.sparse.linalg import LinearOperator,eigs
 import lib.ncon as ncon
 from lib.mpslib.Container import Container
 
@@ -38,8 +39,18 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
                       a numpy function like np.random.random_sample
     shapes:           list of tuple
                       the shapes of the individual tensors
-    *args,**kwargs:   if numpy_func is not one of np.random functions, these are passed on to numpy_func
 
+    
+    *args,**kwargs:   if numpy_func is not one of np.random functions, these are passed on to numpy_func
+    possible **kwargs are:
+    minval:        float
+                   lower bound for np.random.rand
+    maxval:        float
+                   upper bound for np.random.rand
+    mean:          float
+                   mean value for np.random.randn
+    std:           float
+                   standard deviation for np.random.randn
     Returns:
     -------------------------
     list of Tensor objects of shape ```shapes```, initialized with numpy_func
@@ -451,113 +462,6 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         
 class MPS(TensorNetwork):
 
-    @staticmethod
-    def prepareTruncate(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
-        """
-        prepares and truncates an mps tensor using svd
-        Parameters:
-        ---------------------
-        tensor: np.ndarray of shape(D1,D2,d)
-                an mps tensor
-        direction: int
-                   if >0 returns left orthogonal decomposition, if <0 returns right orthogonal decomposition
-        thresh: float
-                cutoff of schmidt-value truncation
-        r_thresh: float
-                  only used when svd throws an exception.
-        D:        int or None
-                  the maximum bond-dimension to keep (hard cutoff); if None, no truncation is applied
-    
-        Returns:
-        ----------------------------
-        direction>0: out,s,v,Z
-                     out: a left isometric tensor of dimension (D1,D,d)
-                     s  : the singular values of length D
-                     v  : a right isometric matrix of dimension (D,D2)
-                     Z  : the norm of tensor, i.e. tensor"="out.dot(s).dot(v)*Z
-        direction<0: u,s,out,Z
-                     u  : a left isometric matrix of dimension (D1,D)
-                     s  : the singular values of length D
-                     out: a right isometric tensor of dimension (D,D2,d)
-                     Z  : the norm of tensor, i.e. tensor"="u.dot(s).dot(out)*Z
-    
-        """
-
-        assert(direction!=0),'do NOT use direction=0!'
-        [l1,l2,d]=tensor.shape
-        if direction in (1,'l','left'):
-            temp,merge_data=tensor.merge([[0,2],[1]])
-            [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
-            Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
-            s/=Z
-            [size1,size2]=u.shape
-            out=u.split([merge_data[0],[size2]]).transpose(0,2,1)
-            return out,s,v,Z
-
-        if direction in (-1,'r','right'):
-            temp,merge_data=tensor.merge([[0],[1,2]])
-            [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
-            Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
-            s/=Z
-            [size1,size2]=v.shape
-            out=v.split([[size1],merge_data[1]])
-            return u,s,out,Z
-    
-    @staticmethod
-    def prepareTensor(tensor,direction):
-        """
-        orthogonalizes an mps tensor using qr decomposition 
-    
-        Parameters:
-        ----------------------------------
-        tensor: np.ndarray of shape(D1,D2,d)
-                an mps tensor
-    
-        direction: int
-                   direction in {1,'l','left'}: returns left orthogonal decomposition, 
-                   direction in {-1,'r','right'}: returns right orthogonal decomposition, 
-        fixphase:  str
-                  fixphase can be in {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
-        Returns: 
-        -------------------------------------
-        (out,r,Z)
-        out: np.ndarray
-             a left or right isometric mps tensor
-        r:   np.ndarray
-             an upper or lower triangular matrix
-        Z:   float
-             the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
-        """
-        
-        if len(tensor.shape)!=3:
-            raise ValueError('prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'.format(len(tensor.shape)))
-        [l1,l2,d]=tensor.shape
-        if direction in (1,'l','left'):
-            temp,merge_data=tensor.merge([[0,2],[1]])
-            q,r=temp.qr()
-            #normalize the bond matrix
-            Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
-            r/=Z
-            [size1,size2]=q.shape
-            out=q.split([merge_data[0],[size2]]).transpose(0,2,1)
-            return out,r,Z            
-        elif direction in (-1,'r','right'):
-            temp,merge_data=tensor.merge([[1,2],[0]])
-            temp=np.conj(temp)
-            q,r_=temp.qr()
-
-            [size1,size2]=q.shape
-            out=np.conj(q.split([merge_data[0],[size2]]).transpose(2,0,1))
-            r=np.conj(np.transpose(r_,(1,0)))
-            #normalize the bond matrix
-            Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
-            r/=Z
-            return r,out,Z
-        else:
-            raise ValueError("unkown value {} for input parameter direction".format(direction))
-
-
-    
     def __init__(self,tensors=[],Dmax=None,name=None,fromview=False):
         """
         no checks are performed to see wheter the provided tensors can be contracted
@@ -568,11 +472,18 @@ class MPS(TensorNetwork):
         else:
             self._D=Dmax
         self.mat=tensors[-1].eye(1)
-        self.mat=self.mat/np.sqrt(np.trace(self.mat.dot(self.mat.herm())))
-        self.connector=self.mat.inv()
+        self.mat=self.mat/np.sqrt(np.sum(tensors[-1].shape[1]))
+        self._connector=self.mat.inv()
         self._position=self.N
 
-
+    @property
+    def centermatrix(self):
+        return self.mat
+    
+    @property
+    def connector(self):
+        return self._connector
+    
     def normalize(self):
         pos=self.pos
         if self.pos==len(self):
@@ -590,8 +501,26 @@ class MPS(TensorNetwork):
         """
         """
         A = self.get_tensor(site)
-        return mf.TransferOperator(A,A,direction=direction, x=x)
+        return mf.transfer_operator(A,A,direction=direction, x=x)
 
+    def get_unitcell_transfer_op(self,direction):
+        """
+        Returns a function that implements the transfer operator for the
+        entire unit cell.
+        """
+        if direction in ('l','left',1):
+            As = [self.get_tensor(n) for n in range(len(self))]
+        elif direction in ('r','right',-1):
+            As = [self.get_tensor(n) for n in reversed(range(len(self)))]
+        else:
+            raise ValueError("Invalid direction: {}".format(direction))
+
+        def t_op(x):
+            for A in As:
+                x = mf.transfer_operator(A, A, direction, x)
+            return x
+        return t_op
+    
     def unitcell_transfer_op(self,direction,x):
         """
         FIXME: absorbing self.connector and self.mat each time
@@ -618,6 +547,257 @@ class MPS(TensorNetwork):
                 r=self.transfer_op(n,direction='r',x=r)
             return r
 
+
+    def TMeigs(self,direction,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,which='LR'):
+        """
+        calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
+
+        Parameters:
+        ------------------------------
+        direction:     int or str
+
+                       if direction in (1,'l','left')   return the left dominant EV
+                       if direction in (-1,'r','right') return the right dominant EV
+        init:          tf.tensor
+                       initial guess for the eigenvector
+        precision:     float
+                       desired precision of the dominant eigenvalue
+        ncv:           int
+                       number of Krylov vectors
+        nmax:          int
+                       max number of iterations
+        numeig:        int
+                       hyperparameter, passed to scipy.sparse.linalg.eigs; number of eigenvectors 
+                       to be returned by scipy.sparse.linalg.eigs; leave at 6 to avoid problems with arpack
+                       use numeig=1 for best performance (and sacrificing stability)
+        which:         str
+                       hyperparameter, passed to scipy.sparse.linalg.eigs; which eigen-vector to target
+                       can be ('LM','LA,'SA','LR'), refer to scipy.sparse.linalg.eigs documentation for details
+
+        Returns:
+        ------------------------------
+        (eta,x):
+        eta: float
+             the eigenvalue
+        x:   tf.tensor
+             the dominant eigenvector (in matrix form)
+        """
+        if self.D[0]!=self.D[-1]:
+            raise ValueError(" in TMeigs: left and right ancillary dimensions of the MPS do not match")
+        if np.all(init!=None):
+            initial=init
+        t_op=self.get_unitcell_transfer_op(direction)
+        def mv(vector):
+            return t_op(type(self[0]).from_dense(vector,[self.D[0],self.D[0]])).to_dense()
+
+        LOP=LinearOperator((np.sum(self.D[0]*self.D[0]),np.sum(self.D[-1]*self.D[-1])),
+                           matvec=mv,dtype=self.dtype)
+        if numeig>=LOP.shape[0]-1:
+            warnings.warn('TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
+            while numeig>=(LOP.shape[0]-1):
+                numeig-=1
+        
+        eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)        
+        m=np.argmax(np.real(eta))
+        while np.abs(np.imag(eta[m]))/np.abs(np.real(eta[m]))>1E-4:
+            numeig=numeig+1
+            print ('found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'.format(numeig))
+            eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)
+            m=np.argmax(np.real(eta))
+            
+        if np.issubdtype(self.dtype,np.floating):
+            out=type(self[0]).from_dense(vec[:,m],[self.D[0],self.D[0]])
+            if np.linalg.norm(np.imag(out))>1E-10:
+                raise TypeError("TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
+            return np.real(eta[m]),out.real
+        elif np.issubdtype(self.dtype,np.complexfloating):    
+            return eta[m],type(self[0]).from_dense(vec[:,m],[self.D[0],self.D[0]])
+
+    def regauge(self,gauge,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,pinv=1E-50,warn_thresh=1E-8):
+        """
+        regauge the MPS into left or right canonical form (inplace)
+
+        Parameters:
+        ------------------------------
+        
+        gauge:         int or str
+                       for (1,'l','left'): bring into left gauge
+                       for (-1,'r','right'): bring into right gauge
+
+        init:          tf.tensor
+                       initial guess for the eigenvector
+        precision:     float
+                       desired precision of the dominant eigenvalue
+        ncv:           int
+                       number of Krylov vectors
+        nmax:          int
+                       max number of iterations
+        numeig:        int
+                       hyperparameter, passed to scipy.sparse.linalg.eigs; number of eigenvectors 
+                       to be returned by scipy.sparse.linalg.eigs; leave at 6 to avoid problems with arpack
+        pinv:          float
+                       pseudoinverse cutoff
+        warn_thresh:   float 
+                       threshold value; if TMeigs returns an eigenvalue with imaginary value larger than 
+                       ```warn_thresh```, a warning is issued 
+
+        Returns:
+        ----------------------------------
+        None
+        """
+
+        if gauge in ('left','l',1):
+            self.position(0)
+            eta,l=self.TMeigs(direction='left',init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig)
+            self.mat/=np.sqrt(eta)
+            if np.abs(np.imag(eta))/np.abs(np.real(eta))>warn_thresh:
+                print ('in mpsfunctions.py.regaugeIMPS: warning: found eigenvalue eta with large imaginary part: ',eta)
+
+            l=l/l.tr()
+            l=(l+l.conj().transpose())/2.0
+
+            eigvals,u=l.eigh()
+            eigvals/=np.sqrt(ncon.ncon([eigvals,eigvals.conj()],[[1],[1]]))
+            abseigvals=eigvals.abs()
+            eigvals[abseigvals<=pinv]=0.0
+            inveigvals=1.0/eigvals
+            inveigvals[abseigvals<=pinv]=0.0
+
+            y=ncon.ncon([u,np.sqrt(eigvals).diag()],[[-2,1],[1,-1]])
+            invy=ncon.ncon([np.sqrt(inveigvals).diag(),u.conj()],[[-2,1],[-1,1]])
+            
+            #multiply y to the left and y^{-1} to the right bonds of the tensor:
+            #the index contraction looks weird, but is correct; my l matrices have their 0-index on the non-conjugated top layer
+            self.mat=ncon.ncon([y,self.mat],[[-1,1],[1,-2]])
+            self._connector=ncon.ncon([self.connector,invy],[[-1,1],[1,-2]])
+
+            #the easier solution is to do
+            #self.position(len(self))
+
+            #however, the current implementatin serves as a check that indeed the rightmost tensor is right orthogonal
+            #also, below self.mat and self.connector are left as 11, which is nice
+            self.position(len(self)-1)
+            self._tensors[-1]=ncon.ncon([self.mat,self._tensors[-1],self.connector],[[-1,1],[1,2,-3],[2,-2]])
+            Z=ncon.ncon([self._tensors[-1],self._tensors[-1].conj()],[[1,2,3],[1,2,3]])/np.sum(self.D[-1])
+            self._tensors[-1]/=np.sqrt(Z)
+            self.mat=self._tensors[-1].eye(1)/np.sum(self.D[-1])
+            self._position=len(self)
+            self._connector=self._tensors[-1].eye(1)*np.sum(self.D[-1])
+
+        if gauge in ('right','r',-1):
+            self.position(len(self))
+            eta,r=self.TMeigs(direction='right',init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig)
+            self.mat/=np.sqrt(eta)            
+            if np.abs(np.imag(eta))/np.abs(np.real(eta))>warn_thresh:
+                print ('in mpsfunctions.py.regaugeIMPS: warning: found eigenvalue eta with large imaginary part: ',eta)
+
+            r=r/r.tr()
+            r=(r+r.conj().transpose())/2.0
+
+
+            eigvals,u=r.eigh()
+            eigvals/=np.sqrt(ncon.ncon([eigvals,eigvals.conj()],[[1],[1]]))
+            abseigvals=eigvals.abs()
+            eigvals[abseigvals<=pinv]=0.0
+            inveigvals=1.0/eigvals
+            inveigvals[abseigvals<=pinv]=0.0
+
+            x=ncon.ncon([u,np.sqrt(eigvals).diag()],[[-1,1],[1,-2]])
+            invx=ncon.ncon([np.sqrt(inveigvals).diag(),u.conj()],[[-1,1],[-2,1]])
+            
+            #multiply y to the left and y^{-1} to the right bonds of the tensor:
+            #the index contraction looks weird, but is correct; my l matrices have their 0-index on the non-conjugated top layer
+            self.mat=ncon.ncon([self.mat,self.connector,x],[[-1,1],[1,2],[2,-2]])
+
+            self.position(1)
+            self._tensors[0]=ncon.ncon([invx,self._tensors[0],self.mat],[[-1,1],[1,2,-3],[2,-2]])
+            Z=ncon.ncon([self._tensors[0],self._tensors[0].conj()],[[1,2,3],[1,2,3]])/np.sum(self.D[-1])
+            self._tensors[0]/=np.sqrt(Z)
+            
+            self.mat=self._tensors[0].eye(0)/np.sum(self.D[0])
+            self._position=0
+            self._connector=self._tensors[0].eye(0)*np.sum(self.D[0])
+
+
+
+    def canonize(self,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,pinv=1E-30,warn_thresh=1E-8):
+        """
+        bring the MPS into Schmidt canonical form
+
+        Parameters:
+        ------------------------------
+        init:          tf.tensor
+                       initial guess for the eigenvector
+        precision:     float
+                       desired precision of the dominant eigenvalue
+        ncv:           int
+                       number of Krylov vectors
+        nmax:          int
+                       max number of iterations
+        numeig:        int
+                       hyperparameter, passed to scipy.sparse.linalg.eigs; number of eigenvectors 
+                       to be returned by scipy.sparse.linalg.eigs; leave at 6 to avoid problems with arpack
+        pinv:          float
+                       pseudoinverse cutoff
+        warn_thresh:   float 
+                       threshold value; if TMeigs returns an eigenvalue with imaginary value larger than 
+                       ```warn_thresh```, a warning is issued 
+
+        Returns:
+        ----------------------------------
+        None
+        """
+        self.position(0)
+        eta,l=self.TMeigs(direction='left',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
+        sqrteta=np.real(eta)
+        self.mat/=sqrteta
+    
+        if np.abs(np.imag(eta))/np.abs(np.real(eta))>warn_thresh:
+            print ('in mpsfunctions.py.regaugeIMPS: warning: found eigenvalue eta with large imaginary part: ',eta)
+    
+        l=l/l.tr()
+        l=(l+l.conj().transpose())/2.0
+
+        eigvals_left,u_left=l.eigh()
+        eigvals_left/=np.sqrt(ncon.ncon([eigvals_left,eigvals_left.conj()],[[1],[1]]))
+        abseigvals_left=eigvals_left.abs()
+        inveigvals_left=1.0/eigvals_left
+        eigvals_left[abseigvals_left<=pinv]=0.0
+        inveigvals_left[abseigvals_left<=pinv]=0.0
+        
+    
+        y=ncon.ncon([u_left,np.sqrt(eigvals_left).diag()],[[-2,1],[1,-1]])
+        invy=ncon.ncon([np.sqrt(inveigvals_left).diag(),u_left.conj()],[[-2,1],[-1,1]])
+    
+        eta,r=self.TMeigs(direction='right',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
+    
+        r=r/r.tr()
+        r=(r+r.conj().transpose())/2.0
+        eigvals_right,u_right=r.eigh()
+        eigvals_right/=np.sqrt(ncon.ncon([eigvals_right,eigvals_right.conj()],[[1],[1]]))
+        abseigvals_right=eigvals_right.abs()
+        inveigvals_right=1.0/eigvals_right        
+        eigvals_right[abseigvals_right<=pinv]=0.0
+        inveigvals_right[abseigvals_right<=pinv]=0.0
+        
+        x=ncon.ncon([u_right,np.sqrt(eigvals_right).diag()],[[-1,1],[1,-2]])
+        invx=ncon.ncon([np.sqrt(inveigvals_right).diag(),u_right.conj()],[[-1,1],[-2,1]])
+        U,lam,V=ncon.ncon([y,x],[[-1,1],[1,-2]]).svd()
+        self.mat=ncon.ncon([lam.diag(),V,invx,self.mat],[[-1,1],[1,2],[2,3],[3,-2]])
+        self._connector=ncon.ncon([self.connector,invy,U],[[-1,1],[1,2],[2,-2]])
+        self.position(len(self)-1)
+        self._tensors[-1]=ncon.ncon([self.mat,self._tensors[-1],self.connector],[[-1,1],[1,2,-3],[2,-2]])
+        Z=ncon.ncon([self._tensors[-1],self._tensors[-1].conj()],[[1,2,3],[1,2,3]])/np.sum(self.D[-1])
+        self._tensors[-1]/=np.sqrt(Z)
+        lam_norm=np.sqrt(ncon.ncon([lam,lam],[[1],[1]]))
+        lam=lam/lam_norm
+        self.mat=lam.diag()
+        self._position=len(self)
+        self._connector=(1.0/lam).diag()
+
+
+            
+        
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
         implements in-place unary operations on MPS._tensors and MPS.mat
@@ -705,7 +885,7 @@ class MPS(TensorNetwork):
         The vector will have length `N+1`, where `N == num_sites`."""
         return (
             [self.get_tensor(0).shape[0]] + 
-            [self.get_tensor(n).shape[2] for n in range(len(self))]
+            [self.get_tensor(n).shape[1] for n in range(len(self))]
         )
 
     
@@ -826,9 +1006,9 @@ class MPS(TensorNetwork):
             self[self._position]=ncon.ncon([self.mat,self[self._position]],[[-1,1],[1,-2,-3]])
             for n in range(self._position,bond):
                 if schmidt_thresh < 1E-15 and D==None:
-                    tensor,self.mat,Z=self.prepareTensor(self[n],direction=1)
+                    tensor,self.mat,Z=mf.prepare_tensor_QR(self[n],direction=1)
                 else:
-                    tensor,s,v,Z=self.prepareTruncate(self[n],direction=1,D=D,thresh=schmidt_thresh,\
+                    tensor,s,v,Z=mf.prepare_tensor_SVD(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                                     r_thresh=r_thresh)
                     self.mat=s.diag().dot(v)
                 self.Z*=Z                    
@@ -840,9 +1020,9 @@ class MPS(TensorNetwork):
 
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
-                    self.mat,tensor,Z=self.prepareTensor(self[n],direction=-1)
+                    self.mat,tensor,Z=mf.prepare_tensor_QR(self[n],direction=-1)
                 else:
-                    u,s,tensor,Z=self.prepareTruncate(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
+                    u,s,tensor,Z=mf.prepare_tensor_SVD(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
                     self.mat=u.dot(s.diag())
                 self.Z*=Z                                        
@@ -852,50 +1032,84 @@ class MPS(TensorNetwork):
         self._position=bond
 
 
+    @staticmethod
+    def ortho_deviation(tensor,which):
+        return mf.ortho_deviation(tensor,which)
+        
+
+    @staticmethod
+    def check_ortho(tensor,which,thresh=1E-8):
+        """
+        checks if orthogonality condition on tensor is obeyed up to ```thresh```
+        """
+        return mf.ortho_deviation(tensor,which)<thresh
 
         
-    def ortho(self,sites,which):
+        
+    def check_form(self,thresh=1E-8):
         """
-        checks if the orthonormalization of the mps is OK
-        prints out some stuff
+        check if the MPS is in canonical form, i.e. if all tensors to the left of self.pos are left isometric, and 
+        all tensors to the right of self.pos are right isometric
+
+        Parameters:
+        thresh:    float
+                   threshold for allowed deviation from orthogonality
+        Returns:
+        ---------------------
+        bool
         """
-        if which in (1,'l','left'):
-            if hasattr(sites,'__iter__'):
-                return [np.linalg.norm(ncon.ncon([self[site],np.conj(self[site])],[[1,-1,2],[1,-2,2]])-\
-                                       self[site].eye(1,dtype=self.dtype)) for site in sites]
-            else:
-                return np.linalg.norm(ncon.ncon([self[sites],np.conj(self[sites])],[[1,-1,2],[1,-2,2]])-\
-                                      self[sites].eye(1,dtype=self.dtype))
+        return np.all([self.check_ortho(self[site],'l',thresh) for site in range(self.pos)]+[self.check_ortho(self[site],'r',thresh) for site in range(self.pos,len(self))])
+        
+    def get_env_left(self, site):
+        """
 
-        elif which in (-1,'r','right'):
-            if hasattr(sites,'__iter__'):
-                return [np.linalg.norm(ncon.ncon([self[site],np.conj(self[site])],[[-1,1,2],[-2,1,2]])-self[site].eye(0,dtype=self.dtype)) for site in sites]
-            else:
-                return np.linalg.norm(ncon.ncon([self[sites],np.conj(self[sites])],[[-1,1,2],[-2,1,2]])-self[sites].eye(0,dtype=self.dtype))
-        else:
-            raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
-
-
+        """
+        if site<self.pos:
+            return self._tensors[site-1].eye(1)
+        elif site>=self.pos:
+            l=ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[1,-1],[1,-2]])
+            for n in range(self.pos,site):
+                l=self.transfer_op(n,direction='l',x=l)                
+        return l
+    
+    def get_env_right(self, site):
+        if site>=len(self):
+            raise IndexError('index {0} out of bounds for MPSUnitCellCentralGauge of length {1}'.format(site,len(self)))
+        if site>=self.pos:
+            return self._tensors[site+1].eye(0)
+        elif site<self.pos:
+            r=ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
+            for n in range(self.pos-1,site,-1):
+                r=self.transfer_op(n,direction='r',x=r)                
+        return r
 
     def get_tensor(self, n):
         """
         get_tensor returns an mps tensors, possibly contracted with the center matrix
         by convention, the center matrix is contracted if n==self.pos
+        the centermatrix is always absorbed from the left into the mps tensor, unless site==N-1, 
+        in which case it is absorbed from the right
+
+        the connector matrix is always absorbed into the right-most mps tensors, unless
+        self.pos==0, in which case it absorbed into the left-most mps tensor
+
         """
 
-        if (n != self.pos) and (self.pos<len(self)):
+        if n != (self.pos) and (self.pos<len(self)):
             out = self._tensors[n]
         elif (n == self.pos)  and (self.pos<len(self)):
-            out = ncon([self.centermatrix,self._tensors[n]],[[-1,1],[1,-2,-3]])
-        elif (n != (self.pos-1))  and (self.pos==len(self)):
+            out = ncon.ncon([self.centermatrix,self._tensors[n]],[[-1,1],[1,-2,-3]])
+        elif n != (len(self)-1) and (self.pos==len(self)):
             out = self._tensors[n]
-        elif (n == (self.pos-1))  and (self.pos==len(self)):
-            out = ncon([self._tensors[n],self.centermatrix],[[-1,-2,1],[1,-3]])
+        elif (n == (len(self)-1))  and (self.pos==len(self)):
+            out = ncon.ncon([self._tensors[n],self.centermatrix],[[-1,1,-3],[1,-2]])
         
-        if n==(len(self)-1):
-            return ncon([out,self.connector],[[-1,-2,1],[1,-3]])
-        else:
-            return out
+        if (n==(len(self)-1)) and (self.pos!=0):
+            out=ncon.ncon([out,self.connector],[[-1,1,-3],[1,-2]])
+        elif (n==0) and (self.pos==0):
+            out=ncon.ncon([self.connector,out],[[-1,1],[1,-2,-3]])
+        return out
+
             
     def set_tensor(self, n, tensor):
         raise NotImplementedError()
@@ -967,7 +1181,7 @@ class MPS(TensorNetwork):
         if preserve_position==True:
             self.position(site)
             tensor=ncon.ncon([self.localWaveFunction(length=1),gate],[[-1,-2,1],[-3,1]])
-            A,mat,Z=self.prepareTensor(tensor,1)
+            A,mat,Z=mf.prepare_tensor_QR(tensor,1)
             self.Z*=Z
             self[site]=A
             self.mat=mat
@@ -1055,6 +1269,14 @@ class FiniteMPS(MPS):
         U,S,V=self.mat.svd(full_matrices=False)
         return S
 
+    def regauge(self,gauge):
+        if gauge in (1,'l','left'):
+            self.position(0)
+            self.position(len(self))
+        if gauge in (-1,'r','right'):
+            self.position(len(self))
+            self.position(0)
+            
     def canonize(self,name=None):
         """
         """
@@ -1069,7 +1291,6 @@ class FiniteMPS(MPS):
             Gammas.append(ncon.ncon([(1.0/Lambdas[-1]).diag(),self[n]],[[-1,1],[1,-2,-3]]))
             Lambdas.append(self.mat.diag())
         return CanonizedFiniteMPS(gammas=Gammas,lambdas=Lambdas,name=name)
-        
             
     def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
         """ 
@@ -1197,6 +1418,9 @@ class FiniteMPS(MPS):
 
 
 class  CanonizedMPS(TensorNetwork):
+    """
+
+    """
     class GammaTensors(object):
         """
         helper class to implement calls such as camps.Gamma[site]
@@ -1217,7 +1441,13 @@ class  CanonizedMPS(TensorNetwork):
             if site>=N:
                 raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
             self._data[int(2*site+1)]=val
-
+            
+        def __len__(self):
+            return int((len(self._data)-1)/2)
+        
+        def __iter__(self):
+            return (self[n] for n in range(len(self)))
+        
     class LambdaTensors(object):
         """
         helper class to implement calls such as camps.Lambda[site]
@@ -1238,7 +1468,13 @@ class  CanonizedMPS(TensorNetwork):
             if site>=N:
                 raise IndexError('CanonizedMPS.Gamms[index]: index {0} out of bounds or CanonizedMPS of length {1}'.format(site,N))
             self._data[int(2*site)]=val
-
+            
+        def __len__(self):
+            return int((len(self._data)-1)/2+1)
+        
+        def __iter__(self):
+            return (self[n] for n in range(len(self)))
+        
             
     def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None):
         """
@@ -1257,7 +1493,6 @@ class  CanonizedMPS(TensorNetwork):
             self._D=max(self.D)
         else:
             self._D=Dmax
-
 
     @classmethod
     def fromList(cls,tensors,Dmax=None,name=None):
@@ -1293,8 +1528,37 @@ class  CanonizedMPS(TensorNetwork):
         Returns:
         int
         """
+        return len(self.Gamma)
 
-        return int((len(self._tensors)-1)/2)
+    @property
+    def num_sites(self):
+        return len(self.Gamma)
+    
+    def get_tensor(self,n,mult='l'):
+        if mult in (1,'l','left'):
+            out=ncon.ncon([self.Lambda[n].diag(),self.Gamma[n]],[[-1,1],[1,-2,-3]])
+            if n==(self.num_sites-1):
+                out=ncon.ncon([out,self.Lambda[n+1].diag()],[[-1,1,-3],[1,-2]])
+        elif mult in (-1,'r','right'):
+            out=ncon.ncon([self.Gamma[n],self.Lambda[n+1].diag()],[[-1,1,-3],[1,-2]])
+            if n==0:
+                out=ncon.ncon([self.Lambda[n].diag(),out],[[-1,1],[1,-2,-3]])
+                
+        return out
+
+    def __iter__(self):
+        """
+        iterates through the mps tensors
+        lambda is absorbed from the left into the Gammas, result is returned
+        """
+        return (self.get_tensor(n) for n in range(self.num_sites))
+
+    def iterator(self,mult='l'):
+        """
+        iterates through the mps tensors
+        lambda is absorbed from the left into the Gammas, result is returned
+        """
+        return (self.get_tensor(n,mult) for n in range(self.num_sites))
     
     @property
     def D(self):
@@ -1373,7 +1637,6 @@ class  CanonizedMPS(TensorNetwork):
         else:
             return self.fromList(tensors=result,Dmax=self.Dmax,name=None)                        
 
-        
 class  CanonizedFiniteMPS(CanonizedMPS):
     def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=True):
         """
@@ -1451,33 +1714,6 @@ class  CanonizedFiniteMPS(CanonizedMPS):
             print('{1} is not left canonized at site(s) {0} within {2}'.format(np.nonzero(left)[0][:],type(self),thresh))
         return False
         
-    def ortho(self,sites,which):
-        """
-        checks if the orthonormalization of the CanonizedMPS is OK
-        """
-        if which in (1,'l','left'):
-            if hasattr(sites,'__iter__'):
-                tensors=[ncon.ncon([self.Lambda[site].diag(),self.Gamma[site]],[[-1,1],[1,-2,-3]]) for site in sites]
-                return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[1,-1,2],[1,-2,2]])-\
-                                       tensors[n].eye(1,dtype=self.dtype)) for n in range(len(tensors))]
-            else:
-                tensor=ncon.ncon([self.Lambda[sites].diag(),self.Gamma[sites]],[[-1,1],[1,-2,-3]])
-                return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[1,-1,2],[1,-2,2]])-\
-                                      tensor.eye(1,dtype=self.dtype))
-
-        elif which in (-1,'r','right'):
-            if hasattr(sites,'__iter__'):
-                tensors=[ncon.ncon([self.Lambda[site+1].diag(),self.Gamma[site]],[[1,-2],[-1,1,-3]]) for site in sites]
-                return [np.linalg.norm(ncon.ncon([tensors[n],np.conj(tensors[n])],[[-1,1,2],[-2,1,2]])-\
-                                       tensors[n].eye(0,dtype=self.dtype)) for n in range(len(tensors))]
-
-            else:
-                tensor=ncon.ncon([self.Lambda[sites+1].diag(),self.Gamma[sites]],[[1,-2],[-1,1,-3]])
-                return np.linalg.norm(ncon.ncon([tensor,np.conj(tensor)],[[-1,1,2],[-2,1,2]])-\
-                                      tensor.eye(0,dtype=self.dtype))
-
-        else:
-            raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
         
 
 

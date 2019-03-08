@@ -31,13 +31,24 @@ class TensorBase(object):
     
     @staticmethod
     def directSum(*args,**kwargs):
-        return NotImplementedError('TensorBase.directSum: not implemented')
+        raise NotImplementedError('TensorBase.directSum: not implemented')
     @staticmethod
     def concatenate(arrs,*args,**kwargs):
-        return NotImplementedError('TensorBase.concatenate: not implemented')        
+        raise NotImplementedError('TensorBase.concatenate: not implemented')        
 
     def squeeze(*args,**kwargs):
-        return NotImplementedError('TensorBase.concatenate: not implemented')        
+        raise NotImplementedError('TensorBase.squeeze: not implemented')        
+
+    def to_dense(self):
+        raise NotImplementedError('TensorBase.to_dense: not implemented')
+    def from_dense(self):
+        raise NotImplementedError('TensorBase.from_dense: not implemented')        
+    def herm(self):
+        raise NotImplementedError()
+    def trace(self):
+        raise NotImplementedError()        
+    def abs(self):
+        raise NotImplementedError()        
 
     
 class Tensor(np.ndarray,TensorBase):
@@ -196,6 +207,10 @@ class Tensor(np.ndarray,TensorBase):
 
     def qr(self,**kwargs):
         return np.linalg.qr(self,**kwargs)
+    
+    def eigh(self,**kwargs):
+        eta,u=np.linalg.eigh(self,**kwargs)
+        return eta.view(type(self)), u.view(type(self))
 
     def squeeze(self,thresh):
         
@@ -246,4 +261,14 @@ class Tensor(np.ndarray,TensorBase):
     def inv(self):
         return np.linalg.inv(self)
 
-
+    def to_dense(self):
+        return self.reshape(np.prod(self.shape))
+    @staticmethod
+    def from_dense(dense,shape):
+        return dense.reshape(shape).view(Tensor)
+    def herm(self):
+        return self.conj().T
+    def tr(self,**kwargs):
+        return np.trace(self,**kwargs)
+    def abs(self):
+        return np.abs(self)
