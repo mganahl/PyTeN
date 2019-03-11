@@ -338,7 +338,7 @@ class FiniteDMRGengine(MPSSimulation):
         return e
     
     
-    def runOneSite(self,Nsweeps=4,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
+    def run_one_site(self,Nsweeps=4,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
         """
         do a one-site DMRG optimzation for an open system
         Paramerters:
@@ -390,7 +390,7 @@ class FiniteDMRGengine(MPSSimulation):
         return e
 
 
-    def runTwoSite(self,Nsweeps=4,thresh=1E-10,D=None,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
+    def run_two_site(self,Nsweeps=4,thresh=1E-10,D=None,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
         """
         do a one-site DMRG optimzation for an open system
         Paramerters:
