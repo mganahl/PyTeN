@@ -485,10 +485,10 @@ class MPSBase(TensorNetwork):
         """
         A = self.get_tensor(site)
         return mf.transfer_operator(A,A,direction=direction, x=x)
+
     
     def get_env_left(self, site):
         raise NotImplementedError()
-    
     def get_env_right(self, site):
         raise NotImplementedError()
         
@@ -556,22 +556,26 @@ class MPSBase(TensorNetwork):
         self.pos==0, in which case it absorbed into the left-most mps tensor
 
         """
+        if n < 0:
+            raise ValueError("n={} is less than zero!".format(n))
 
-        if n != (self.pos) and (self.pos<self.num_sites):
-            out = self._tensors[n]
-        elif (n == self.pos)  and (self.pos<self.num_sites):
-            out = ncon.ncon([self.centermatrix,self._tensors[n]],[[-1,1],[1,-2,-3]])
-        elif n != (self.num_sites-1) and (self.pos==self.num_sites):
-            out = self._tensors[n]
-        elif (n == (self.num_sites-1))  and (self.pos==self.num_sites):
-            out = ncon.ncon([self._tensors[n],self.centermatrix],[[-1,1,-3],[1,-2]])
+        if self.pos < len(self):
+            if n == self.pos:
+                out = ncon.ncon([self.centermatrix,self._tensors[n]],[[-1,1],[1,-2,-3]])
+            else:
+                out = self._tensors[n]
+        elif self.pos == len(self):
+            if n == (self.pos-1):
+                out = ncon.ncon([self._tensors[n],self.centermatrix],[[-1,1,-3],[1,-2]])
+            else:
+                out = self._tensors[n]
+        else:
+            raise ValueError("Invalid tensor index {}".format(n))
         
-        if (n==(self.num_sites-1)) and (self.pos!=0):
-            out=ncon.ncon([out,self.connector],[[-1,1,-3],[1,-2]])
-        elif (n==0) and (self.pos==0):
-            out=ncon.ncon([self.connector,out],[[-1,1],[1,-2,-3]])
-        return out
-
+        if n == (len(self)-1):
+            return ncon.ncon([out,self.connector],[[-1,1,-3],[1,-2]])
+        else:
+            return out
 
     def measure_1site_ops(self,ops,sites):
         """
@@ -621,9 +625,10 @@ class MPS(MPSBase):
         else:
             self._D=Dmax
         self.mat=tensors[-1].eye(1)
-        self.mat=self.mat/np.sqrt(np.sum(tensors[-1].shape[1]))
+        self._left_mat=tensors[-1].eye(1)
         self._connector=self.mat.inv()
         self._position=self.num_sites
+
 
     def __len__(self):
         return self.num_sites
@@ -646,11 +651,13 @@ class MPS(MPSBase):
             self.position(len(self))
         self.position(self.pos)                        
         self.Z=self.dtype.type(1)
-        
+
+
     def get_env_left(self, site):
         """
         obtain the left environment of ```site```
         """
+        site=site%len(self)                                        
         if site >= len(self) or site < 0:
             raise IndexError('index {0} out of bounds for MPSUnitCellCentralGauge of length {1}'.format(site,len(self)))
 
@@ -661,23 +668,28 @@ class MPS(MPSBase):
             for n in range(self.pos,site):
                 l=self.transfer_op(n,direction='l',x=l)
             return l
-    
+
+
     def get_env_right(self, site):
         """
         obtain the right environment of ```site```
         """
         
+        site=site%len(self)                                
         if site >= len(self) or site < 0:
             raise IndexError('index {0} out of bounds for MPSUnitCellCentralGauge of length {1}'.format(site,len(self)))
 
-        if site >= self.pos or (site == len(self)-1 and self.pos == len(self)):
-            return self[site].eye(1)
-        else:
-            r=ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
-            for n in range(self.pos-1,site,-1):
-                r=self.transfer_op(n,direction='r',x=r)                
-            return r
+        if site==len(self)-1:
+            return ncon.ncon([self._left_mat,self._left_mat.conj()],[[-1,1],[-2,1]])
 
+        elif site >= self.pos and site < len(self)-1:
+            return self[site].eye(1)            
+        else:
+            r=ncon.ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
+            for n in range(self.pos-1,site,-1):
+                r = self.transfer_op(n,'r',r)                            
+            return r
+        
     def get_unitcell_transfer_op(self,direction):
         """
         Returns a function that implements the transfer operator for the
@@ -788,6 +800,7 @@ class MPS(MPSBase):
             return eta[m],type(self[0]).from_dense(vec[:,m],[self.D[0],self.D[0]])
 
     def regauge(self,gauge,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,pinv=1E-50,warn_thresh=1E-8):
+        raise NotImplementedError()
         """
         regauge the MPS into left or right canonical form (inplace)
 
@@ -957,10 +970,15 @@ class MPS(MPSBase):
         x=ncon.ncon([u_right,np.sqrt(eigvals_right).diag()],[[-1,1],[1,-2]])
         invx=ncon.ncon([np.sqrt(inveigvals_right).diag(),u_right.conj()],[[-1,1],[-2,1]])
         U,lam,V=ncon.ncon([y,x],[[-1,1],[1,-2]]).svd()
-        self.mat=ncon.ncon([lam.diag(),V,invx,self.connector,self.mat],[[-1,1],[1,2],[2,3],[3,4],[4,-2]])
-        self._tensors[-1]=ncon.ncon([self._tensors[-1],invy,U],[[-1,1,-3],[1,2],[2,-2]])
+
+        self._tensors[0]=ncon.ncon([lam.diag(),V,invx,self.get_tensor(0)],[[-1,1],[1,2],[2,3],[3,-2,-3]])
+        self._tensors[-1]=ncon.ncon([self.get_tensor(len(self)-1),invy,U],[[-1,1,-3],[1,2],[2,-2]])
+        self.mat=self._tensors[0].eye(0)
+        self._connector=self._tensors[-1].eye(1)        
+        
         self.position(len(self)-1)
-        self._tensors[-1]=ncon.ncon([self.mat,self._tensors[-1]],[[-1,1],[1,-2,-3]])
+        self._tensors[-1]=self.get_tensor(len(self)-1)        
+
         Z=ncon.ncon([self._tensors[-1],self._tensors[-1].conj()],[[1,2,3],[1,2,3]])/np.sum(self.D[-1])
         self._tensors[-1]/=np.sqrt(Z)
         lam_norm=np.sqrt(ncon.ncon([lam,lam],[[1],[1]]))
@@ -968,7 +986,7 @@ class MPS(MPSBase):
         self.mat=lam.diag()
         self._position=len(self)
         self._connector=(1.0/lam).diag()
-
+        self._left_mat=lam.diag()
 
             
         
@@ -1244,6 +1262,39 @@ class MPS(MPSBase):
     def set_tensor(self, n, tensor):
         raise NotImplementedError()
         
+    def get_left_orthogonal_imps(self,
+                                 init=None,
+                                 precision=1E-12,
+                                 ncv=50,
+                                 nmax=1000,
+                                 numeig=1,
+                                 pinv=1E-30,
+                                 warn_thresh=1E-8,
+                                 restore_form=True,
+                                 name=None):
+        if not restore_form:        
+            self.canonize(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
+        return MPS(tensors=[self.get_tensor(n) for n in range(len(self))],Dmax=self._D,name=name)
+        
+    def get_right_orthogonal_imps(self,
+                                  init=None,
+                                  precision=1E-12,
+                                  ncv=50,
+                                  nmax=1000,
+                                  numeig=1,
+                                  pinv=1E-30,
+                                  warn_thresh=1E-8,
+                                  restore_form=True):
+        if not restore_form:
+            self.restore_form(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
+        self.position(0)
+        A=ncon([self.connector,self.mat,self._tensors[0]],[[-1,1],[1,2],[2,-2,-3]])
+        tensors=[A]+[self._tensors[n] for n in range(1,len(self))]
+        imps=InfiniteMPSCentralGauge(tensors=tensors)
+        imps.pos=0
+        return imps
+        
+                     
         
     # def apply_2site_gate(self,gate,site,Dmax=None,thresh=1E-16):
     #     """
