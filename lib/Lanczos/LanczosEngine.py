@@ -51,14 +51,13 @@ class LanczosEngine(object):
             kn.append(knval)
             xn=xn/kn[-1]
             #store the Lanczos vector for later
-
             if reortho==True:
                 for v in self.vecs:
                     xn-=ncon.ncon([v.conj(),xn],[range(len(v.shape)),range(len(xn.shape))])*v
             self.vecs.append(xn)                    
             Hxn=self.matvec(xn)
             epsn.append(ncon.ncon([xn.conj(),Hxn],[range(len(xn.shape)),range(len(Hxn.shape))]))
-            if ((it%self.Ndiag)==0)&(len(epsn)>=self.numeig):
+            if ((it>0) and (it%self.Ndiag)==0)&(len(epsn)>=self.numeig):
                 #diagonalize the effective Hamiltonian
                 Heff=np.diag(epsn)+np.diag(kn[1:],1)+np.diag(np.conj(kn[1:]),-1)
                 eta,u=np.linalg.eigh(Heff)

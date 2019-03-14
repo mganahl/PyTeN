@@ -20,6 +20,7 @@ import lib.utils.utilities as utils
 import lib.ncon as ncon
 from lib.mpslib.Container import Container
 from scipy.sparse.linalg import ArpackNoConvergence
+import time
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
@@ -276,6 +277,7 @@ class FiniteDMRGengine(MPSSimulation):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
+        self.times=[]
         super(FiniteDMRGengine,self).__init__(mps=mps,mpo=mpo,name=name,lb=lb,rb=rb)
 
 
@@ -290,7 +292,9 @@ class FiniteDMRGengine(MPSSimulation):
         lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
         initial,mps_merge_data=ncon.ncon([self.mps[self.mps.pos-1],self.mps.mat,self.mps[self.mps.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).merge([[0],[1],[2,3]])
 
+        t1=time.time()
         e,opt,conv=lan.simulate(initial)
+        self.times.append(time.time()-t1)
         temp,merge_data=opt[0].split(mps_merge_data).transpose(0,2,3,1).merge([[0,1],[2,3]])
 
         U,S,V=temp.svd(truncation_threshold=thresh,D=D)
@@ -323,8 +327,9 @@ class FiniteDMRGengine(MPSSimulation):
             return ncon.ncon([L,mps,mpo,R],[[1,-1,2],[1,4,3],[2,5,-3,3],[4,-2,5]])
         mv=fct.partial(HAproduct,*[self.leftEnv(self.mps.pos),self.mpo[self.mps.pos],self.rightEnv(self.mps.pos)])
         lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
-
+        t1=time.time()
         e,opt,conv=lan.simulate(initial)
+        self.times.append(time.time()-t1)
         Dnew=opt[0].shape[1]
         if verbose>0:
             stdout.write("\rSS-DMRG it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._it,self.Nsweeps,self.mps.pos,len(self.mps),np.real(e),np.imag(e),Dnew))
