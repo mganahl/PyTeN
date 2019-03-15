@@ -56,11 +56,10 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
     list of Tensor objects of shape ```shapes```, initialized with numpy_func
     """
 
-    minval=kwargs.get('mean',-0.5)
-    maxval=kwargs.get('std',0.5)
-
+    minval=kwargs.get('minval',-0.5)
+    maxval=kwargs.get('maxval',0.5)
     mean=kwargs.get('mean',0.0)
-    std=kwargs.get('std',0.1)
+    std=kwargs.get('std',0.7)
     dtype=kwargs.get('dtype',np.float64)
     if numpy_func in (np.random.random_sample,np.random.rand):
         if np.issubdtype(dtype,np.complexfloating):
@@ -129,7 +128,11 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         else:
             raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
 
-    
+
+    def set_tensors(self,tensors):
+        for n in range(len(tensors)):
+            self._tensors[n]=tensors[n]
+        
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
         """
         implements in-place unary operations on TensorNetwork tensors
@@ -515,7 +518,7 @@ class MPSBase(TensorNetwork):
         for n in range(n2,n1-1,-1):
             if n in sites:
                 rs[n] = r
-            r = self.transfer_op(n,'r',r)            
+            r = self.transfer_op(n%self.num_sites,'r',r)            
         return rs
     
     def get_envs_left(self, sites):
@@ -541,7 +544,7 @@ class MPSBase(TensorNetwork):
         for n in range(n1,n2+1):
             if n in sites:
                 ls[n] = l
-            l = self.transfer_op(n,'l',l)
+            l = self.transfer_op(n%self.num_sites,'l',l)
         return ls
     
 
@@ -552,10 +555,10 @@ class MPSBase(TensorNetwork):
         the centermatrix is always absorbed from the left into the mps tensor, unless site==N-1, 
         in which case it is absorbed from the right
 
-        the connector matrix is always absorbed into the right-most mps tensors, unless
-        self.pos==0, in which case it absorbed into the left-most mps tensor
+        the connector matrix is always absorbed into the right-most mps tensors
 
         """
+        n=n%self.num_sites
         if n < 0:
             raise ValueError("n={} is less than zero!".format(n))
 
@@ -577,6 +580,32 @@ class MPSBase(TensorNetwork):
         else:
             return out
 
+    def measure_1site_correlator(self, op1, op2, n1, n2_max):
+        """
+        state has top be normalized
+        """
+        N = self.num_sites
+        if n1 < 0 or n1 >= N:
+            raise ValueError(
+                "Site n1 out of range: {} not between 0 and {}.".format(n1, N))
+        ls = self.get_envs_left([n1])
+        rs = self.get_envs_right([n % N for n in range(n1 + 1, n2_max + 1)])
+
+        A = self.get_tensor(n1)
+        l = ncon.ncon([ls[n1], A, op1, A.conj()], [(0, 1), (0, -1,2), (3, 2),
+                                                   (1, -2,3)])
+        c = []
+        for n in range(n1 + 1, n2_max + 1):
+            r = rs[n % N]
+            A = self.get_tensor(n % N)
+            res = ncon.ncon([l, A, op2, A.conj(),r], [[1,4],[1,5,2],[3,2],[4,6,3],[5,6]])
+            c.append(res)
+
+            if n < n2_max:
+                l = self.transfer_op(n % N, 'left', l)
+
+        return c
+        
     def measure_1site_ops(self,ops,sites):
         """
         Expectation value of list of  single-site operators on sites
@@ -608,7 +637,7 @@ class MPSBase(TensorNetwork):
         return np.array(res)#[o/norm for o in res]
 
     def norm(self):
-        raise NotImplementedError()
+        return self.Z
 
     def normalize(self):
         raise NotImplementedError()
@@ -627,6 +656,7 @@ class MPS(MPSBase):
         self.mat=tensors[-1].eye(1)
         self._left_mat=tensors[-1].eye(1)
         self._connector=self.mat.inv()
+        #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
         self._position=self.num_sites
 
 
@@ -640,19 +670,54 @@ class MPS(MPSBase):
     def connector(self):
         return self._connector
     
-    def normalize(self):
-        pos=self.pos
-        if self.pos==len(self):
-            self.position(0)
-        elif self.pos==0:
-            self.position(len(self))
-        else:
-            self.position(0)
-            self.position(len(self))
-        self.position(self.pos)                        
+    def normalize(self,**kwargs):
+        self.canonize(numeig=1,**kwargs)
         self.Z=self.dtype.type(1)
 
+    def roll(self, num_sites):
+        """
+        roll the mps unitcell by num_sites (shift it by num_sites)
+        """
+        self.position(num_sites)
+        centermatrix = tf.Variable(self.mat)  #copy the center matrix
+        self.position(len(self))  #move cenermatrix to the right
+        new_center_matrix = ncon([self.mat, self.connector], [[-1, 1], [1, -2]])
 
+        self.pos = num_sites
+        self.mat = tf.Variable(centermatrix)
+        self.position(0)
+        new_center_matrix = ncon([new_center_matrix, self.mat],
+                                 [[-1, 1], [1, -2]])
+        tensors=[self._tensors[n] for n in range(num_sites,len(self._tensors))]\
+            + [self._tensors[n] for n in range(num_sites)]
+        self._tensors = tensors
+        self.connector = tf.linalg.inv(centermatrix)
+        self._left_mat = centermatrix
+        self.mat = new_center_matrix
+        self.pos = len(self) - num_sites
+
+
+    def schmidt_spectrum(self,n,canonize=True,**kwargs):
+        """
+        schmidt_spectrum(n):
+
+        return the Schmidt-values on bond n:
+        Parameters:
+        ---------------------------------
+        n: int
+           the bond number
+
+        Returns:
+        -------------------
+        S: np.ndarray of shape (D[n],)
+           the D[n] Schmidt values
+        """
+        if canonize==True:
+            self.canonize(**kwargs)
+        self.position(n)
+        U,S,V=self.mat.svd(full_matrices=False)
+        return S
+        
     def get_env_left(self, site):
         """
         obtain the left environment of ```site```
@@ -987,7 +1052,7 @@ class MPS(MPSBase):
         self._position=len(self)
         self._connector=(1.0/lam).diag()
         self._left_mat=lam.diag()
-
+        self.Z=self.dtype.type(1)
             
         
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
@@ -1168,8 +1233,6 @@ class MPS(MPSBase):
             self[self.pos]=ncon.ncon([V,self[self.pos]],[[-1,1],[1,-2,-3]])                        
 
 
-
-    
     def position(self,bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         """
         position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
@@ -1188,8 +1251,6 @@ class MPS(MPSBase):
                   internal parameter, has no relevance 
         """
 
-        assert(bond<=self.num_sites)
-        assert(bond>=0)
         """
         set the values for the schmidt_thresh-threshold, D-threshold and r_thresh-threshold
         r_thresh is used in case that svd throws an exception (happens sometimes in python 2.x)
@@ -1270,9 +1331,9 @@ class MPS(MPSBase):
                                  numeig=1,
                                  pinv=1E-30,
                                  warn_thresh=1E-8,
-                                 restore_form=True,
+                                 canonize=True,
                                  name=None):
-        if not restore_form:        
+        if canonize:        
             self.canonize(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
         return MPS(tensors=[self.get_tensor(n) for n in range(len(self))],Dmax=self._D,name=name)
         
@@ -1284,90 +1345,74 @@ class MPS(MPSBase):
                                   numeig=1,
                                   pinv=1E-30,
                                   warn_thresh=1E-8,
-                                  restore_form=True):
-        if not restore_form:
-            self.restore_form(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
+                                  canonize=True):
+        if canonize:
+            self.canonize(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
         self.position(0)
-        A=ncon([self.connector,self.mat,self._tensors[0]],[[-1,1],[1,2],[2,-2,-3]])
+        A=ncon.ncon([self.connector,self.mat,self._tensors[0]],[[-1,1],[1,2],[2,-2,-3]])
         tensors=[A]+[self._tensors[n] for n in range(1,len(self))]
-        imps=InfiniteMPSCentralGauge(tensors=tensors)
-        imps.pos=0
+        imps=MPS(tensors=tensors)
+        imps._position=0
         return imps
         
                      
+    def apply_2site_gate(self,gate,site,Dmax=None,thresh=1E-16):
+        """
+        applies a two-site gate to the mps at site ```site```, 
+        and does a truncation with truncation threshold "thresh"
+        the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
+
+
+        Parameters:
+        --------------------------
+        gate:   np.ndarray of shape (dout1,dout2,din1,din2)
+                the gate to be applied to the mps.
+        site:   int
+                the left-hand site of the support of ```gate```
+        Dmax:   int
+                the maximally allowed bond dimension
+                bond dimension will never be larger than ```Dmax```, irrespecitive of ```thresh```
+        thresh: float  
+                truncation threshold; all schmidt values < ```thresh`` are discarded
+        Returns:
+        tuple (tw,D):
+        tw: float
+            the truncated weight
+        D:  int
+            the current bond dimension D on bond=site+1
         
-    # def apply_2site_gate(self,gate,site,Dmax=None,thresh=1E-16):
-    #     """
-    #     applies a two-site gate to the mps at site ```site```, 
-    #     and does a truncation with truncation threshold "thresh"
-    #     the center bond is shifted to bond site+1 and mps[site],mps._mat and mps[site+1] are updated
+        """
+
+        if type(gate)!=type(self[site]):
+            raise TypeError('MPS.apply_2site_gate(): provided gate has to be of same type as MPS tensors')
+        self.position(site+1)
+        newState=ncon.ncon([self.get_tensor(site),self.get_tensor(site+1),gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
+        [Dl,d1,d2,Dr]=newState.shape
+        newState,merge_data=newState.merge([[0,1],[2,3]])
+        U,S,V=newState.svd(truncation_threshold=thresh,D=Dmax,full_matrices=False)
+        Strunc=S.truncate([Dmax]).squeeze(thresh)
+        tw=float(np.sum(S**2)-np.sum(Strunc**2))
+        Strunc/=Strunc.norm()
+        U=U.truncate([U.shape[0],Strunc.shape[0]]) 
+        V=V.truncate([Strunc.shape[0],V.shape[1]])
+        self[site]=np.transpose(np.reshape(U,(Dl,d1,Strunc.shape[0])),(0,2,1))
+        self[site+1]=np.transpose(np.reshape(V,(Strunc.shape[0],d2,Dr)),(0,2,1))
+        self.mat=Strunc.diag()
+        return tw,Strunc.shape[0]
 
 
-    #     Parameters:
-    #     --------------------------
-    #     gate:   np.ndarray of shape (dout1,dout2,din1,din2)
-    #             the gate to be applied to the mps.
-    #     site:   int
-    #             the left-hand site of the support of ```gate```
-    #     Dmax:   int
-    #             the maximally allowed bond dimension
-    #             bond dimension will never be larger than ```Dmax```, irrespecitive of ```thresh```
-    #     thresh: float  
-    #             truncation threshold; all schmidt values < ```thresh`` are discarded
-    #     Returns:
-    #     tuple (tw,D):
-    #     tw: float
-    #         the truncated weight
-    #     D:  int
-    #         the current bond dimension D on bond=site+1
-        
-    #     """
-    #     assert(len(gate.shape)==4)
-    #     assert(site<len(self)-1)
-    #     if type(gate)!=type(self[site]):
-    #         raise TypeError('MPS.apply_2site_gate(): provided gate has to be of same type as MPS tensors')
-    #     self.position(site+1)
-    #     newState=ncon.ncon([self.get_tensor(site),self.get_tensor(site+1),gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
-    #         [Dl,d1,d2,Dr]=newState.shape
-    #         newState=newState.merge([[0,1],[2,3]])
-    #         U,S,V=newState.svd(full_matrices=False)
-    #         Strunc=S.truncate([Dmax]).squeeze(thresh)
-    #         tw=float(np.sum(S**2)-np.sum(Strunc**2))
-    #         Strunc/=Strunc.norm()
-    #         U=U.truncate([U.shape[0],Strunc.shape[0]]) 
-    #         V=V.truncate([Strunc.shape[0],V.shape[1]])
-    #         self[site]=np.transpose(np.reshape(U,(Dl,d1,Strunc.shape[0])),(0,2,1))
-    #         self[site+1]=np.transpose(np.reshape(V,(Strunc.shape[0],d2,Dr)),(0,2,1))
-    #         self.mat=Strunc.diag()
-    #         self._position=site+1
-    #         return tw,Strunc.shape[0]
-    #     else:
-    #         newState=ncon.ncon([self[site],self[site+1],gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
-    #         [Dl,d1,d2,Dr]=newState.shape
-    #         newState=newState.merge([[0,1],[2,3]])
-    #         U,S,V=newState.svd(full_matrices=False)
-    #         self[site]=np.transpose(np.reshape(ncon.ncon([U,S.diag()],[[-1,1],[1,-2]]),(Dl,d1,S.shape[0])),(0,2,1))
-    #         self[site+1]=np.transpose(np.reshape(V,(S.shape[0],d2,Dr)),(0,2,1))
-    #         return 0.0,S.shape[0]
-
-    def applyOneSiteGate(self,gate,site,preserve_position=True):
+    def apply_1site_gate(self,gate,site):
         """
         applies a one-site gate to an mps at site "site"
         the center bond is shifted to bond site+1 
         the _Z norm of the mps is changed
         """
-        assert(len(gate.shape)==2)
-        assert(site<len(self))
-        if preserve_position==True:
-            self.position(site)
-            tensor=ncon.ncon([self.localWaveFunction(length=1),gate],[[-1,-2,1],[-3,1]])
-            A,mat,Z=mf.prepare_tensor_QR(tensor,1)
-            self.Z*=Z
-            self[site]=A
-            self.mat=mat
-        else:
-            tensor=ncon.ncon([self[site],gate],[[-1,-2,1],[-3,1]])
-            self[site]=tensor
+        self.position(site)
+        tensor=ncon.ncon([self.get_tensor(site),gate],[[-1,-2,1],[-3,1]])
+        A,mat,Z=mf.prepare_tensor_QR(tensor,1)
+        self.Z*=Z
+        self[site]=A
+        self.mat=mat
         return self
 
     
@@ -1415,9 +1460,21 @@ class FiniteMPS(MPS):
             [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
         return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax) #out is an unnormalized MPS
+    
+    def normalize(self):
+        pos=self.pos
+        if self.pos==len(self):
+            self.position(0)
+        elif self.pos==0:
+            self.position(len(self))
+        else:
+            self.position(0)
+            self.position(len(self))
+        self.position(self.pos)                        
+        self.Z=self.dtype.type(1)
 
-    def norm(self):
-        return np.sqrt(ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[1,2],[1,2]]))
+    #def norm(self):
+    #    return np.sqrt(ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[1,2],[1,2]]))
     
     def schmidt_spectrum(self,n):
         """

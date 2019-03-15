@@ -20,14 +20,15 @@ import lib.Lanczos.LanczosEngine as LZ
 import lib.utils.utilities as utils
 import lib.ncon as ncon
 from lib.mpslib.Container import Container
+from lib.mpslib.TensorNetwork import FiniteMPS,MPS
 from scipy.sparse.linalg import ArpackNoConvergence
 import time
 comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
 anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
-class MPSSimulation(Container):
-    def __init__(self,mps,mpo,name=None,lb=None,rb=None):
+class MPSSimulationBase(Container):
+    def __init__(self,mps,mpo,lb,rb,name):
         """
         Base class for simulation objects; upon initialization, creates all 
         left and right envvironment blocks
@@ -46,31 +47,17 @@ class MPSSimulation(Container):
                   rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
                   if None, obc are assumed, and rb=ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
-        super(MPSSimulation,self).__init__(name=name)
+        super().__init__(name=name)
         self.mps=mps
         self.mpo=mpo
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
-        self.L=[None]*(len(self)+1)
-        self.R=[None]*(len(self)+1)
+        self.mps.position(0)        
+        self.left_envs = {} 
+        self.right_envs = {}
+        self.lb=lb
+        self.rb=rb
 
-        if (np.all(lb!=None)) and (np.all(rb!=None)):
-            if not np.sum(mps[0].shape[0])==np.sum(lb.shape[0]):
-                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): shape of lb is incompatible with the shape of mps[0]')
-            if not np.sum(mps[-1].shape[1])==np.sum(rb.shape[0]):
-                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): shape of rb is incompatible with the shape of mps[-1]')
-            if lb.shape[0]!=lb.shape[1]:
-                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): lb has to be square')
-            if rb.shape[0]!=rb.shape[1]:
-                raise ValueError('MPSSimulation.__init__(mps,mpo,name,lb,rb): rb has to be square')
-
-            self.lb=lb
-            self.rb=rb
-        else:
-            self.lb=self.mps.tensortype.ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]),dtype=self.dtype)
-            self.rb=self.mps.tensortype.ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]),dtype=self.dtype)
-        self.computeL()
-        self.computeR()
         
     def __len__(self):
         """
@@ -88,59 +75,10 @@ class MPSSimulation(Container):
         """
         return np.result_type(self.mps.dtype,self.mpo.dtype)
         
+
     
-    def measureLocal(self,operators):
-        """
-        measures the expectation values of a list of local operators;
-        len(operators) has to be the same as len(self.mps) 
-        Parameters:
-        --------------------------------------------
-        operators: list of np.ndarrays
-                   local operators to be measured
-
-
-
-        returns:
-        --------------------------------------------
-        a list of floats containing the expectation values
-        """
-        return self.mps.measureList(operators)
-    
-    def truncate(self,schmidt_thresh=1E-16,D=None,presweep=True):
-        """
-        truncates the mps. After truncation, the mps is in right-orthogonal form, 
-        i.e. the mps.pos attribute is mps.pos=0. left and right Hamiltonian environments
-        are recalculated as well using the truncated msp, with self._L (left environment)
-        being a list of length len(mps)+1 with the only non-empty element being the first one:
-        self._L[0]=self._lb. self._lb is the left bundary condition of the simulation
-        self._R is a list of length len(mps)+1 holding all right-environment for all bipartitions
-        of the chain.
-
-        Parameters:
-        -------------------------------------------------------------------------
-        truncation_threshold: float
-                              desired truncation threshold
-        D:                    int
-                              maximally allowed bond-dimension after truncation
-        tol:                  float
-                              precision for the transfer-matrix eigensolver; relevant only for infinite MPS
-        ncv:                  int
-                              number of krylov vectors in the implicitly restarted arnoldi solver used for transfer-matrix
-                              eigen-decomposition; relevanty only for infinite MPS
-        pinv:                 float:
-                              pseudo-inverse parameter for invertion of reduced density matrices and Schmidt-values
-                              change this value with caution; too large values (e.g even values pinv=1E-16) can 
-                              cause erratic behaviour
-
-        returns: self
-        """
-
-        self.mps.truncate(schmidt_thresh=schmidt_thresh,D=D,presweep=presweep)
-        self.update()
-        return self
-
     @staticmethod
-    def addLayer(B,mps,mpo,conjmps,direction):
+    def add_layer(B,mps,mpo,conjmps,direction):
         """
         adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
         environments
@@ -163,41 +101,14 @@ class MPSSimulation(Container):
         Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
         
-        if direction in ('l','left',1):
-            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
-        if direction in ('r','right',-1):
-            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
-        
-    def computeL(self):
-        """
-        compute all left environment blocks
-        up to self.mps.position; all blocks for site > self.mps.position are set to None
-        """
-        self.L=[None]*(len(self)+1)
-        self.L[0]=self.lb
-        for n in range(self.mps.pos):
-            self.L[n+1]=self.addLayer(B=self.L[n],mps=self.mps[n],mpo=self.mpo[n],conjmps=self.mps[n],direction=1)
-            #self.L[n+1]=ncon.ncon([self.L[n],self.mps[n],self.mpo[n],np.conj(self.mps[n])],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
-
-    def computeR(self):
-        """
-        compute all right environment blocks
-        up to self.mps.position; all blocks for site < self.mps.position are set to None
-        """
-        self.R=[None]*(len(self)+1)        
-        self.R[0]=self.rb
-        for n in range(len(self)-1,self.mps.pos-1,-1):
-            self.R[len(self.mps)-n]=self.addLayer(B=self.R[len(self.mps)-1-n],mps=self.mps[n],mpo=self.mpo[n],conjmps=self.mps[n],direction=-1)            
-            #self.R[len(self.mps)-n]=ncon.ncon([self.R[len(self.mps)-1-n],self.mps[n],self.mpo[n],np.conj(self.mps[n])],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
+        return mf.add_layer(B,mps,mpo,conjmps,direction)
 
     
     def position(self,n):
 
         """
         shifts the center position of mps to bond n, and updates left and right environments
-        accordingly; Left blocks at site > n are None, and right blocks at site < n are None
-        Note that the index convention for R blocks is reversed, i.e. self.R[0] is self.rb, 
-        self.R[1] is the second right most R-block, a.s.o
+        accordingly
         Parameters:
         ------------------------------------
         n: int
@@ -205,72 +116,62 @@ class MPSSimulation(Container):
 
         returns: self
         """
+
+        
         if n>len(self.mps):
             raise IndexError("MPSSimulation.position(n): n>len(mps)")
         if n<0:
             raise IndexError("MPSSimulation.position(n): n<0")
-        
-        if n>=self.mps.pos:
-            pos=self.mps.pos            
+
+
+        if n >= self.mps.pos:
+            pos = self.mps.pos
             self.mps.position(n)
-            for m in range(pos,n):
-                self.L[m+1]=self.addLayer(self.L[m],self.mps[m],self.mpo[m],self.mps[m],1)
-            for m in range(n+1,len(self.L)):
-                self.L[m]=None
-            for m in range(n-1,-1,-1):
-                self.R[len(self.mps)-m]=None
-                
-        if n<self.mps.pos:
-            pos=self.mps.pos            
+            for m in range(pos, n):
+                self.left_envs[m + 1] = self.add_layer(
+                    self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1)
+
+        if n < self.mps.pos:
+            pos = self.mps.pos
             self.mps.position(n)
-            for m in range(pos-1,n-1,-1):
-                self.R[len(self.mps)-m]=self.addLayer(self.R[len(self.mps)-1-m],self.mps[m],self.mpo[m],self.mps[m],-1)
-                
-            for m in range(n-1,-1,-1):
-                self.R[len(self.mps)-m]=None
-            for m in range(n+1,len(self.L)):
-                self.L[m]=None
-                
+            for m in reversed(range(n + 1, pos + 1)):
+                self.right_envs[m - 1] = self.add_layer(
+                    self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
+
+        for m in range(n + 1, len(self.mps)):
+            try:
+                del self.left_envs[m]
+            except KeyError:
+                pass
+        for m in range(n - 1):
+            try:
+                del self.right_envs[m]
+            except KeyError:
+                pass
+
         return self
 
 
-    def rightEnv(self,n):
-        """
-        returns the right environment of tensor ```n```
-        """
-        return self.R[len(self.mps)-1-n]
-    
-    def leftEnv(self,n):
-        """
-        returns the left environment of tensor ```n```
-        """
-        return self.L[n]
     
     def update(self):
         """
         shift center site of the MPSSimulation to 0 and recalculate all left and right blocks
         """
         self.mps.position(0)
-        self.computeL()
-        self.computeR()
+        self.compute_left_envs()
+        self.compute_right_envs()
         return self
 
 
-
-class FiniteDMRGengine(MPSSimulation):
-    """
-    DMRGengine
-    simulation container for density matrix renormalization group optimization
-
-    """
-    def __init__(self,mps,mpo,name='DMRG',lb=None,rb=None):
+class DMRGEngineBase(MPSSimulationBase):
+    def __init__(self, mps, mpo, lb, rb, name='DMRG'):
         """
         initialize an MPS object
         mps:      MPS object
                   the initial mps
         mpo:      MPO object
                   Hamiltonian in MPO format
-        name: str
+        name:     str
                   the name of the simulation
         lb,rb:    None or np.ndarray
                   left and right environment boundary conditions
@@ -278,9 +179,38 @@ class FiniteDMRGengine(MPSSimulation):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-        self.times=[]
-        super(FiniteDMRGengine,self).__init__(mps=mps,mpo=mpo,name=name,lb=lb,rb=rb)
 
+        super().__init__(mps=mps, mpo=mpo,lb=lb, rb=rb,name=name)
+
+    def compute_left_envs(self):
+        """
+        compute all left environment blocks
+        up to self.mps.position; all blocks for site > self.mps.position are set to None
+        """
+        self.left_envs = {}
+        self.left_envs[0] = self.lb
+        for n in range(self.mps.pos):
+            self.left_envs[n + 1] = self.add_layer(
+                B=self.left_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=1)
+
+    def compute_right_envs(self):
+        """
+        compute all right environment blocks
+        up to self.mps.position; all blocks for site < self.mps.position are set to None
+        """
+        self.right_envs = {}
+        self.right_envs[len(self.mps) - 1] = self.rb
+        for n in reversed(range(self.mps.pos, len(self.mps))):
+            self.right_envs[n - 1] = self.add_layer(
+                B=self.right_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=-1)
 
     def _optimize_2s_local(self,thresh=1E-10,D=None,ncv=40,Ndiag=10,landelta=1E-5,landeltaEta=1E-5,verbose=0):
 
@@ -289,13 +219,11 @@ class FiniteDMRGengine(MPSSimulation):
 
         mpo,mpo_merge_data=ncon.ncon([self.mpo[self.mps.pos-1],self.mpo[self.mps.pos]],[[-1,1,-3,-5],[1,-2,-4,-6]]).merge([[0],[1],[2,3],[4,5]])        
 
-        mv=fct.partial(HAproduct,*[self.leftEnv(self.mps.pos-1),mpo,self.rightEnv(self.mps.pos)])
+        mv=fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])
         lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
         initial,mps_merge_data=ncon.ncon([self.mps[self.mps.pos-1],self.mps.mat,self.mps[self.mps.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).merge([[0],[1],[2,3]])
 
-        t1=time.time()
         e,opt,conv=lan.simulate(initial)
-        self.times.append(time.time()-t1)
         temp,merge_data=opt[0].split(mps_merge_data).transpose(0,2,3,1).merge([[0,1],[2,3]])
 
         U,S,V=temp.svd(truncation_threshold=thresh,D=D)
@@ -310,8 +238,8 @@ class FiniteDMRGengine(MPSSimulation):
 
         self.mps[self.mps.pos-1]=U.split([merge_data[0],[U.shape[1]]]).transpose(0,2,1)
         self.mps[self.mps.pos]=V.split([[V.shape[0]],merge_data[1]]).transpose(0,2,1)
-        self.L[self.mps.pos]=self.addLayer(B=self.L[self.mps.pos-1],mps=self.mps[self.mps.pos-1],mpo=self.mpo[self.mps.pos-1],conjmps=self.mps[self.mps.pos-1],direction=1)
-        self.R[len(self.mps)-self.mps.pos]=self.addLayer(B=self.R[len(self.mps)-self.mps.pos-1],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
+        self.left_envs[self.mps.pos]=mf.add_layer(B=self.left_envs[self.mps.pos-1],mps=self.mps[self.mps.pos-1],mpo=self.mpo[self.mps.pos-1],conjmps=self.mps[self.mps.pos-1],direction=1)
+        self.right_envs[self.mps.pos-1]=mf.add_layer(B=self.right_envs[self.mps.pos],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
         return e
         
     def _optimize_1s_local(self,ncv=40,Ndiag=10,landelta=1E-5,landeltaEta=1E-5,verbose=0):
@@ -326,11 +254,10 @@ class FiniteDMRGengine(MPSSimulation):
         initial=ncon.ncon([self.mps.mat,self.mps[self.mps.pos]],[[-1,1],[1,-2,-3]])            
         def HAproduct(L,mpo,R,mps):
             return ncon.ncon([L,mps,mpo,R],[[1,-1,2],[1,4,3],[2,5,-3,3],[4,-2,5]])
-        mv=fct.partial(HAproduct,*[self.leftEnv(self.mps.pos),self.mpo[self.mps.pos],self.rightEnv(self.mps.pos)])
+        mv=fct.partial(HAproduct,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
         lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
-        t1=time.time()
+
         e,opt,conv=lan.simulate(initial)
-        self.times.append(time.time()-t1)
         Dnew=opt[0].shape[1]
         if verbose>0:
             stdout.write("\rSS-DMRG it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(self._it,self.Nsweeps,self.mps.pos,len(self.mps),np.real(e),np.imag(e),Dnew))
@@ -340,17 +267,16 @@ class FiniteDMRGengine(MPSSimulation):
         mat,B,Z=mf.prepare_tensor_QR(opt[0],direction='r')
         self.mps.mat=mat
         self.mps[self.mps.pos]=B
-        self.R[len(self.mps)-self.mps.pos]=self.addLayer(B=self.R[len(self.mps)-self.mps.pos-1],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
+        self.right_envs[self.mps.pos-1]=mf.add_layer(B=self.right_envs[self.mps.pos],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
         return e
     
-    
-    def run_one_site(self,Nsweeps=4,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
+    def run_one_site(self,Nsweeps=4,precision=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
         """
-        do a one-site DMRG optimzation for an open system
+        do a one-site finite DMRG optimzation for an open system
         Paramerters:
         Nsweeps:         int
                          number of left-right  sweeps
-        Econv:           float    
+        precision:       float    
                          desired precision of the ground state energy
         ncv:             int
                          number of krylov vectors
@@ -367,6 +293,9 @@ class FiniteDMRGengine(MPSSimulation):
                          desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
                          iteration is terminated
         """
+        self.mps.position(0)        
+        self.compute_left_envs()
+        self.compute_right_envs()
 
         self.Nsweeps=Nsweeps
         converged=False
@@ -374,14 +303,33 @@ class FiniteDMRGengine(MPSSimulation):
         self._it=1
 
         while not converged:
-            for n in range(len(self.mps)-1):
-                self.position(n)
-                e=self._optimize_1s_local(ncv=ncv,Ndiag=Ndiag,landelta=landelta,landeltaEta=landeltaEta,verbose=verbose)                
-            for n in range(len(self.mps)-1,0,-1):
-                self.position(n)
-                e=self._optimize_1s_local(ncv=ncv,Ndiag=Ndiag,landelta=landelta,landeltaEta=landeltaEta,verbose=verbose)                                
+            self.position(
+                0)  #the part outside the loop covers the len(self)==1 case
+            e = self._optimize_1s_local(
+                ncv=ncv,
+                Ndiag=Ndiag,
+                landelta=landelta,
+                landeltaEta=landeltaEta,
+                verbose=verbose)
 
-            if np.abs(e-energy)<Econv:
+            for n in range(1, len(self.mps) - 1):
+                self.position(n)
+                e = self._optimize_1s_local(
+                    ncv=ncv,
+                    Ndiag=Ndiag,
+                    landelta=landelta,
+                    landeltaEta=landeltaEta,
+                    verbose=verbose)
+
+            for n in range(len(self.mps) - 1, 0, -1):
+                self.position(n)
+                e = self._optimize_1s_local(
+                    ncv=ncv,
+                    Ndiag=Ndiag,
+                    landelta=landelta,
+                    landeltaEta=landeltaEta,
+                    verbose=verbose)
+            if np.abs(e-energy)<precision:
                 converged=True
             energy=e
 
@@ -393,16 +341,21 @@ class FiniteDMRGengine(MPSSimulation):
                     print()
                     print ('reached maximum iteration number ',Nsweeps)
                 break
+        self.position(0)
         return e
 
 
-    def run_two_site(self,Nsweeps=4,thresh=1E-10,D=None,Econv=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
+    def run_two_site(self,Nsweeps=4,thresh=1E-10,D=None,precision=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5):
         """
-        do a one-site DMRG optimzation for an open system
+        do a two-site finite DMRG optimzation for an open system
         Paramerters:
         Nsweeps:         int
                          number of left-right  sweeps
-        Econv:           float    
+        thresh:          float
+                         truncation  threshold for SVD truncation of the MPS
+        D:               int
+                         maximally allowed bond dimension; if D=None, no bound on D is assumed (can become expensive)
+        precision:       float    
                          desired precision of the ground state energy
         ncv:             int
                          number of krylov vectors
@@ -419,21 +372,33 @@ class FiniteDMRGengine(MPSSimulation):
                          desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
                          iteration is terminated
         """
+        self.mps.position(0)
+        self.compute_left_envs()
+        self.compute_right_envs()
 
         self.Nsweeps=Nsweeps
         converged=False
         energy=100000.0
         self._it=1
-
         while not converged:
-            for n in range(1,len(self.mps)-1):
+            self.position(1)
+            e=self._optimize_2s_local(
+                thresh=thresh,
+                D=D,
+                ncv=ncv,
+                Ndiag=Ndiag,
+                landelta=landelta,
+                landeltaEta=landeltaEta,
+                verbose=verbose
+            )
+            for n in range(2,len(self.mps)):
                 self.position(n)
                 e=self._optimize_2s_local(thresh=thresh,D=D,ncv=ncv,Ndiag=Ndiag,landelta=landelta,landeltaEta=landeltaEta,verbose=verbose)                
-            for n in range(len(self.mps)-1,1,-1):
+            for n in range(len(self.mps)-2,1,-1):
                 self.position(n)
                 e=self._optimize_2s_local(thresh=thresh,D=D,ncv=ncv,Ndiag=Ndiag,landelta=landelta,landeltaEta=landeltaEta,verbose=verbose)                
 
-            if np.abs(e-energy)<Econv:
+            if np.abs(e-energy)<precision:
                 converged=True
             energy=e
 
@@ -445,211 +410,299 @@ class FiniteDMRGengine(MPSSimulation):
                     print()
                     print ('reached maximum iteration number ',Nsweeps)
                 break
+        self.position(0)
         return e
-    
-########################################################   everything below is not yet adapted to the new layout ######################################
-class IDMRGengine(FiniteDMRGengine):
+
+class FiniteDMRGengine(DMRGEngineBase):
     """
-    IDMRGengine
-    container object for performing an IDMRG optimization of the ground-state of a Hamiltonian
+    DMRGengine
+    simulation container for density matrix renormalization group optimization
+
     """
-    def __init__(self,mps,mpo,filename='IDMRG'):
+    def __init__(self, mps, mpo, name='FiniteDMRG'):
         """
-        initialize an IDMRG object
+        initialize an finite DMRG simulation
         mps:      MPS object
-                  initial mps
+                  the initial mps
         mpo:      MPO object
                   Hamiltonian in MPO format
-        filename: str
+        name:     str
                   the name of the simulation
         """
         
-        lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(mps,mpo,numeig=1)                            
-        super(IDMRGengine,self).__init__(mps,mpo,filename,lb,rb)
-    #shifts the unit-cell by N/2 by updating self._L, self._R, self._lb, self._rb, and cutting and patching self._mps and self._mpo
+        if not isinstance(mps, FiniteMPS):
+            raise TypeError(
+                'in FiniteDMRGEngine.__init__(...): mps of type FiniteMPS expected, got {0}'
+                .format(type(mps)))
 
-    def update(self,regauge=False):
-        """
-        overrides self.update method of the Container class
-        """
-        self._mps.position(len(self._mps))
-        #update the left boundary
-        for site in range(int(len(self._mps)/2)):
-            self._lb=mf.addLayer(self._lb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],1)
-            
-        lamR=np.copy(self._mps._mat)
-        mps=[]
-        D=0
-        #cut and patch the right half of the mps
-        for n in range(int(len(self._mps)/2),len(self._mps)):
-            if self._mps._tensors[n].shape[0]>D:
-                D=self._mps._tensors[n].shape[0]
-            mps.append(np.copy(self._mps._tensors[n]))
-
-        self._mps.position(int(len(self._mps)/2))
-        lamC=np.copy(self._mps._mat)
-        connector=np.linalg.pinv(lamC)
-
-        #update the right boundary
-        for site in range(len(self._mps)-1,int(len(self._mps)/2)-1,-1):
-            self._rb=mf.addLayer(self._rb,self._mps._tensors[site],self._mpo[site],self._mps._tensors[site],-1)
-
-        self._mps.position(0)
-        lamL=np.copy(self._mps._mat)
-        #cut and patch the left half of the mps
-        for n in range(int(len(self._mps)/2)):
-            if self._mps._tensors[n].shape[0]>D:
-                D=self._mps._tensors[n].shape[0]
-            mps.append(np.copy(self._mps._tensors[n]))
-        for n in range(len(self._mps)):
-            self._mps._tensors[n]=mps[n]
-            
-        self._mps._position=int(len(self._mps)/2)
-        self._mps._mat=lamR.dot(self._mps._connector).dot(lamL)
-        self._mps._connector=connector
-        self._mps.position(0)
-        
-        #cut and patch the mpo
-        mf.patchmpo(self._mpo,int(len(self._mps)/2))
-        if not regauge:
-            self._L=mf.getL(self._mps._tensors,self._mpo,self._lb)
-            self._L.insert(0,self._lb)
-            self._R=mf.getR(self._mps._tensors,self._mpo,self._rb)
-            self._R.insert(0,self._rb)
-        elif regauge:
-            lb,rb,lbound,rbound,self._hl,self._hr=mf.getBoundaryHams(self._mps,self._mpo,regauge=True)
-            super(IDMRGengine,self).__init__(self._mps,self._mpo,self._filename,lb,rb)        
-        return D
-
+        lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
+        rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]], dtype=mps.dtype)        
+        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
     
-    def simulate(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):            
-        """
-        IDMRGengine.simulate(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
-        run a single site IDMRG simulation
 
-        Nmax: number of outer iterations
-        NUC: number of optimization sweeps when optimizing a single unitcell
-        Econv: desired convergence of energy per unitcell
-        tol: arnoldi tolerance
-        ncv: number of krylov vectors in arnoldi or lanczos
-        cp: chekpoint step
-        verbose: verbosity flag
-        numvecs: the number of eigenvectors to be calculated; should be 1
-        solver: type of eigensolver: 'AR' or 'LAN' or 'LOBPCG' for arnoldi or lanczos or conjugate gradient
-        Ndiag: lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
-        nmaxlan: maximum number of lanczos stesp
-        landelta: lanczos stops if a krylov vector with norm < landelta is encountered
-        landeltaEta: desired convergence of lanzcos eigenenergies
-        regaugestep: if > 0, the mps is regauged into symmetric form when it%regaugestep==0; the effective Hamiltonians 
-                     are recalculated in this case; do NOT use regaugestep==1
+
+
+class InfiniteDMRGEngine(DMRGEngineBase):
+
+    def __init__(self,
+                 mps,
+                 mpo,
+                 name='InfiniteDMRG',
+                 precision=1E-12,
+                 precision_canonize=1E-12,
+                 nmax=1000,
+                 nmax_canonize=1000,
+                 ncv=40,
+                 numeig=1,
+                 pinv=1E-20):
+
+        if not isinstance(mps, MPS):
+            raise TypeError(
+                'in InfiniteDMRGEngine.__init__(...): mps of type InfiniteMPSCentralGauge expected, got {0}'
+                .format(type(mps)))
+
+        mps.canonize(
+            precision=precision_canonize,
+            ncv=ncv,
+            nmax=nmax_canonize,
+            numeig=numeig,
+            pinv=pinv)  #this leaves state in left-orthogonal form
+
+        lb, hl = mf.compute_steady_state_Hamiltonian_GMRES(
+            'l',
+            mps,
+            mpo,
+            left_dominant=mps[-1].eye(1),
+            right_dominant=ncon.ncon([mps.mat, mps.mat.conj()],
+                                     [[-1, 1], [-2, 1]]),
+            precision=precision,
+            nmax=nmax)
+
+        rmps = mps.get_right_orthogonal_imps(
+            precision=precision_canonize,
+            ncv=ncv,
+            nmax=nmax_canonize,
+            numeig=numeig,
+            pinv=pinv,
+            canonize=False)
+
+        rb, hr = mf.compute_steady_state_Hamiltonian_GMRES(
+            'r',
+            rmps,
+            mpo,
+            right_dominant=mps[0].eye(0),
+            left_dominant=ncon.ncon([mps.mat, mps.mat.conj()],
+                                    [[1, -1], [1, -2]]),
+            precision=precision,
+            nmax=nmax)
+
+        left_dominant = ncon.ncon([mps.mat, mps.mat.conj()],
+                                  [[1, -1], [1, -2]])
+        out = mps.unitcell_transfer_op('l', left_dominant)
+
+        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+
+
+    def compute_infinite_envs(self,precision=1E-8,ncv=40,nmax=10000,numeig=1,pinv=1E-20):
+        self.mps.canonize(
+            precision=precision,
+            ncv=ncv,
+            nmax=nmax,
+            numeig=numeig,
+            pinv=pinv)  #this leaves state in left-orthogonal form
+
+        self.lb, hl = mf.compute_steady_state_Hamiltonian_GMRES(
+            'l',
+            self.mps,
+            self.mpo,
+            left_dominant=self.mps[-1].eye(1),
+            right_dominant=ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+                                     [[-1, 1], [-2, 1]]),
+            precision=precision,
+            nmax=nmax)
+        self.left_envs[0]=self.lb
+        rmps = self.mps.get_right_orthogonal_imps(
+            precision=precision,
+            ncv=ncv,
+            nmax=nmax,
+            numeig=numeig,
+            pinv=pinv,
+            canonize=False)
+
+        self.rb, hr = mf.compute_steady_state_Hamiltonian_GMRES(
+            'r',
+            rmps,
+            self.mpo,
+            right_dominant=self.mps[0].eye(0),
+            left_dominant=ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+                                    [[1, -1], [1, -2]]),
+            precision=precision,
+            nmax=nmax)
+        self.right_envs[len(self.mps)-1]=self.rb
+        left_dominant = ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+                                  [[1, -1], [1, -2]])
+        out = self.mps.unitcell_transfer_op('l', left_dominant)
+
+    def roll(self, sites):
         """
-        if regaugestep==1:
-            raise ValueError("IDMRGengine.simulate(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
         
-        it=0
-        converged=False
-        eold=0.0
-        verbose=1
-        skip=False
+        """
+        self.position(sites)
+        new_lb = self.left_envs[sites]
+        new_rb = self.right_envs[sites - 1]
+        centermatrix = self.mps.mat  #copy the center matrix
+        self.mps.position(len(self.mps))  #move cenermatrix to the right
+        new_center_matrix = ncon.ncon([self.mps.mat, self.mps.connector],
+                                      [[-1, 1], [1, -2]])
+
+        self.mps._position = sites
+        self.mps.mat = centermatrix
+        self.mps.position(0)
+        new_center_matrix = ncon.ncon([new_center_matrix, self.mps.mat],
+                                      [[-1, 1], [1, -2]])
+        tensors = [self.mps[n] for n in range(sites, len(self.mps))
+                  ] + [self.mps[n] for n in range(sites)]
+        self.mps.set_tensors(tensors)
+        self.mpo.set_tensors([self.mpo[n] for n in range(sites, len(self.mps))
+                            ] + [self.mpo[n] for n in range(sites)])
+        self.mps._connector = centermatrix.inv()
+        self.mps._left_mat = centermatrix
+        self.mps.mat = new_center_matrix
+        self.mps._position = len(self.mps) - sites
+        self.lb = new_lb
+        self.rb = new_rb
+        self.update()
+
+    def run_one_site(self,
+                     Nsweeps=10,
+                     precision=1E-6,
+                     ncv=40,
+                     verbose=0,
+                     Ndiag=10,
+                     landelta=1E-10,
+                     landeltaEta=1E-10):
+        """
+        do a one-site infinite DMRG optimzation for an open system
+        Paramerters:
+        Nsweeps:         int
+                         number of left-right  sweeps
+        precision:       float    
+                         desired precision of the ground state energy
+        ncv:             int
+                         number of krylov vectors
+        cp:              int
+                         checkpoint every ```cp```steps
+        verbose:         int
+                         verbosity flag
+        Ndiag:           int
+                         step number at which to diagonlize the local tridiag hamiltonian
+        landelta:        float
+                         orthogonality threshold; once the next vector of the iteration is orthogonal to the previous ones 
+                         within ```delta``` precision, iteration is terminated
+        landeltaEta:     float
+                         desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
+                         iteration is terminated
+        """
+
+        self._idmrg_it = 0
+        converged = False
+        eold = 0.0
         while not converged:
-            regauge=False
-            e=super(IDMRGengine,self).simulate(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,landelta=landelta,landeltaEta=landeltaEta)
-            if regaugestep>0 and it%regaugestep==0 and it>0:
-                regauge=True
-                skip=True
-            D=self.update(regauge)
-            if verbose>0:
-                if regauge==False:
-                    if skip==False:
-                        stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real((e-eold)/(len(self._mps))),np.imag((e-eold)/(len(self._mps))),D))
-                    if skip==True:
-                        skip=False
-                if regauge==True:
-                    stdout.write("\rSS-IDMRG using %s solver: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(solver,it,Nmax,np.real(self._hl/len(self)),np.imag(self._hl/len(self)),D))
-                stdout.flush()  
-                if verbose>1:
+            e = super().run_one_site(
+                Nsweeps=1,
+                precision=precision,
+                ncv=ncv,
+                verbose=verbose - 1,
+                Ndiag=Ndiag,
+                landelta=landelta,
+                landeltaEta=landeltaEta)
+
+            self.roll(sites=len(self.mps) // 2)
+            if verbose > 0:
+                stdout.write(
+                    "\rSS-IDMRG  it=%i/%i, energy per unit-cell E/N=%.16f+%.16f"
+                    % (self._idmrg_it, Nsweeps,
+                       np.real((e - eold) / len(self.mps)),
+                       np.imag((e - eold) / len(self.mps))))
+                stdout.flush()
+                if verbose > 1:
                     print('')
-            #if regauge==True:
-                #input('finished updating and regauing, starting fresh now')
-                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
-            if cp!=None and it>0 and it%cp==0:
-                self.save(self._filename+'_idmrg_cp')                                                
-            eold=e
-            it=it+1
-            if it>Nmax:
-                converged=True
+            eold = e
+            self._idmrg_it += 1
+            if self._idmrg_it > Nsweeps:
+                converged = True
                 break
-        self._mps.resetZ()            
-        it=it+1
 
-        
-    def simulateTwoSite(self,Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0):
+
+    def run_two_site(self,
+                     Nsweeps=10,
+                     thresh=1E-10,
+                     D=None,
+                     precision=1E-6,
+                     ncv=40,
+                     verbose=0,
+                     Ndiag=10,
+                     landelta=1E-10,
+                     landeltaEta=1E-10):
         """
-        IDMRGengine.simulateTwoSite(Nmax=10,NUC=1,Econv=1E-6,tol=1E-6,ncv=40,cp=10,verbose=0,numvecs=1,truncation=1E-10,solver='AR',Ndiag=10,nmaxlan=500,landelta=1E-8,landeltaEta=1E-5,regaugestep=0)
-        run a twos-site IDMRG simulation
-
-        Nmax:        number of outer iterations
-        NUC:         number of optimization sweeps when optimizing a single unitcell
-        Econv:       desired convergence of energy per unitcell
-        tol:         arnoldi tolerance
-        ncv:         number of krylov vectors in arnoldi or lanczos
-        cp:          chekpoint step
-        verbose:     verbosity flag
-        numvecs:     the number of eigenvectors to be calculated; should be 1
-        solver:      type of eigensolver: 'AR' or 'LAN' for arnoldi or lanczos
-        Ndiag:       lanczos parameter; diagonalize tridiagonal Hamiltonian every Ndiag steps to check convergence;
-        nmaxlan:     maximum number of lanczos stesp
-        landelta:    lanczos stops if a krylov vector with norm < landelta is encountered
-        landeltaEta: desired convergence of lanzcos eigenenergies
-        regaugestep: if > 0, the mps is regauged into symmetric form when it%regaugestep==0; the effective Hamiltonians 
-                     are recalculated in this case; do NOT use regaugestep==1
-
+        do a two-site infinite DMRG optimzation for an open system
+        Paramerters:
+        Nsweeps:         int
+                         number of left-right  sweeps
+        thresh:          float
+                         truncation  threshold for SVD truncation of the MPS
+        D:               int
+                         maximally allowed bond dimension; if D=None, no bound on D is assumed (can become expensive)
+        precision:       float    
+                         desired precision of the ground state energy
+        ncv:             int
+                         number of krylov vectors
+        cp:              int
+                         checkpoint every ```cp```steps
+        verbose:         int
+                         verbosity flag
+        Ndiag:           int
+                         step number at which to diagonlize the local tridiag hamiltonian
+        landelta:        float
+                         orthogonality threshold; once the next vector of the iteration is orthogonal to the previous ones 
+                         within ```delta``` precision, iteration is terminated
+        landeltaEta:     float
+                         desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
+                         iteration is terminated
         """
-        if regaugestep==1:
-            raise ValueError("IDMRGengine.simulateTwoSite(): regaugestep=1 can cause problems, use regaugestep>1 or regaugestep=0 (no regauging)")
-        print ('# simulation parameters:')
-        print ('# of idmrg iterations: {0}'.format(Nmax))
-        print ('# of sweeps per unit cell: {0}'.format(NUC))
-        print ('# Econv: {0}'.format(Econv))
-        print ('# Arnoldi tolerance: {0}'.format(tol))
-        print ('# Number of Lanzcos vector in Arnoldi: {0}'.format(ncv))
-        it=0
-        converged=False
-        eold=0.0
-        skip=False
+
+        self._idmrg_it = 0
+        converged = False
+        eold = 0.0
         while not converged:
-            regauge=False
-            e=super(IDMRGengine,self).simulateTwoSite(Nmax=NUC,Econv=Econv,tol=tol,ncv=ncv,cp=cp,verbose=verbose-1,numvecs=numvecs,truncation=truncation,solver=solver,Ndiag=Ndiag,nmaxlan=nmaxlan,\
-                                          landelta=landelta,landeltaEta=landeltaEta)
-            if regaugestep>0 and it%regaugestep==0 and it>0:
-                regauge=True
-                skip=True
-            D=self.update(regauge)
-            if verbose>0:
-                if regauge==False:
-                    if skip==False:
-                        stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real((e-eold)/(len(self._mps))),np.imag((e-eold)/(len(self._mps))),D))
-                    if skip==True:
-                        skip=False
-                if regauge==True:
-                    stdout.write("\rSS-IDMRG: rit=%i/%i, energy per unit-cell E/N=%.16f+%.16f at D=%i"%(it,Nmax,np.real(self._hl/len(self)),np.imag(self._hl/len(self)),D))
-                stdout.flush()  
-                if verbose>1:
+            e = super().run_two_site(
+                Nsweeps=1,
+                thresh=thresh,
+                D=D,
+                precision=precision,
+                ncv=ncv,
+                verbose=verbose - 1,
+                Ndiag=Ndiag,
+                landelta=landelta,
+                landeltaEta=landeltaEta)
+
+            self.roll(sites=len(self.mps) // 2)
+            if verbose > 0:
+                stdout.write(
+                    "\rTS-IDMRG  it=%i/%i, energy per unit-cell E/N=%.16f+%.16f, D=%i"
+                    % (self._idmrg_it, Nsweeps,
+                       np.real((e - eold) / len(self.mps)),
+                       np.imag((e - eold) / len(self.mps)),
+                       np.max([np.sum(dim) for dim in self.mps.D])))
+                stdout.flush()
+                if verbose > 1:
                     print('')
-            #if regauge==True:
-                #input('finished updating and regauing, starting fresh now')
-                #print ('at iteration {0} optimization returned E/N={1}'.format(it,(e-eold)/(dmrg._mps._N)))
-            if cp!=None and it>0 and it%cp==0:
-                self.save(self._filename+'_2sidmrg_cp')                                                                
-            eold=e
-            it=it+1
-            if it>Nmax:
-                converged=True
+            eold = e
+            self._idmrg_it += 1
+            if self._idmrg_it > Nsweeps:
+                converged = True
                 break
-        it=it+1
-        self._mps.resetZ()
-        
-        
+            
 # class HomogeneousIMPSengine(Container):
 #     """
 #     HomogeneousIMPSengine

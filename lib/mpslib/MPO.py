@@ -51,8 +51,46 @@ class MPO(TensorNetwork):
     """
 
     def __init__(self,tensors=[],name=None,fromview=False,which=Tensor):
-        super(MPO,self).__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
+        super().__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
+
+    @property
+    def D(self):
+        """Returns a vector of all bond dimensions.
+        The vector will have length `N+1`, where `N == num_sites`."""
+        return (
+            [self._tensors[0].shape[0]] + 
+            [self._tensors[n].shape[1] for n in range(len(self._tensors))]
+        )
     
+    @property
+    def d_in(self):
+        """Returns a vector of all bond dimensions.
+        The vector will have length `N+1`, where `N == num_sites`."""
+        return (
+            [self._tensors[n].shape[2] for n in range(len(self._tensors))]
+        )
+    @property
+    def d_out(self):
+        """Returns a vector of all bond dimensions.
+        The vector will have length `N+1`, where `N == num_sites`."""
+        return (
+            [self._tensors[n].shape[2] for n in range(len(self._tensors))]
+        )
+    
+    def get_tensor(self,n):
+        return self._tensors[n]
+    
+    def get_boundary_vector(self,side):
+        if side.lower() in ('l','left'):
+            v=np.zeros(self.D[0],dtype=self.dtype)
+            v[-1]=1.0
+            return v
+        
+        if side.lower() in ('r','right'):
+            v=np.zeros(self.D[-1],dtype=self.dtype)
+            v[0]=1.0
+            return v
+        
     def getTwositeMPO(self,site1,site2,obc):
         if site2<site1:
             mpo1=self[site2][-1,:,:,:]

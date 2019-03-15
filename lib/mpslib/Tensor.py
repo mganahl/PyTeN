@@ -146,7 +146,8 @@ class Tensor(np.ndarray,TensorBase):
         initializer function for Tensor
         """
         return numpy_func(*args,**kwargs).view(Tensor)
-    
+
+
     def eye(self,rank_index,*args,**kwargs):
         """
         returns an identity matrix of shape matching with ```self.shape[index]```
@@ -233,6 +234,11 @@ class Tensor(np.ndarray,TensorBase):
         
         """
         truncate a one-dimensional array
+        Parameters:
+        -----------------------
+        newshape: tuple or list
+                  the new shape of the array
+                  if newshape[n]=None, the dimension ```n``` is not truncated
         """
         if not len(newshape)==len(self.shape):
             raise ValueError('Tensor.truncate(newshape): newshape has different rank than self')
@@ -263,9 +269,11 @@ class Tensor(np.ndarray,TensorBase):
 
     def to_dense(self):
         return self.reshape(np.prod(self.shape))
+    
     @staticmethod
     def from_dense(dense,shape):
         return dense.reshape(shape).view(Tensor)
+    
     def herm(self):
         return self.conj().T
     def tr(self,**kwargs):

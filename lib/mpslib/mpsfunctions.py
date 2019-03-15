@@ -143,7 +143,7 @@ def transfer_operator(A,B,direction,x):
     """
     if direction in ('l','left',1):
         return ncon.ncon([x,A,B.conj()],[[1,2],[1,-1,3],[2,-2,3]])
-    if direction in ('r','right',-1):        
+    if direction in ('r','right',-1):
         return ncon.ncon([A,B.conj(),x],[[-1,1,3],[-2,2,3],[1,2]])
 
 
@@ -268,9 +268,295 @@ def check_ortho(tensor,which,thresh=1E-8):
     checks if orthogonality condition on tensor is obeyed up to ```thresh```
     """
     return MPS.ortho_deviation(tensor,which)<thresh
+
+def add_layer(B,mps,mpo,conjmps,direction):
+        """
+        adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
+        environments
+        Parameters:
+        ---------------------------
+        B:        Tensor object  
+                  a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
+        mps:      Tensor object of shape =(Dl,Dr,d)
+        mpo:      Tensor object of shape = (Ml,Mr,d,d')
+        conjmps: Tensor object of shape =(Dl',Dr',d')
+                 the mps tensor on the conjugated side
+                 this tensor will be complex conjugated inside the routine; usually, the user will like to pass 
+                 the unconjugated tensor
+        direction: int or str
+                  direction in (1,'l','left'): add a layer to the right of ```B```
+                  direction in (-1,'r','right'): add a layer to the left of ```B```
+        Return:
+        -----------------
+        Tensor of shape (Dr,Dr',Mr) for direction in (1,'l','left')
+        Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
+        """
         
+        if direction in ('l','left',1):
+            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
+        if direction in ('r','right',-1):
+            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
+
         
+
+def one_minus_pseudo_unitcell_transfer_op(direction, mps, left_dominant,
+                                          right_dominant, vector):
+    """
+    calculates action of 11-Transfer-Operator +|r)(l|
+    Parameters:
+    ---------------------------
+    direction:  int or str 
+                if (1,'l','left'): do left multiplication
+                if (-1,'r','right'): do right multiplication
+    mps:        InfiniteMPSCentralGauge object
+                an infinite mps
+    left_dominant:  Tensor of shape (mps.D[0],mps.D[0])
+                    left dominant eigenvvector of the unit-cell transfer operator of mps
+    right_dominant: Tensor of shape (mps.D[-1],mps.D[-1])
+                    right dominant eigenvvector of the unit-cell transfer operator of mps
+    vector:         Tensor of shape (mps.D[0]*mps.D[0]) or (mps.D[-1]*mps.D[-1])
+                    the input vector
+    Returns
+    ---------------------------
+    np.ndarray of shape (mps.D[0]*mps.D[0]) or (mps.D[-1]*mps.D[-1])
+
+    """
+
+    if direction in (1, 'l', 'left'):
+        x = type(mps[0]).from_dense(vector,[mps.D[0], mps.D[0]])
+        temp = x - mps.unitcell_transfer_op('left', x) + ncon.ncon(
+            [x, right_dominant], [[1, 2], [1, 2]]) * left_dominant
+        return temp.to_dense()
+
+    if direction in (-1, 'r', 'right'):
+        x = type(mps[-1]).from_dense(vector,[mps.D[-1], mps.D[-1]])
+        temp = x - mps.unitcell_transfer_op('right', x) + ncon.ncon(
+            [left_dominant, x], [[1, 2], [1, 2]]) * right_dominant
+        return temp.to_dense()
+
+
+def LGMRES_solver(mps,
+                  direction,
+                  left_dominant,
+                  right_dominant,
+                  inhom,
+                  x0,
+                  precision=1e-10,
+                  nmax=2000,
+                  **kwargs):
+    #mps.D[0] has to be mps.D[-1], so no distincion between direction='l' or direction='r' has to be made here
+    if not mps.D[0] == mps.D[-1]:
+        raise ValueError(
+            'in LGMRES_solver: mps.D[0]!=mps.D[-1], can only handle intinite MPS!'
+        )
+    inhom_dense = inhom.to_dense()
+    x0_dense = x0.to_dense()
+    mv = fct.partial(one_minus_pseudo_unitcell_transfer_op,
+                     *[direction, mps, left_dominant, right_dominant])
+
+    LOP = LinearOperator((np.sum(mps.D[0])**2, np.sum(mps.D[-1])**2),
+                         matvec=mv,
+                         dtype=mps.dtype)
+    out, info = lgmres(
+        A=LOP,
+        b=inhom_dense,
+        x0=x0_dense,
+        tol=precision,
+        maxiter=nmax,
+        **kwargs)
+
+    return type(mps[0]).from_dense(out,[mps.D[0], mps.D[0]]), info
+
+
+def compute_steady_state_Hamiltonian_GMRES(direction,
+                                           mps,
+                                           mpo,
+                                           left_dominant,
+                                           right_dominant,
+                                           precision=1E-10,
+                                           nmax=1000):
+    """
+    calculates the left or right Hamiltonain environment of an infinite MPS-MPO-MPS network
+    Parameters:
+    ---------------------------
+    direction:  int or str 
+                if (1,'l','left'): obtain left environment
+                if (-1,'r','right'): obtain right environment
+    mps:        InfiniteMPSCentralGauge object
+                an infinite mps
+    mpo:        MPO object
+    left_dominant:  Tensor of shape (mps.D[0],mps.D[0])
+                    left dominant eigenvvector of the unit-cell transfer operator of mps
+    right_dominant: Tensor of shape (mps.D[-1],mps.D[-1])
+                    right dominant eigenvvector of the unit-cell transfer operator of mps
+    precision: float
+               deisred precision of the environments
+    nmax:      int
+               maximum iteration numner
+
+    Returns
+    ---------------------------
+    (H,h)
+    H:    Tensor of shape (mps.D[0],mps.D[0],mpo.D[0])
+          Hamiltonian environment
+    h:    Tensor of shape (1)
+          average energy per unitcell 
+    """
+    dummy1 = mpo.get_boundary_vector('l')
+    dummy2 = mpo.get_boundary_vector('r')    
+
+    if direction in (1, 'l', 'left'):
+        L = ncon.ncon([
+            mps.get_tensor(mps.num_sites-1), dummy1,
+            mpo.get_tensor(mps.num_sites-1),
+            mps.get_tensor(mps.num_sites-1).conj()
+        ], [[1, -1, 2], [3], [3, -3, 4, 2], [1, -2, 4]])
+        for n in range(len(mps)):
+            L = add_layer(
+                L,
+                mps.get_tensor(n),
+                mpo.get_tensor(n),
+                mps.get_tensor(n),
+                direction='l')
+
+        h = ncon.ncon([L, dummy2, right_dominant], [[1, 2, 3], [3], [1, 2]])
+        inhom = ncon.ncon([L, dummy2], [[-1, -2, 1], [1]]) - h * mps[-1].eye(1)
+        [out, info] = LGMRES_solver(
+            mps=mps,
+            direction=direction,
+            left_dominant=left_dominant,
+            right_dominant=right_dominant,
+            inhom=inhom,
+            x0=inhom.zeros([mps.D[0], mps.D[0]], dtype=mps.dtype),
+            precision=precision,
+            nmax=nmax)
+        L[:, :, 0] = out
+        return L, h
+
+    if direction in (-1, 'r', 'right'):
+        R = ncon.ncon([
+            mps.get_tensor(0), dummy2,
+            mpo.get_tensor(0),
+            mps.get_tensor(0).conj()
+        ], [[-1, 1, 2], [3], [-3, 3, 4, 2], [-2, 1, 4]])
+        for n in reversed(range(len(mps))):
+            R = add_layer(
+                R,
+                mps.get_tensor(n),
+                mpo.get_tensor(n),
+                mps.get_tensor(n),
+                direction='r')
+        h = ncon.ncon([dummy1, left_dominant, R], [[3], [1, 2], [1, 2, 3]])
+        inhom = ncon.ncon([dummy1, R], [[1], [-1, -2, 1]]) - h * mps[0].eye(0)
+        [out, info] = LGMRES_solver(
+            mps=mps,
+            direction=direction,
+            left_dominant=left_dominant,
+            right_dominant=right_dominant,
+            inhom=inhom,
+            x0=inhom.zeros([mps.D[0], mps.D[0]], dtype=mps.dtype),
+            precision=precision,
+            nmax=nmax)
+
+        R[:, :, -1] = out
+        return R, h
+
+
+def compute_Hamiltonian_environments(mps,
+                                     mpo,
+                                     precision=1E-10,
+                                     precision_canonize=1E-10,
+                                     nmax=1000,
+                                     nmax_canonize=10000,
+                                     ncv=40,
+                                     numeig=6,
+                                     pinv=1E-30):
+    """
+    calculates the Hamiltonain environments of an infinite MPS-MPO-MPS network
+    Parameters:
+    ---------------------------
+    mps:        InfiniteMPSCentralGauge object
+                an infinite mps
+    mpo:        MPO object
+    precision: float
+               deisred precision of the environments
+    precision_canonize: float
+                        deisred precision for mps canonization
+    nmax:      int
+               maximum iteration numner
+    nmax_canonize:      int
+                        maximum iteration number in TMeigs during canonization
+    ncv:       int
+               number of krylov vectors in TMeigs during canonization
+    numeig:    int
+               number of eigenvectors targeted by sparse soler in TMeigs during canonization
+    pinv:      float 
+               pseudo inverse threshold during canonization
+
+    Returns:
+    --------------------
+    (lb,rb,hl,hr)
+    lb:      Tensor of shape (mps.D[0],mps.D[0],mpo.D[0])
+             left Hamiltonian environment, including coupling of unit-cell to the left environment
+    rb:      Tensor of shape (mps.D[-1],mps.D[-1],mpo.D[-1])
+             right Hamiltonian environment, including coupling of unit-cell to the right environment
+    hl:     Tensor of shape(1)
+            average energy per left unitcell 
+    hr:     Tensor of shape(1)
+            average energy per right unitcell 
+    NOTE:  hl and hr do not have to be identical
+    """
+
+    mps.canonize(
+        precision=precision_canonize,
+        ncv=ncv,
+        nmax=nmax_canonize,
+        numeig=numeig,
+        pinv=pinv)
+    mps.position(len(mps))
+    lb, hl = compute_steady_state_Hamiltonian_GMRES(
+        'l',
+        mps,
+        mpo,
+        left_dominant=mps[-1].eye(1),
+        right_dominant=ncon.ncon([mps.mat, mps.mat.conj()],[[-1, 1], [-2, 1]]),
+        precision=precision,
+        nmax=nmax)
+    rmps = mps.get_right_orthogonal_imps(
+        precision=precision_canonize,
+        ncv=ncv,
+        nmax=nmax_canonize,
+        numeig=numeig,
+        pinv=pinv,
+        canonize=False)
+    rb, hr = compute_steady_state_Hamiltonian_GMRES(
+        'r',
+        rmps,
+        mpo,
+        right_dominant=mps[0].eye(0),
+        left_dominant=ncon.ncon([mps.mat, mps.mat.conj()],[[1, -1], [1, -2]]),
+        precision=precision,
+        nmax=nmax)
+    return lb, rb, hl, hr
+
+
+def HA_product(L, mpo, R, mps):
+    """
+    the local matrix vector product of the DMRG optimization
+    Parameters:
+    --------------------
+    L:    tf.Tensor
+          left environment of the local sites
+    mpo:  tf.Tensor
+          local mpo tensor
+    R:    tf.Tensor
+          right environment of the local sites
+    mps: tf.Tensor
+         local mps tensor
+    Returns:
+    ------------------
+    tf.Tensor:   result of the local contraction
     
-
-
-
+    """
+    return ncon.ncon([L, mps, mpo, R],
+                     [[1, -1, 2], [1, 4, 3], [2, 5, -2, 3], [4, -3, 5]])
