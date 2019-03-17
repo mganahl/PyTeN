@@ -406,7 +406,7 @@ class XXZ(MPO):
     """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """    
-    def __init__(self,Jz,Jxy,Bz,obc=True,dtype=float):
+    def __init__(self,Jz,Jxy,Bz,obc=True,dtype=np.float64):
         self.obc=obc
         N=len(Bz)
         if obc==True:

@@ -73,7 +73,8 @@ def ndarray_initializer(numpy_func,shapes,*args,**kwargs):
             return [(std*numpy_func(*shape).view(Tensor)+mean+1j*std*(numpy_func(*shape).view(Tensor)+1j*mean)).astype(dtype) for shape in shapes]
 
         elif np.issubdtype(dtype,np.floating):
-           return [(std*numpy_func(*shape).view(Tensor)+mean).astype(dtype) for shape in shapes]
+            tensors=[(std*numpy_func(*shape).view(Tensor)+mean).astype(dtype) for shape in shapes]
+            return [(std*numpy_func(*shape).view(Tensor)+mean).astype(dtype) for shape in shapes]
        
     else:
         if np.issubdtype(dtype,np.complexfloating):
@@ -124,7 +125,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
             self._tensors=np.empty(_shape,dtype=self.tensortype)
             for n in range(len(tensors)):
                 self._tensors.flat[n]=tensors[n].view(Tensor)
+
             self.Z=np.result_type(*self._tensors).type(1.0)
+
         else:
             raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
 
@@ -465,7 +468,6 @@ class MPSBase(TensorNetwork):
     """
     def __init__(self,tensors=[],name=None,fromview=True):
         super().__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
-
     @property
     def D(self):
         """Returns a vector of all bond dimensions.
@@ -654,6 +656,7 @@ class MPS(MPSBase):
         else:
             self._D=Dmax
         self.mat=tensors[-1].eye(1)
+
         self._left_mat=tensors[-1].eye(1)
         self._connector=self.mat.inv()
         #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
@@ -748,7 +751,7 @@ class MPS(MPSBase):
             return ncon.ncon([self._left_mat,self._left_mat.conj()],[[-1,1],[-2,1]])
 
         elif site >= self.pos and site < len(self)-1:
-            return self[site].eye(1)            
+            return self[site].eye(1)
         else:
             r=ncon.ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
             for n in range(self.pos-1,site,-1):
@@ -932,9 +935,9 @@ class MPS(MPSBase):
             self._tensors[-1]=ncon.ncon([self.mat,self._tensors[-1]],[[-1,1],[1,-2,-3]])
             Z=ncon.ncon([self._tensors[-1],self._tensors[-1].conj()],[[1,2,3],[1,2,3]])/np.sum(self.D[-1])
             self._tensors[-1]/=np.sqrt(Z)
-            self.mat=self._tensors[-1].eye(1)/np.sum(self.D[-1])
+            self.mat=self._tensors[-1].eye(1)
             self._position=len(self)
-            self._connector=self._tensors[-1].eye(1)*np.sum(self.D[-1])
+            self._connector=self._tensors[-1].eye(1)
 
         if gauge in ('right','r',-1):
             self.position(len(self))
@@ -1039,7 +1042,7 @@ class MPS(MPSBase):
         self._tensors[0]=ncon.ncon([lam.diag(),V,invx,self.get_tensor(0)],[[-1,1],[1,2],[2,3],[3,-2,-3]])
         self._tensors[-1]=ncon.ncon([self.get_tensor(len(self)-1),invy,U],[[-1,1,-3],[1,2],[2,-2]])
         self.mat=self._tensors[0].eye(0)
-        self._connector=self._tensors[-1].eye(1)        
+        self._connector=self._tensors[-1].eye(1)
         
         self.position(len(self)-1)
         self._tensors[-1]=self.get_tensor(len(self)-1)        
@@ -1259,7 +1262,7 @@ class MPS(MPSBase):
         """
         if bond==self._position:
             return
-        
+
         if bond>self._position:
             self[self._position]=ncon.ncon([self.mat,self[self._position]],[[-1,1],[1,-2,-3]])
             for n in range(self._position,bond):
@@ -1269,13 +1272,13 @@ class MPS(MPSBase):
                     tensor,s,v,Z=mf.prepare_tensor_SVD(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                                     r_thresh=r_thresh)
                     self.mat=s.diag().dot(v)
-                self.Z*=Z                    
+
+                self.Z*=self.dtype.type(Z)
                 self[n]=tensor
                 if (n+1)<bond:
                     self[n+1]=ncon.ncon([self.mat,self[n+1]],[[-1,1],[1,-2,-3]])
         if bond<self._position:
             self[self._position-1]=ncon.ncon([self[self._position-1],self.mat],[[-1,1,-3],[1,-2]])
-
             for n in range(self._position-1,bond-1,-1):
                 if schmidt_thresh < 1E-15 and D==None:
                     self.mat,tensor,Z=mf.prepare_tensor_QR(self[n],direction=-1)
@@ -1283,7 +1286,8 @@ class MPS(MPSBase):
                     u,s,tensor,Z=mf.prepare_tensor_SVD(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
                     self.mat=u.dot(s.diag())
-                self.Z*=Z                                        
+
+                self.Z*=self.dtype.type(Z)
                 self[n]=tensor
                 if n>bond:
                     self[n-1]=ncon.ncon([self[n-1],self.mat],[[-1,1,-3],[1,-2]])
@@ -1426,7 +1430,7 @@ class FiniteMPS(MPS):
         super().__init__(tensors=tensors,Dmax=Dmax,name=name,fromview=fromview)
         self.position(0)
         self.position(len(self))
-        
+
     @classmethod
     def zeros(self,*args,**kwargs):
         raise NotImplementedError('FiniteMPS.zeros(*args,**kwargs) not implemented')
@@ -1561,7 +1565,7 @@ class FiniteMPS(MPS):
             Ml,Mr,din,dout=mpo[n].shape 
             Dl,Dr,d=res[n].shape
             res[n]=ncon.ncon([res[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]).merge([[0,1],[2,3],[4]])
-        res.mat=res[0].eye(0,dtype=res.dtype)
+        res.mat=res[0].eye(0)
         return res
             
 
@@ -1577,7 +1581,7 @@ class FiniteMPS(MPS):
             raise ValueError('FiniteMPS.dot(other): len(other)!=len(self)')
         if not isinstance(mps,FiniteMPS):
             raise TypeError('can only calculate overlaps with FiniteMPS')
-        O=self[0].eye(0,dtype=np.result_type(self.dtype,mps.dtype))
+        O=self[0].eye(0)
         for site in range(min(self.pos,mps.pos)):
             O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
         if self.pos<mps.pos:

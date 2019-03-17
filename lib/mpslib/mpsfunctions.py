@@ -98,7 +98,6 @@ def qr(mat,signfix):
         unit=np.diag(sign)
         return q.dot(herm(unit)),unit.dot(r)
 
-    
 def mpsTensorAdder(A,B,boundary_type,ZA=1.0,ZB=1.0):
     """
     adds to Tensors A and B in the MPS fashion
@@ -559,4 +558,81 @@ def HA_product(L, mpo, R, mps):
     
     """
     return ncon.ncon([L, mps, mpo, R],
-                     [[1, -1, 2], [1, 4, 3], [2, 5, -2, 3], [4, -3, 5]])
+                     [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])                     
+
+def HA_product_vectorized(L,mpo,R,vector):
+    x = type(L).from_dense(vector,[L.shape[0], R.shape[0],mpo.shape[2]])
+    return HA_product(L,mpo,R,x).to_dense()
+
+def eigsh(L,mpo,R,initial,precision=1e-6,numvecs=1,ncv=20,numvecs_calculated=1,*args,**kwargs):
+    
+    """
+    sparse diagonalization of DMRG local hamiltonian
+    L:                  Tensor object of shape (Dl,Dl',Ml)
+    mpo:                Tensor object of shape (Ml,Mr,d,d')
+    R:                  Tensor object of shape (Dr,Dr',Mr)
+    initial:            Tensor object of shape (Dl,Dd,d)
+    precision:          float
+    numvecs:            int 
+    ncv:                int 
+    numvecs_calculated: int 
+
+    """
+    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,initial.dtype)
+    chil=np.sum(L.shape[0])
+    chir=np.sum(R.shape[0])
+    chilp=np.sum(L.shape[1])
+    chirp=np.sum(R.shape[1])
+    d=mpo.shape[2]
+    dp=mpo.shape[3]
+
+    mv=fct.partial(HA_product_vectorized,*[L,mpo,R])
+    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,dtype=dtype)
+    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',tol=precision,v0=initial.to_dense(),ncv=ncv)
+
+    if numvecs==1:
+        ind=np.nonzero(e==min(e))
+        return e[ind[0][0]],initial.from_dense(v[:,ind[0][0]],(chilp,chirp,dp))
+
+    elif numvecs>1:
+        if (numvecs>numvecs_calculated):
+            warnings.warn('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
+            numvecs=numvecs_calculated
+        es=[]
+        vs=[]
+        esorted=np.sort(e)
+        for n in range(numvecs):
+            es.append(esorted[n])
+            ind=np.nonzero(e==esorted[n])
+            vs.append(initial.from_dense(v[:,ind[0][0]],(chilp,chirp,dp)))
+        return es,vs
+
+
+def lobpcg(L,mpo,R,initial,precision=1e-6,*args,**kwargs):
+    
+    """
+    calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
+    of the4 effective DMRG hamiltonian as given by L, mpo and R
+    L (np.ndarray of shape (Dl,Dl',d)): left hamiltonian environment
+    R (np.ndarray of shape (Dr,Dr',d)): right hamiltonian environment
+    mpo (np.ndarray of shape (Ml,Mr,d)): MPO
+    mps0 (np.ndarray of shape (Dl,Dr,d)): initial MPS tensor for the arnoldi solver
+    see scipy eigsh documentation for details on the other parameters
+    """
+
+    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,initial.dtype)
+    chil=np.sum(L.shape[0])
+    chir=np.sum(R.shape[0])
+    chilp=np.sum(L.shape[1])
+    chirp=np.sum(R.shape[1])
+    d=mpo.shape[2]
+    dp=mpo.shape[3]
+    mv=fct.partial(HA_product_vectorized,*[L,mpo,R])
+    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,dtype=dtype)
+
+    X=np.expand_dims(initial.to_dense(),1)
+
+    e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False,tol=precision,*args,**kwargs)
+    return e[0],initial.from_dense(v,[chilp,chirp,dp])
+
+    

@@ -7,7 +7,7 @@ import lib.ncon as ncon
 #        split: takes data from merge and un-merges the indices
 #        SparseTensor needs to have __len__ implemented
 #        truncation is done in svd, this has to implemented in SparseTensor as well
-class TensorBase(object):
+class TensorBase:
     @classmethod
     def random(cls,*args,**kwargs):
         return cls._initializer(np.random.random_sample,*args,**kwargs)
@@ -41,6 +41,7 @@ class TensorBase(object):
 
     def to_dense(self):
         raise NotImplementedError('TensorBase.to_dense: not implemented')
+    @staticmethod    
     def from_dense(self):
         raise NotImplementedError('TensorBase.from_dense: not implemented')        
     def herm(self):
@@ -140,8 +141,8 @@ class Tensor(np.ndarray,TensorBase):
         [newshape.extend(m) for m in merge_data[1:]]
         return np.reshape(self,newshape)
         
-    @classmethod
-    def _initializer(cls,numpy_func,*args,**kwargs):
+    @staticmethod
+    def _initializer(numpy_func,*args,**kwargs):
         """
         initializer function for Tensor
         """
@@ -154,7 +155,9 @@ class Tensor(np.ndarray,TensorBase):
         """
         if rank_index>=len(self.shape):
             raise IndexError("rank_index out of range")
-        return np.eye(self.shape[rank_index],*args,**kwargs).view(type(self))
+
+
+        return np.eye(self.shape[rank_index],*args,**kwargs).astype(self.dtype.type).view(Tensor)
 
     
     def diag(self,**kwargs):
