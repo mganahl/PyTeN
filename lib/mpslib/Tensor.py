@@ -216,7 +216,7 @@ class Tensor(np.ndarray,TensorBase):
         eta,u=np.linalg.eigh(self,**kwargs)
         return eta.view(type(self)), u.view(type(self))
 
-    def squeeze(self,thresh):
+    def truncate(self,thresh):
         
         """
         truncate a one-dimension array
@@ -226,7 +226,6 @@ class Tensor(np.ndarray,TensorBase):
             raise ValueError('Tensors.truncate works only on rank 1 tensors')
         return self[self>=thresh]
     
-
     def norm(self,**kwargs):
         """
         the norm of the state

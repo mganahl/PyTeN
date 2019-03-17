@@ -406,10 +406,11 @@ def compute_steady_state_Hamiltonian_GMRES(direction,
 
     if direction in (1, 'l', 'left'):
         L = ncon.ncon([
-            mps.get_tensor(mps.num_sites-1), dummy1,
-            mpo.get_tensor(mps.num_sites-1),
+            mps.get_tensor(mps.num_sites-1),
+            #mpo.get_tensor(mps.num_sites-1),
+            mpo.get_boundary_mpo('left'),            
             mps.get_tensor(mps.num_sites-1).conj()
-        ], [[1, -1, 2], [3], [3, -3, 4, 2], [1, -2, 4]])
+        ], [[1, -1, 2], [-3, 4, 2], [1, -2, 4]])
         for n in range(len(mps)):
             L = add_layer(
                 L,
@@ -434,10 +435,11 @@ def compute_steady_state_Hamiltonian_GMRES(direction,
 
     if direction in (-1, 'r', 'right'):
         R = ncon.ncon([
-            mps.get_tensor(0), dummy2,
-            mpo.get_tensor(0),
+            mps.get_tensor(0),
+            #mpo.get_tensor(0),
+            mpo.get_boundary_mpo('right'),            
             mps.get_tensor(0).conj()
-        ], [[-1, 1, 2], [3], [-3, 3, 4, 2], [-2, 1, 4]])
+        ], [[-1, 1, 2], [-3, 4, 2], [-2, 1, 4]])
         for n in reversed(range(len(mps))):
             R = add_layer(
                 R,

@@ -1394,7 +1394,7 @@ class MPS(MPSBase):
         [Dl,d1,d2,Dr]=newState.shape
         newState,merge_data=newState.merge([[0,1],[2,3]])
         U,S,V=newState.svd(truncation_threshold=thresh,D=Dmax,full_matrices=False)
-        Strunc=S.truncate([Dmax]).squeeze(thresh)
+        Strunc=S.truncate([Dmax]).truncate(thresh)
         tw=float(np.sum(S**2)-np.sum(Strunc**2))
         Strunc/=Strunc.norm()
         U=U.truncate([U.shape[0],Strunc.shape[0]]) 

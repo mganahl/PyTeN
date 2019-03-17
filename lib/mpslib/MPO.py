@@ -513,7 +513,15 @@ class XXZ(MPO):
                 mpo.append(np.copy(temp))
             super(XXZ,self).__init__(mpo)
 
-            
+    def get_boundary_mpo(self,side):
+        if side.lower() in ('l','left'):
+            out=copy.deepcopy(self._tensors[-1][-1,:,:,:])
+            out[0,:,:]/=2            
+        if side.lower() in ('r','right'):
+            out=copy.deepcopy(self._tensors[0][:,0,:,:])
+            out[-1,:,:]/=2            
+        return out.squeeze()
+    
 class XXZIsing(MPO):
     """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
