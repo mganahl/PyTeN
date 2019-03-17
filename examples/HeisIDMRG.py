@@ -21,13 +21,13 @@ herm=lambda x:np.conj(np.transpose(x))
 if __name__ == "__main__":
     D=50
     d=2
-    N=6
+    N=4
     Jz=np.ones(N)
     Jxy=np.ones(N)
     #initialize MPS with bond dimension D
     dtype=complex
     mps=mpslib.MPS.random(N=N,D=D,d=d,obc=False,dtype=dtype)
-    mpo=H.XXZ(Jz,Jxy,np.zeros(N),False,dtype=dtype)
+    mpo=H.XXZ(Jz,Jxy,np.ones(N),False,dtype=dtype)
     idmrg=en.IDMRGengine(mps,mpo,'blabla')
     
     #idmrg.__simulateTwoSite__(Nmax=1000,NUC=1,Econv=1E-10,tol=1E-4,ncv=10,cp=None,verbose=1,truncation=1E-8,regaugestep=3) #two site idmrg
