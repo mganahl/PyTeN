@@ -126,18 +126,26 @@ class MPSSimulationBase(Container):
 
         if n >= self.mps.pos:
             pos = self.mps.pos
+            t1=time.time()
             self.mps.position(n)
+            self.mps_shift_times.append(time.time()-t1)
+            t2=time.time()            
             for m in range(pos, n):
                 self.left_envs[m + 1] = self.add_layer(
                     self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1)
-
+            self.add_layer_times.append(time.time()-t2)
+            
         if n < self.mps.pos:
             pos = self.mps.pos
+            t1=time.time()
             self.mps.position(n)
+            self.mps_shift_times.append(time.time()-t1)
+            t2=time.time()                        
             for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
                     self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
-
+            self.add_layer_times.append(time.time()-t2)
+            
         for m in range(n + 1, len(self.mps)):
             try:
                 del self.left_envs[m]
@@ -181,7 +189,6 @@ class DMRGEngineBase(MPSSimulationBase):
         """
 
         super().__init__(mps=mps, mpo=mpo,lb=lb, rb=rb,name=name)
-
     def compute_left_envs(self):
         """
         compute all left environment blocks
@@ -225,9 +232,10 @@ class DMRGEngineBase(MPSSimulationBase):
         
         if solver.lower()== 'lan':
             mv=fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])            
-            lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)        
-            e,opt,conv=lan.simulate(initial)
-            
+            lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
+            t1=time.time()
+            e,opt,nit=lan.simulate(initial)
+            self.lan_times.extend([(time.time()-t1)/nit]*nit)                        
         elif solver.lower() == 'ar':
             e,opt=mf.eigsh(self.left_envs[self.mps.pos-1],
                            mpo,self.right_envs[self.mps.pos],
@@ -277,8 +285,10 @@ class DMRGEngineBase(MPSSimulationBase):
         initial=ncon.ncon([self.mps.mat,self.mps[self.mps.pos]],[[-1,1],[1,-2,-3]])
         if solver.lower()== 'lan':
             mv=fct.partial(mf.HA_product,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
+            t1=time.time()
             lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
-            e,opt,conv=lan.simulate(initial)
+            e,opt,nit=lan.simulate(initial)
+            self.lan_times.extend([(time.time()-t1)/nit]*nit)            
         elif solver.lower() == 'ar':
             e,opt=mf.eigsh(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision=landeltaEta,numvecs=1,ncv=ncv,numvecs_calculated=1)
         elif solver.lower() == 'lobpcg':
@@ -290,10 +300,16 @@ class DMRGEngineBase(MPSSimulationBase):
             stdout.flush()
         if verbose>1:
             print("")
+
+        t1=time.time()
         mat,B,Z=mf.prepare_tensor_QR(opt,direction='r')
+        self.mps_shift_times.append(time.time()-t1)                    
         self.mps.mat=mat
         self.mps[self.mps.pos]=B
+        
+        t2=time.time()        
         self.right_envs[self.mps.pos-1]=mf.add_layer(B=self.right_envs[self.mps.pos],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
+        self.add_layer_times.append(time.time()-t2)        
         return e
     
     def run_one_site(self,Nsweeps=4,precision=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5,solver='AR'):
@@ -321,6 +337,10 @@ class DMRGEngineBase(MPSSimulationBase):
         solver:          str
                          'AR' or 'LAN'
         """
+        self.lan_times=[]
+        self.mps_shift_times=[]
+        self.add_layer_times=[]
+        
         self.mps.position(0)        
         self.compute_left_envs()
         self.compute_right_envs()
@@ -761,6 +781,7 @@ class VUMPSengine(InfiniteDMRGEngine):
     container object for mps ground-state optimization  using the VUMPS algorithm and time evolution using the TDVP 
     """
     def __init__(self,mps,mpo,name='VUMPS'):
+        raise NotImplementedError()
         """
         initialize a VUMPS simulation object
 
