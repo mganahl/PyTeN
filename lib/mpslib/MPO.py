@@ -90,6 +90,15 @@ class MPO(TensorNetwork):
             v=np.zeros(self.D[-1],dtype=self.dtype)
             v[0]=1.0
             return v
+
+    def get_boundary_mpo(self,side):
+        if side.lower() in ('l','left'):
+            out=copy.deepcopy(self._tensors[-1][-1,:,:,:])
+            out[0,:,:]*=0.0
+        if side.lower() in ('r','right'):
+            out=copy.deepcopy(self._tensors[0][:,0,:,:])
+            out[-1,:,:]*=0.0           
+        return out.squeeze()
         
     def getTwositeMPO(self,site1,site2,obc):
         if site2<site1:
@@ -225,7 +234,7 @@ class TFI(MPO):
 
     """ 
     the good old transverse field Ising MPO
-    convention: sigma_z=diag([-0.5,0.5])
+    convention: sigma_z=diag([-1,1])
     
     """
     
@@ -234,17 +243,16 @@ class TFI(MPO):
         self.Jx=Jx.astype(dtype)
         self.Bz=Bz.astype(dtype)
         N=len(Bz)
+        sigma_x=np.array([[0,1],[1,0]]).astype(dtype)
+        sigma_z=np.diag([-1,1]).astype(dtype)
+        
         if obc==True:
             mpo=[]
             temp=Tensor.zeros((1,3,2,2),dtype)
-            #BSz
-            temp[0,0,0,0]=-self.Bz[0]
-            temp[0,0,1,1]= self.Bz[0]
-
-            
-            #Sx
-            temp[0,1,0,1]=self.Jx[0]
-            temp[0,1,1,0]=self.Jx[0]
+            #Bsigma_z
+            temp[0,0,:,:]=self.Bz[0]*sigma_z
+            #sigma_x
+            temp[0,1,:,:]=self.Jx[0]*sigma_x
             #11
             temp[0,2,0,0]=1.0
             temp[0,2,1,1]=1.0
@@ -254,58 +262,50 @@ class TFI(MPO):
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
-                #Sx
-                temp[1,0,1,0]=1.0
-                temp[1,0,0,1]=1.0
-                #BSz
-                temp[2,0,0,0]=-self.Bz[n]
-                temp[2,0,1,1]= self.Bz[n]
-                #Sx
-                temp[2,1,0,1]=self.Jx[n]
-                temp[2,1,1,0]=self.Jx[n]
+                #sigma_x
+                temp[1,0,:,:]=sigma_x
+                #Bsigma_z
+                temp[2,0,:,:]=self.Bz[n]*sigma_z
+                #sigma_x
+                temp[2,1,:,:]=self.Jx[n]*sigma_x
                 #11
                 temp[2,2,0,0]=1.0
                 temp[2,2,1,1]=1.0
-        
                 mpo.append(np.copy(temp))
         
             temp=Tensor.zeros((3,1,2,2),dtype)
             #11
             temp[0,0,0,0]=1.0
             temp[0,0,1,1]=1.0
-            #Sx
-            temp[1,0,1,0]=1.0
-            temp[1,0,0,1]=1.0
-            #BSz
-            temp[2,0,0,0]=-Bz[-1]
-            temp[2,0,1,1]= Bz[-1]
+            #sigma_x
+            temp[1,0,:,:]=sigma_x
+            #Bsigma_z
+            temp[2,0,:,:]=self.Bz[-1]*sigma_z
             
             mpo.append(np.copy(temp))
-            super(TFI,self).__init__(tensors=mpo,name='TFI_MPO')                    
+            
+            super().__init__(tensors=mpo,name='TFI_MPO')
+            
         if obc==False:
-            assert(len(Bz)==len(Jx))
             mpo=[]
             for n in range(0,N):
                 temp=Tensor.zeros((3,3,2,2),dtype)
                 #11
                 temp[0,0,0,0]=1.0
                 temp[0,0,1,1]=1.0
-                #Sx
+                #sigma_x
                 temp[1,0,1,0]=1
                 temp[1,0,0,1]=1
-                #BSz
-
-                temp[2,0,0,0]=-self._Bz[n]
-                temp[2,0,1,1]= self._Bz[n]
-                #Sx
-                temp[2,1,0,1]=self._Jx[n]
-                temp[2,1,1,0]=self._Jx[n]
+                #Bsigma_z
+                temp[2,0:,:]=sigma_z*self.Bz[n]
+                #sigma_x
+                temp[2,1,:,:]=sigma_x*self.Jx[n]
                 #11
                 temp[2,2,0,0]=1.0
                 temp[2,2,1,1]=1.0
                 mpo.append(np.copy(temp))
                 
-            super(TFI,self).__init__(tensors=mpo,name='TFI_MPO')
+            super().__init__(tensors=mpo,name='TFI_MPO')
         
 class BranchingHamiltonian(MPO):
     """
@@ -513,14 +513,6 @@ class XXZ(MPO):
                 mpo.append(np.copy(temp))
             super(XXZ,self).__init__(mpo)
 
-    def get_boundary_mpo(self,side):
-        if side.lower() in ('l','left'):
-            out=copy.deepcopy(self._tensors[-1][-1,:,:,:])
-            out[0,:,:]/=2            
-        if side.lower() in ('r','right'):
-            out=copy.deepcopy(self._tensors[0][:,0,:,:])
-            out[-1,:,:]/=2            
-        return out.squeeze()
     
 class XXZIsing(MPO):
     """

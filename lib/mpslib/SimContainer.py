@@ -627,7 +627,8 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      verbose=0,
                      Ndiag=10,
                      landelta=1E-10,
-                     landeltaEta=1E-10):
+                     landeltaEta=1E-10,
+                     solver='AR'):
         """
         do a one-site infinite DMRG optimzation for an open system
         Paramerters:
@@ -662,13 +663,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                 verbose=verbose - 1,
                 Ndiag=Ndiag,
                 landelta=landelta,
-                landeltaEta=landeltaEta)
+                landeltaEta=landeltaEta,
+                solver=solver)
 
             self.roll(sites=len(self.mps) // 2)
             if verbose > 0:
                 stdout.write(
-                    "\rSS-IDMRG  it=%i/%i, energy per unit-cell E/N=%.16f+%.16f"
-                    % (self._idmrg_it, Nsweeps,
+                    "\rSS-IDMRG (%s) it=%i/%i, energy per unit-cell E/N=%.16f+%.16f"
+                    % (solver,self._idmrg_it, Nsweeps,
                        np.real((e - eold) / len(self.mps)),
                        np.imag((e - eold) / len(self.mps))))
                 stdout.flush()
@@ -690,7 +692,8 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      verbose=0,
                      Ndiag=10,
                      landelta=1E-10,
-                     landeltaEta=1E-10):
+                     landeltaEta=1E-10,
+                     solver='AR'):
         """
         do a two-site infinite DMRG optimzation for an open system
         Paramerters:
@@ -731,13 +734,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                 verbose=verbose - 1,
                 Ndiag=Ndiag,
                 landelta=landelta,
-                landeltaEta=landeltaEta)
+                landeltaEta=landeltaEta,
+                solver=solver)
 
             self.roll(sites=len(self.mps) // 2)
             if verbose > 0:
                 stdout.write(
-                    "\rTS-IDMRG  it=%i/%i, energy per unit-cell E/N=%.16f+%.16f, D=%i"
-                    % (self._idmrg_it, Nsweeps,
+                    "\rTS-IDMRG (%s) it=%i/%i, energy per unit-cell E/N=%.16f+%.16f, D=%i"
+                    % (solver,self._idmrg_it, Nsweeps,
                        np.real((e - eold) / len(self.mps)),
                        np.imag((e - eold) / len(self.mps)),
                        np.max([np.sum(dim) for dim in self.mps.D])))
