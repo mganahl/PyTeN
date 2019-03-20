@@ -1,7 +1,7 @@
 import numpy as np
 import warnings
 import lib.ncon as ncon
-
+from numpy.linalg.linalg import LinAlgError
 #TODO:   merge returns data necessary to unmerge
 #        prepareTensor has to be removed as a staticmethod from Tensor; logically does not nelong to it
 #        split: takes data from merge and un-merges the indices
@@ -81,7 +81,9 @@ class Tensor(np.ndarray,TensorBase):
                    the indices which should be merged
         Returns:
         ----------------------
-        Tensor:    the tensor with merged indices
+        (Tensor,data):    
+        Tensor:            the tensor with merged indices
+        data:              information neccessary to undo the merge
         
         """
         t=list(indices)
@@ -131,8 +133,9 @@ class Tensor(np.ndarray,TensorBase):
 
     def split(self,merge_data):
         """
-        splits the indices in the list ```indices``` into its constituent parts, using
-        the information provided in ```data```.
+        splits the tensor indices into its constituent parts, using
+        the information provided in `merge_data`.
+        len(merge_data) = len(self.shape), i.e. each index of the tensor is represented in `merge_data`
         """
         if len(merge_data)!=len(self.shape):
             raise ValueError('length of merge_data is not compatible with the shape of tensor')
@@ -168,24 +171,25 @@ class Tensor(np.ndarray,TensorBase):
         return np.diag(self,**kwargs).view(type(self))
         
     def svd(self,truncation_threshold=1E-16,D=None,r_thresh=1E-14,*args,**kwargs):
+        tw=0.0
         try:        
             u,s,v=np.linalg.svd(self,*args,**kwargs)
             Z=np.linalg.norm(s)
             s/=Z
             if truncation_threshold>1E-16:
-                s=s[s>truncation_threshold]
+                mask=s>truncation_threshold
+                tw=np.sum(s[~mask])
+                s=s[mask]
             if D!=None:
                 if D<len(s):
                     warnings.warn('Tensors.svd: desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
+                tw+=np.sum(s[min(D,len(s))::])                           
                 s=s[0:min(D,len(s))]
-                u=u[:,0:len(s)]
-                v=v[0:len(s),:]
-            elif D==None:
-                u=u[:,0:len(s)]
-                v=v[0:len(s),:]
-                s=s[0:len(s)]
+
+            u=u[:,0:len(s)]
+            v=v[0:len(s),:]
             s*=Z
-            return u,s.view(type(self)),v
+            return u,s.view(type(self)),v,tw
         except LinAlgError:
             [q,r]=temp.qr()
             r[np.abs(r)<r_thresh]=0.0
@@ -194,20 +198,22 @@ class Tensor(np.ndarray,TensorBase):
             u=q.dot(u_).view(Tensor)
             warnings.warn('svd: prepareTruncate caught a LinAlgError with dir>0')
             if truncation_threshold>1E-16:
-                s=s[s>truncation_threshold]
+                mask=s>truncation_threshold
+                tw=np.sum(s[~mask])
+                s=s[mask]
+
     
             if D!=None:
                 if D<len(s):
                     warnings.warn('Tensors.svd: desired thresh imcompatible with max bond dimension; truncating',stacklevel=3)
+                tw+=np.sum(s[min(D,len(s))::])
                 s=s[0:min(D,len(s))]
-                u=u[:,0:len(s)]
-                v=v[0:len(s),:]
-            elif D==None:
-                u=u[:,0:len(s)]
-                v=v[0:len(s),:]
-                s=s[0:len(s)]
+
+            u=u[:,0:len(s)]
+            v=v[0:len(s),:]
+
             s*=Z            
-            return u.view(type(self)),s.view(type(self)),v.view(type(self))
+            return u.view(type(self)),s.view(type(self)),v.view(type(self)),tw
 
     def qr(self,**kwargs):
         return np.linalg.qr(self,**kwargs)
@@ -232,7 +238,7 @@ class Tensor(np.ndarray,TensorBase):
         """
         return np.linalg.norm(self,**kwargs)
     
-    def truncate(self,newshape):
+    def prune(self,newshape):
         
         """
         truncate a one-dimensional array
