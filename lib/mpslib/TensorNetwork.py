@@ -491,7 +491,7 @@ class MPSBase(TensorNetwork):
         """
         """
         A = self.get_tensor(site)
-        return mf.transfer_operator(A,A,direction=direction, x=x)
+        return mf.transfer_operator([A],[A],direction=direction, x=x)
 
     
     def get_env_left(self, site):
@@ -774,7 +774,7 @@ class MPS(MPSBase):
 
         def t_op(x):
             for A in As:
-                x = mf.transfer_operator(A, A, direction, x)
+                x = mf.transfer_operator([A], [A], direction, x)
             return x
         return t_op
     
@@ -842,32 +842,15 @@ class MPS(MPSBase):
             raise ValueError(" in TMeigs: left and right ancillary dimensions of the MPS do not match")
         if np.all(init!=None):
             initial=init
-        t_op=self.get_unitcell_transfer_op(direction)
-        def mv(vector):
-            return t_op(type(self[0]).from_dense(vector,[self.D[0],self.D[0]])).to_dense()
-
-        LOP=LinearOperator((np.sum(self.D[0]*self.D[0]),np.sum(self.D[-1]*self.D[-1])),
-                           matvec=mv,dtype=self.dtype)
-        if numeig>=LOP.shape[0]-1:
-            warnings.warn('TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
-            while numeig>=(LOP.shape[0]-1):
-                numeig-=1
-        
-        eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)        
-        m=np.argmax(np.real(eta))
-        while np.abs(np.imag(eta[m]))/np.abs(np.real(eta[m]))>1E-4:
-            numeig=numeig+1
-            print ('found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'.format(numeig))
-            eta,vec=sp.sparse.linalg.eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)
-            m=np.argmax(np.real(eta))
-            
-        if np.issubdtype(self.dtype,np.floating):
-            out=type(self[0]).from_dense(vec[:,m],[self.D[0],self.D[0]])
-            if np.linalg.norm(np.imag(out))>1E-10:
-                raise TypeError("TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
-            return np.real(eta[m]),out.real
-        elif np.issubdtype(self.dtype,np.complexfloating):    
-            return eta[m],type(self[0]).from_dense(vec[:,m],[self.D[0],self.D[0]])
+        tensors=[self.get_tensor(n) for n in range(len(self))]
+        return mf.TMeigs(tensors = tensors,
+                         direction = direction,
+                         init = init,
+                         precision = precision,
+                         ncv = ncv,
+                         nmax = nmax,
+                         numeig = numeig,
+                         which='LR')
 
     def regauge(self,gauge,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,pinv=1E-50,warn_thresh=1E-8):
         raise NotImplementedError()
@@ -1590,7 +1573,7 @@ class FiniteMPS(MPS):
 
         O=self[0].eye(0)
         for n in range(len(self)):
-            O=mf.transfer_operator(self.get_tensor(n),mps.get_tensor(n),'l',O)        
+            O=mf.transfer_operator([self.get_tensor(n)],[mps.get_tensor(n)],'l',O)        
         return O
 
         
