@@ -85,7 +85,7 @@ class LanczosEngine(object):
                 state+=self.vecs[n1]*u[n1,n2]
                 
             states.append(state/np.sqrt(ncon.ncon([state.conj(),state],[range(len(state.shape)),range(len(state.shape))])))
-        return eta[0:min(self.numeig,len(eta))],states[0],converged
+        return eta[0:min(self.numeig,len(eta))],states[0],it
                 
 class LanczosTimeEvolution(LanczosEngine,object):
     """
