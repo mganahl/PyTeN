@@ -1013,7 +1013,15 @@ class MPS(MPSBase):
 
 
 
-    def canonize(self,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,pinv=1E-30,warn_thresh=1E-8):
+    def canonize(self,
+                 init=None,
+                 precision=1E-12,
+                 ncv=50,
+                 nmax=1000,
+                 numeig=1,
+                 power_method=True,
+                 pinv=1E-30,
+                 warn_thresh=1E-8):
         """
         bring the MPS into Schmidt canonical form
 
@@ -1041,7 +1049,10 @@ class MPS(MPSBase):
         None
         """
         self.position(0)
-        eta,l=self.TMeigs(direction='left',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
+        if not power_method:
+            eta,l=self.TMeigs(direction='left',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
+        elif power_method:
+            eta,l,_,_=self.TMeigs_naive(direction='left',init=init,nmax=nmax,precision=precision)
         sqrteta=np.real(eta)
         self.mat/=sqrteta
     
@@ -1061,9 +1072,11 @@ class MPS(MPSBase):
     
         y=ncon.ncon([u_left,np.sqrt(eigvals_left).diag()],[[-2,1],[1,-1]])
         invy=ncon.ncon([np.sqrt(inveigvals_left).diag(),u_left.conj()],[[-2,1],[-1,1]])
-    
-        eta,r=self.TMeigs(direction='right',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
-    
+        if not power_method:    
+            eta,r=self.TMeigs(direction='right',init=init,nmax=nmax,precision=precision,ncv=ncv,numeig=numeig)
+        elif power_method:
+            eta,r,_,_=self.TMeigs_naive(direction='right',init=init,nmax=nmax,precision=precision)
+
         r=r/r.tr()
         r=(r+r.conj().transpose())/2.0
         eigvals_right,u_right=r.eigh()
