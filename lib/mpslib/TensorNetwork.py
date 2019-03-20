@@ -803,8 +803,61 @@ class MPS(MPSBase):
                 r=self.transfer_op(n,direction='r',x=r)
             return r
 
+    def TMeigs_naive(self,
+                     direction,
+                     init=None,
+                     precision=1E-12,
+                     nmax=100000):
+        """
+        calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
+        usint power method
 
-    def TMeigs(self,direction,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,which='LR'):
+        Parameters:
+        ------------------------------
+        direction:     int or str
+
+                       if direction in (1,'l','left')   return the left dominant EV
+                       if direction in (-1,'r','right') return the right dominant EV
+        init:          tf.tensor
+                       initial guess for the eigenvector
+        precision:     float
+                       desired precision of the dominant eigenvalue
+        nmax:          int
+                       max number of iterations
+
+        Returns:
+        ------------------------------
+        (eta,x,it,diff):
+        eta:  float
+              the eigenvalue
+        x:    tf.tensor
+              the dominant eigenvector (in matrix form)
+        it:   int 
+              number of iterations
+        diff: float
+              the final precision
+        
+        """
+        
+        if self.D[0]!=self.D[-1]:
+            raise ValueError(" in TMeigs: left and right ancillary dimensions of the MPS do not match")
+        if np.all(init!=None):
+            initial=init
+        tensors=[self.get_tensor(n) for n in range(len(self))]
+        return mf.TMeigs_naive(tensors=tensors,
+                               direction=direction,
+                               init=init,
+                               precision=precision,
+                               nmax=nmax)
+
+    def TMeigs(self,
+               direction,
+               init=None,
+               precision=1E-12,
+               ncv=50,
+               nmax=1000,
+               numeig=6,
+               which='LR'):
         """
         calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
 
