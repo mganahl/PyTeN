@@ -105,7 +105,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
                 self._tensors=copy.deepcopy(tensors)
             else:
                 self._tensors=tensors.view()
-            self.Z=np.result_type(*tensors.ravel()).type(1.0)
+            self._norm=np.result_type(*tensors.ravel()).type(1.0)
             self.tensortype=type(tensors.ravel()[0])
         elif isinstance(tensors,list):
             N=len(tensors)
@@ -126,7 +126,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
             for n in range(len(tensors)):
                 self._tensors.flat[n]=tensors[n].view(Tensor)
 
-            self.Z=np.result_type(*self._tensors).type(1.0)
+            self._norm=np.result_type(*self._tensors).type(1.0)
 
         else:
             raise TypeError('TensorNetwork.__init__(tensors): tensors has invlaid tupe {0}'.type(tensors))
@@ -200,7 +200,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         ----------------
         np.dtype.type: the data type of the MPS tensors
         """
-        return np.result_type(*[t.dtype for t in self._tensors],self.Z)
+        return np.result_type(*[t.dtype for t in self._tensors],self._norm)
     
     @property
     def shape(self):
@@ -307,7 +307,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         
         inds=np.unravel_index(range(self.num_sites),dims=self.shape)
         inds=list(zip(*inds))
-        return ''.join(['Name: ',str(self.name),'\n\n ']+['TN'+str(index)+' \n\n '+self[index].__str__()+' \n\n ' for index in inds]+['\n\n Z=',str(self.Z)])
+        return ''.join(['Name: ',str(self.name),'\n\n ']+['TN'+str(index)+' \n\n '+self[index].__str__()+' \n\n ' for index in inds]+['\n\n Z=',str(self._norm)])
 
     def __len__(self):
         """
@@ -326,7 +326,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         """
         implements np.ufuncs for the TensorNetwork
         for numpy compatibility
-        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        note that the attribute self._norm is NOT operated on with ufunc. ufunc is 
         currently applied elementwise to the tensors in the tensor network
         """
         #this is a dirty hack: division of TensorNetwork by a scalar currently triggers use of
@@ -383,9 +383,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         new=self.copy()
-        new.Z*=num
+        new._norm*=num
         return new
-        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z*num)
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self._norm*num)
 
     def __imul__(self,num):
         """
@@ -395,7 +395,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         """
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
-        self.Z*=num
+        self._norm*=num
         return self
     
 
@@ -407,7 +407,7 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         """
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
-        self.Z/=num
+        self._norm/=num
         return self
     
     def __truediv__(self,num):
@@ -419,9 +419,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         new=self.copy()
-        new.Z/=num
+        new._norm/=num
         return new
-        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z/num)
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self._norm/num)
 
      
     def __rmul__(self,num):
@@ -437,9 +437,9 @@ class TensorNetwork(Container,np.lib.mixins.NDArrayOperatorsMixin):
         if not np.isscalar(num):
             raise TypeError("in TensorNetwork.__mul__(self,num): num is not a number")
         new=self.copy()
-        new.Z*=num
+        new._norm*=num
         return new
-        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self.Z*num)                
+        #return TensorNetwork(tensors=copy.deepcopy(self._tensors),shape=self.shape,name=None,Z=self._norm*num)                
 
 
     def __add__(self,other):
@@ -468,6 +468,8 @@ class MPSBase(TensorNetwork):
     """
     def __init__(self,tensors=[],name=None,fromview=True):
         super().__init__(tensors=tensors,shape=(),name=name,fromview=fromview)
+
+        
     @property
     def D(self):
         """Returns a vector of all bond dimensions.
@@ -639,25 +641,25 @@ class MPSBase(TensorNetwork):
         return np.array(res)#[o/norm for o in res]
 
     def norm(self):
-        return self.Z
+        return self._norm
 
     def normalize(self):
         raise NotImplementedError()
         
 class MPS(MPSBase):
 
-    def __init__(self,tensors=[],Dmax=None,name=None,fromview=True):
+
+    @classmethod
+    def from_tensors(cls,tensors,name=None):
+        return cls(tensors,name=name,fromview=True)
+    
+    def __init__(self,tensors,name=None,fromview=True):
         """
         no checks are performed to see wheter the provided tensors can be contracted
         """
         super().__init__(tensors=tensors,name=name,fromview=fromview)
-        if not Dmax:
-            self._D=max([tensors[0].shape[0]]+[t.shape[1] for t in tensors])
-        else:
-            self._D=Dmax
         self.mat=tensors[-1].eye(1)
-
-        self._left_mat=tensors[-1].eye(1)
+        self._right_mat=tensors[-1].eye(1)
         self._connector=self.mat.inv()
         #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
         self._position=self.num_sites
@@ -675,7 +677,7 @@ class MPS(MPSBase):
     
     def normalize(self,**kwargs):
         self.canonize(numeig=1,**kwargs)
-        self.Z=self.dtype.type(1)
+        self._norm=self.dtype.type(1)
 
     def roll(self, num_sites):
         """
@@ -695,7 +697,7 @@ class MPS(MPSBase):
             + [self._tensors[n] for n in range(num_sites)]
         self._tensors = tensors
         self.connector = tf.linalg.inv(centermatrix)
-        self._left_mat = centermatrix
+        self._right_mat = centermatrix
         self.mat = new_center_matrix
         self.pos = len(self) - num_sites
 
@@ -718,7 +720,7 @@ class MPS(MPSBase):
         if canonize==True:
             self.canonize(**kwargs)
         self.position(n)
-        U,S,V=self.mat.svd(full_matrices=False)
+        U,S,V,_=self.mat.svd(full_matrices=False)
         return S
         
     def get_env_left(self, site):
@@ -748,12 +750,12 @@ class MPS(MPSBase):
             raise IndexError('index {0} out of bounds for MPSUnitCellCentralGauge of length {1}'.format(site,len(self)))
 
         if site==len(self)-1:
-            return ncon.ncon([self._left_mat,self._left_mat.conj()],[[-1,1],[-2,1]])
+            return ncon.ncon([self._right_mat,self._right_mat.conj()],[[-1,1],[-2,1]])
 
         elif site >= self.pos and site < len(self)-1:
             return self[site].eye(1)
         else:
-            r=ncon.ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
+            r=ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[-1,1],[-2,1]])
             for n in range(self.pos-1,site,-1):
                 r = self.transfer_op(n,'r',r)                            
             return r
@@ -1037,7 +1039,7 @@ class MPS(MPSBase):
         
         x=ncon.ncon([u_right,np.sqrt(eigvals_right).diag()],[[-1,1],[1,-2]])
         invx=ncon.ncon([np.sqrt(inveigvals_right).diag(),u_right.conj()],[[-1,1],[-2,1]])
-        U,lam,V=ncon.ncon([y,x],[[-1,1],[1,-2]]).svd()
+        U,lam,V,_=ncon.ncon([y,x],[[-1,1],[1,-2]]).svd()
 
         self._tensors[0]=ncon.ncon([lam.diag(),V,invx,self.get_tensor(0)],[[-1,1],[1,2],[2,3],[3,-2,-3]])
         self._tensors[-1]=ncon.ncon([self.get_tensor(len(self)-1),invy,U],[[-1,1,-3],[1,2],[2,-2]])
@@ -1054,8 +1056,8 @@ class MPS(MPSBase):
         self.mat=lam.diag()
         self._position=len(self)
         self._connector=(1.0/lam).diag()
-        self._left_mat=lam.diag()
-        self.Z=self.dtype.type(1)
+        self._right_mat=lam.diag()
+        self._norm=self.dtype.type(1)
             
         
     def __in_place_unary_operations__(self,operation,*args,**kwargs):
@@ -1096,7 +1098,7 @@ class MPS(MPSBase):
         """
         implements np.ufuncs for the TensorNetwork
         for numpy compatibility
-        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        note that the attribute self._norm is NOT operated on with ufunc. ufunc is 
         currently applied elementwise to the tensors in the tensor network
         """
         
@@ -1135,7 +1137,7 @@ class MPS(MPSBase):
                 raise NotImplementedError('MPS.__array_ufunc__ with argument axis!=None not implemented')
 
         else:
-            obj=MPS(tensors=result,Dmax=self.Dmax,name=None)
+            obj=MPS(tensors=result,name=None)
             obj.mat=matresult
             return obj
 
@@ -1149,21 +1151,8 @@ class MPS(MPSBase):
         """
         return self._position
        
-    @property
-    def Dmax(self):
-        """
-        Dmax is the maximally allowed bond dimension of the MPS
-        """
-        return self._D
-    
-    @Dmax.setter
-    def Dmax(self,D):
-        """
-        set Dmax to D
-        """
-
     @classmethod
-    def random(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,numpy_func=np.random.random_sample,*args,**kwargs):
+    def random(cls,D=[2,2],d=[2],name=None,initializer=ndarray_initializer,numpy_func=np.random.random_sample,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -1172,10 +1161,10 @@ class MPS(MPSBase):
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
 
-        return cls(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
+        return cls(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs),name=name)
 
     @classmethod
-    def zeros(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def zeros(cls,D=[2,2],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -1183,10 +1172,10 @@ class MPS(MPSBase):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
+        return cls(tensors=initializer(numpy_func=np.zeros,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs),name=name)
         
     @classmethod
-    def ones(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def ones(cls,D=[2,2],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -1194,10 +1183,10 @@ class MPS(MPSBase):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
+        return cls(tensors=initializer(numpy_func=np.ones,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs),name=name)
         
     @classmethod
-    def empty(cls,D=[2,2],d=[2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):
+    def empty(cls,D=[2,2],d=[2],name=None,initializer=ndarray_initializer,*args,**kwargs):
         """
         generate a random TensorNetwork
         Parameters:
@@ -1205,7 +1194,7 @@ class MPS(MPSBase):
         """
         if len(D)!=len(d)+1:
             raise ValueError('len(D)!=len(d)+1')
-        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs), Dmax=Dmax,name=name)
+        return cls(tensors=initializer(numpy_func=np.empty,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs),name=name)
 
 
     def __str__(self):
@@ -1214,7 +1203,7 @@ class MPS(MPSBase):
         """
         inds=range(len(self))
         s1=['Name: ',str(self.name),'\n\n ']+['MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos)]+\
-            ['center matrix \n\n ',self.mat.__str__()]+['\n\n MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self.Z)]
+            ['center matrix \n\n ',self.mat.__str__()]+['\n\n MPS['+str(ind)+'] of shape '+str(self[ind].shape)+'\n\n '+self[ind].__str__()+' \n\n ' for ind in range(self.pos,len(self))]+['\n\n Z=',str(self._norm)]
         return ''.join(s1)
 
 
@@ -1223,7 +1212,7 @@ class MPS(MPSBase):
         diagonalizes the center matrix and pushes U and V onto the left and right MPS tensors
         """
 
-        U,S,V=self.mat.svd()
+        U,S,V,_=self.mat.svd()
         self.mat=S.diag()        
         if self.pos>0 and self.pos<len(self):            
             self[self.pos-1]=ncon.ncon([self[self.pos-1],U],[[-1,1,-3],[1,-2]])
@@ -1273,7 +1262,7 @@ class MPS(MPSBase):
                                                                     r_thresh=r_thresh)
                     self.mat=s.diag().dot(v)
 
-                self.Z*=self.dtype.type(Z)
+                self._norm*=self.dtype.type(Z)
                 self[n]=tensor
                 if (n+1)<bond:
                     self[n+1]=ncon.ncon([self.mat,self[n+1]],[[-1,1],[1,-2,-3]])
@@ -1287,7 +1276,7 @@ class MPS(MPSBase):
                                                                  r_thresh=r_thresh)
                     self.mat=u.dot(s.diag())
 
-                self.Z*=self.dtype.type(Z)
+                self._norm*=self.dtype.type(Z)
                 self[n]=tensor
                 if n>bond:
                     self[n-1]=ncon.ncon([self[n-1],self.mat],[[-1,1,-3],[1,-2]])
@@ -1320,7 +1309,10 @@ class MPS(MPSBase):
         ---------------------
         bool
         """
-        return np.all([self.check_ortho(self[site],'l',thresh) for site in range(self.pos)]+[self.check_ortho(self[site],'r',thresh) for site in range(self.pos,len(self))])
+        return np.all([self.check_ortho(self[site],'l',thresh)
+                       for site in range(self.pos)]+
+                      [self.check_ortho(self[site],'r',thresh)
+                       for site in range(self.pos,len(self))])
 
 
     
@@ -1338,8 +1330,16 @@ class MPS(MPSBase):
                                  canonize=True,
                                  name=None):
         if canonize:        
-            self.canonize(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
-        return MPS(tensors=[self.get_tensor(n) for n in range(len(self))],Dmax=self._D,name=name)
+            self.canonize(
+                init=init,
+                precision=precision,
+                ncv=ncv,
+                nmax=nmax,
+                numeig=numeig,
+                pinv=pinv,
+                warn_thresh=warn_thresh)
+            
+        return MPS(tensors=[self.get_tensor(n) for n in range(len(self))],name=name)
         
     def get_right_orthogonal_imps(self,
                                   init=None,
@@ -1351,7 +1351,13 @@ class MPS(MPSBase):
                                   warn_thresh=1E-8,
                                   canonize=True):
         if canonize:
-            self.canonize(init=init,precision=precision,ncv=ncv,nmax=nmax,numeig=numeig,pinv=pinv,warn_thresh=warn_thresh)
+            self.canonize(init=init,
+                          precision=precision,
+                          ncv=ncv,
+                          nmax=nmax,
+                          numeig=numeig,
+                          pinv=pinv,
+                          warn_thresh=warn_thresh)
         self.position(0)
         A=ncon.ncon([self.connector,self.mat,self._tensors[0]],[[-1,1],[1,2],[2,-2,-3]])
         tensors=[A]+[self._tensors[n] for n in range(1,len(self))]
@@ -1360,7 +1366,7 @@ class MPS(MPSBase):
         return imps
         
                      
-    def apply_2site_gate(self,gate,site,Dmax=None,thresh=1E-16):
+    def apply_2site_gate(self,gate,site,truncation_threshold=1E-16,D=None):
         """
         applies a two-site gate to the mps at site ```site```, 
         and does a truncation with truncation threshold "thresh"
@@ -1372,37 +1378,28 @@ class MPS(MPSBase):
         gate:   np.ndarray of shape (dout1,dout2,din1,din2)
                 the gate to be applied to the mps.
         site:   int
-                the left-hand site of the support of ```gate```
-        Dmax:   int
-                the maximally allowed bond dimension
-                bond dimension will never be larger than ```Dmax```, irrespecitive of ```thresh```
+                the left-hand site of the support of `gate`
         thresh: float  
-                truncation threshold; all schmidt values < ```thresh`` are discarded
+                truncation threshold; all schmidt values < `thresh` are discarded
+        D:      int or None
+                the maximally allowed bond dimension
+                bond dimension will never be larger than `D`, irrespecitive of `thresh`
         Returns:
-        tuple (tw,D):
+        ---------------------
         tw: float
             the truncated weight
-        D:  int
-            the current bond dimension D on bond=site+1
-        
         """
 
-        if type(gate)!=type(self[site]):
-            raise TypeError('MPS.apply_2site_gate(): provided gate has to be of same type as MPS tensors')
         self.position(site+1)
         newState=ncon.ncon([self.get_tensor(site),self.get_tensor(site+1),gate],[[-1,1,2],[1,-4,3],[-2,-3,2,3]])
         [Dl,d1,d2,Dr]=newState.shape
         newState,merge_data=newState.merge([[0,1],[2,3]])
-        U,S,V=newState.svd(truncation_threshold=thresh,D=Dmax,full_matrices=False)
-        Strunc=S.truncate([Dmax]).truncate(thresh)
-        tw=float(np.sum(S**2)-np.sum(Strunc**2))
-        Strunc/=Strunc.norm()
-        U=U.truncate([U.shape[0],Strunc.shape[0]]) 
-        V=V.truncate([Strunc.shape[0],V.shape[1]])
-        self[site]=np.transpose(np.reshape(U,(Dl,d1,Strunc.shape[0])),(0,2,1))
-        self[site+1]=np.transpose(np.reshape(V,(Strunc.shape[0],d2,Dr)),(0,2,1))
-        self.mat=Strunc.diag()
-        return tw,Strunc.shape[0]
+        U,S,V,tw=newState.svd(truncation_threshold=truncation_threshold,D=D,full_matrices=False)
+        S/=S.norm()
+        self[site]=U.split([merge_data[0],[S.shape[0]]]).transpose(0,2,1)
+        self[site+1]=V.split([[S.shape[0]],merge_data[1]]).transpose(0,2,1)
+        self.mat=S.diag()
+        return tw
 
 
     def apply_1site_gate(self,gate,site):
@@ -1414,23 +1411,38 @@ class MPS(MPSBase):
         self.position(site)
         tensor=ncon.ncon([self.get_tensor(site),gate],[[-1,-2,1],[-3,1]])
         A,mat,Z=mf.prepare_tensor_QR(tensor,1)
-        self.Z*=Z
+        self._norm*=Z
         self[site]=A
         self.mat=mat
         return self
 
     
 class FiniteMPS(MPS):
-    def __init__(self,tensors=[],Dmax=None,name=None,fromview=True):
+
+
+    @classmethod
+    def random(cls,D,d,name=None,initializer=ndarray_initializer,numpy_func=np.random.random_sample,*args,**kwargs):
+        """
+        generate a random TensorNetwork
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D)!=len(d)-1:
+            raise ValueError('len(D)!=len(d)-1')
+        D=[1]+D+[1]
+        return cls(tensors=initializer(numpy_func=numpy_func,shapes=[(D[n],D[n+1],d[n]) for n in range(len(d))],*args,**kwargs),name=name)
+    
+    def __init__(self,tensors=[],name=None,fromview=True):
         if not np.sum(tensors[0].shape[0])==1:
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[0]'.format(tensors[0].shape))
         if not np.sum(tensors[-1].shape[1])==1:
             raise ValueError('FiniteMPS got a wrong shape {0} for tensor[-1]'.format(tensors[-1].shape))
         
-        super().__init__(tensors=tensors,Dmax=Dmax,name=name,fromview=fromview)
-        self.position(0)
-        self.position(len(self))
+        super().__init__(tensors=tensors,name=name,fromview=fromview)
+        #self.position(0)
+        #self.position(len(self))
 
+        
     @classmethod
     def zeros(self,*args,**kwargs):
         raise NotImplementedError('FiniteMPS.zeros(*args,**kwargs) not implemented')
@@ -1440,30 +1452,32 @@ class FiniteMPS(MPS):
         adds self with other;
         returns an unnormalized mps
         """
-        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=other.Z)]+\
-            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+        tensors=[mf.mps_tensor_adder(self.get_tensor(0),other.get_tensor(0),boundary_type='l',ZA=self._norm,ZB=other._norm)]+\
+            [mf.mps_tensor_adder(self.get_tensor(n),other.get_tensor(n),boundary_type=bt)
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
+        return FiniteMPS(tensors=tensors) #out is an unnormalized MPS
 
+    
     def __iadd__(self,other):
         """
         adds self with other;
         returns an unnormalized mps
         """
-        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=other.Z)]+\
-            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+        tensors=[mf.mps_tensor_adder(self.get_tensor(0),other.get_tensor(0),boundary_type='l',ZA=self._norm,ZB=other._norm)]+\
+            [mf.mps_tensor_adder(self.get_tensor(n),other.get_tensor(n),boundary_type=bt)
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
-        self=FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax,Z=1.0) #out is an unnormalized MPS
-    
+        self=FiniteMPS(tensors=tensors) #out is an unnormalized MPS
+
+        
     def __sub__(self,other):
         """
         subtracts other from self
         returns an unnormalized mps
         """
-        tensors=[mf.mpsTensorAdder(self[0],other[0],boundary_type='l',ZA=self.Z,ZB=-other.Z)]+\
-            [mf.mpsTensorAdder(self[n],other[n],boundary_type=bt)
+        tensors=[mf.mps_tensor_adder(self.get_tensor(0),other.get_tensor(0),boundary_type='l',ZA=self._norm,ZB=-other._norm)]+\
+            [mf.mps_tensor_adder(self.get_tensor(n),other.get_tensor(n),boundary_type=bt)
              for n, bt in zip(range(1,len(self)),['b']*(len(self)-2)+['r'])]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax+other.Dmax) #out is an unnormalized MPS
+        return FiniteMPS(tensors=tensors) #out is an unnormalized MPS
     
     def normalize(self):
         pos=self.pos
@@ -1475,7 +1489,7 @@ class FiniteMPS(MPS):
             self.position(0)
             self.position(len(self))
         self.position(self.pos)                        
-        self.Z=self.dtype.type(1)
+        self._norm=self.dtype.type(1)
 
     #def norm(self):
     #    return np.sqrt(ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[1,2],[1,2]]))
@@ -1496,7 +1510,7 @@ class FiniteMPS(MPS):
            the D[n] Schmidt values
         """
         self.position(n)
-        U,S,V=self.mat.svd(full_matrices=False)
+        U,S,V,_=self.mat.svd(full_matrices=False)
         return S
 
     def regauge(self,gauge):
@@ -1558,17 +1572,9 @@ class FiniteMPS(MPS):
         applies an mpo to an mps; no truncation is done
         """
         assert(len(mpo)==len(self))
-        res=self.copy()
-        res.position(0)
-        res.absorbCenterMatrix(1)
-        for n in range(len(res)):
-            Ml,Mr,din,dout=mpo[n].shape 
-            Dl,Dr,d=res[n].shape
-            res[n]=ncon.ncon([res[n],mpo[n]],[[-1,-3,1],[-2,-4,-5,1]]).merge([[0,1],[2,3],[4]])
-        res.mat=res[0].eye(0)
-        return res
+        tensors=[ncon.ncon([self.get_tensor(n),mpo.get_tensor(n)],[[-1,-3,1],[-2,-4,-5,1]]).merge([[0,1],[2,3],[4]])[0] for n in range(len(self))]
+        return self.from_tensors(tensors)
             
-
 
     def dot(self,mps):
         """
@@ -1579,28 +1585,13 @@ class FiniteMPS(MPS):
         """
         if not len(self)==len(mps):
             raise ValueError('FiniteMPS.dot(other): len(other)!=len(self)')
-        if not isinstance(mps,FiniteMPS):
-            raise TypeError('can only calculate overlaps with FiniteMPS')
+        # if not isinstance(mps,FiniteMPS):
+        #     raise TypeError('can only calculate overlaps with FiniteMPS')
+
         O=self[0].eye(0)
-        for site in range(min(self.pos,mps.pos)):
-            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
-        if self.pos<mps.pos:
-            O=ncon.ncon([O,self.mat],[[1,-2],[1,-1]])
-        elif self.pos==mps.pos:
-            O=ncon.ncon([O,self.mat,np.conj(mps.mat)],[[1,2],[1,-1],[2,-2]])
-        elif self.pos>mps.pos:
-            O=ncon.ncon([O,np.conj(mps.mat)],[[-1,1],[1,-2]])
-            
-        for site in range(min(self.pos,mps.pos),max(self.pos,mps.pos)):
-            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
-            
-        if self.pos<mps.pos:
-            O=ncon.ncon([O,np.conj(mps.mat)],[[-1,1],[1,-2]])
-        elif self.pos>mps.pos:
-            O=ncon.ncon([O,self.mat],[[1,-2],[1,-1]])            
-        for site in range(max(self.pos,mps.pos),len(self)):
-            O=ncon.ncon([O,self[site],np.conj(mps[site])],[[1,2],[1,-1,3],[2,-2,3]])
-        return O.dtype.type(O)
+        for n in range(len(self)):
+            O=mf.transfer_operator(self.get_tensor(n),mps.get_tensor(n),'l',O)        
+        return O
 
         
 
@@ -1662,7 +1653,7 @@ class  CanonizedMPS(MPSBase):
             return (self[n] for n in range(len(self)))
         
             
-    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=True):
+    def __init__(self,gammas=[],lambdas=[],name=None,fromview=True):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
@@ -1675,13 +1666,9 @@ class  CanonizedMPS(MPSBase):
         super().__init__(tensors=tensors,name=name,fromview=fromview)
         self.Gamma=self.GammaTensors(self._tensors.view())
         self.Lambda=self.LambdaTensors(self._tensors.view())                        
-        if not Dmax:
-            self._D=max(self.D)
-        else:
-            self._D=Dmax
 
     @classmethod
-    def fromList(cls,tensors,Dmax=None,name=None):
+    def from_tensors(cls,tensors,name=None):
         """
         construct a CanonizedMPS from a list containing Gamma and Lambda matrices
         Parameters:
@@ -1690,8 +1677,6 @@ class  CanonizedMPS(MPSBase):
                    is a list of Tensor objects which alternates between ```Lambda`` and ```Gamma``` tensors,
                    starting and stopping with a boundary ```Lambda```
                    ```Lambda``` are in vector-format (i.e. it is the diagonal), ```Gamma``` is a full matrix.
-        Dmax:      int
-                   maximally allowed bond dimension
         name:      str or None
                    name of the CanonizedMPS
         Returns:
@@ -1703,7 +1688,7 @@ class  CanonizedMPS(MPSBase):
         if not np.sum(tensors[-1].shape[0])==1:
             raise ValueError('CanonizedFiniteMPS.fromList(tensors) got a wrong shape {0} for tensors[-1]'.format(tensors[-1].shape))
         assert(len(tensors)%2)
-        return cls(gammas=tensors[1::2],lambdas=tensors[0::2],Dmax=Dmax,name=name)
+        return cls(gammas=tensors[1::2],lambdas=tensors[0::2],name=name)
 
     def __len__(self):
         """
@@ -1773,18 +1758,6 @@ class  CanonizedMPS(MPSBase):
         """
         return [g.shape[2] for g in self.Gamma]
     
-    @property
-    def Dmax(self):
-        """
-        Return the maximally allowed bond dimension of the CanonizedMPS
-        """
-        return self._D
-    
-    @Dmax.setter
-    def Dmax(self,D):
-        """
-        Set the maximally allowed bond dimension of the CanonizedMPS
-        """
     @classmethod
     def random(*args,**kwargs):
         raise NotImplementedError('CanonizedMPS.random() only implemented in subclasses')
@@ -1801,7 +1774,7 @@ class  CanonizedMPS(MPSBase):
         """
         implements np.ufuncs for the TensorNetwork
         for numpy compatibility
-        note that the attribute self.Z is NOT operated on with ufunc. ufunc is 
+        note that the attribute self._norm is NOT operated on with ufunc. ufunc is 
         currently applied elementwise to the tensors in the tensor network
         """
         if ufunc==np.true_divide:
@@ -1835,12 +1808,12 @@ class  CanonizedMPS(MPSBase):
                 raise NotImplementedError('CanonizedFiniteMPS.__array_ufunc__ with argument axis!=None not implemented')
 
         else:
-            return self.fromList(tensors=result,Dmax=self.Dmax,name=None)                        
+            return self.from_tensors(tensors=result,name=None)                        
 
 
         
 class  CanonizedFiniteMPS(CanonizedMPS):
-    def __init__(self,gammas=[],lambdas=[],Dmax=None,name=None,fromview=True):
+    def __init__(self,gammas=[],lambdas=[],name=None,fromview=True):
         """
         no checks are performed to see wheter the prived tensors can be contracted
         """
@@ -1849,12 +1822,12 @@ class  CanonizedFiniteMPS(CanonizedMPS):
         if not np.sum(gammas[-1].shape[1])==1:
             raise ValueError('CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(gammas[-1].shape))
 
-        super().__init__(gammas=gammas,lambdas=lambdas,Dmax=None,name=name,fromview=fromview)
+        super().__init__(gammas=gammas,lambdas=lambdas,name=name,fromview=fromview)
             
     
     @classmethod
-    def random(cls,D=[1,2,1],d=[2,2],Dmax=None,name=None,initializer=ndarray_initializer,*args,**kwargs):    
-        mps=FiniteMPS.random(D=D,d=d,Dmax=Dmax,name=name,initialize=initializer,*args,**kwargs)
+    def random(cls,D=[1,2,1],d=[2,2],name=None,initializer=ndarray_initializer,*args,**kwargs):    
+        mps=FiniteMPS.random(D=D,d=d,name=name,initialize=initializer,*args,**kwargs)
         return mps.canonize()
     
     @classmethod
@@ -1890,7 +1863,7 @@ class  CanonizedFiniteMPS(CanonizedMPS):
         FiniteMPS
         """
         tensors=[ncon.ncon([self.Lambda[n].diag(),self.Gamma[n]],[[-1,1],[1,-2,-3]]) for n in range(len(self))]
-        return FiniteMPS(tensors=tensors,Dmax=self.Dmax,name=name)
+        return FiniteMPS(tensors=tensors,name=name)
 
     
     def canonize(self,name=None):
