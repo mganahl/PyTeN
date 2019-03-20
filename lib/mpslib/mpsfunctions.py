@@ -98,7 +98,7 @@ def qr(mat,signfix):
         unit=np.diag(sign)
         return q.dot(herm(unit)),unit.dot(r)
 
-def mpsTensorAdder(A,B,boundary_type,ZA=1.0,ZB=1.0):
+def mps_tensor_adder(A,B,boundary_type,ZA=1.0,ZB=1.0):
     """
     adds to Tensors A and B in the MPS fashion
     A,B:    Tensor objects
@@ -181,7 +181,7 @@ def prepare_tensor_SVD(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
     [l1,l2,d]=tensor.shape
     if direction in (1,'l','left'):
         temp,merge_data=tensor.merge([[0,2],[1]])
-        [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
+        u,s,v,_=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
         Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
         s/=Z
         [size1,size2]=u.shape
@@ -190,7 +190,7 @@ def prepare_tensor_SVD(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
 
     if direction in (-1,'r','right'):
         temp,merge_data=tensor.merge([[0],[1,2]])
-        [u,s,v]=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
+        u,s,v,_=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
         Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
         s/=Z
         [size1,size2]=v.shape
