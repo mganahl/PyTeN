@@ -645,8 +645,44 @@ def lobpcg(L,mpo,R,initial,precision=1e-6,*args,**kwargs):
     e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False,tol=precision,*args,**kwargs)
     return e[0],initial.from_dense(v,[chilp,chirp,dp])
 
+def TMeigs_naive(tensors,
+                 direction,
+                 init=None,
+                 precision=1E-12,
+                 nmax=100000):
 
-def TMeigs(tensors,direction,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,which='LR'):
+    if not np.all(tensors[0].dtype==t.dtype for t in tensors):
+        raise TypeError('TMeigs_naive: all tensors have to have the same dtype')
+
+    if init:
+        x = init
+    else:
+        x = tensors[0].eye(1)
+    if not tensors[0].dtype==x.dtype:
+        raise TypeError('TMeigs_naive: `init` has other dtype than `tensors`')
+
+    x/=x.norm()
+    diff=1101001010001.0
+    it=0
+    while diff>precision:
+        x_new=transfer_operator(tensors, tensors, direction, x)
+        eta=x_new.norm()
+        x_new/=eta
+        diff=(x-x_new).norm()
+        x=x_new
+        if it>=nmax:
+            break
+    return eta,x,it,diff
+
+
+def TMeigs(tensors,
+           direction,
+           init=None,
+           precision=1E-12,
+           ncv=50,
+           nmax=1000,
+           numeig=6,
+           which='LR'):
     """
     calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
 
