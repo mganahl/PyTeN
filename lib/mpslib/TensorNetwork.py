@@ -1090,8 +1090,8 @@ class MPS(MPSBase):
         invx=ncon.ncon([np.sqrt(inveigvals_right).diag(),u_right.conj()],[[-1,1],[-2,1]])
         U,lam,V,_=ncon.ncon([y,x],[[-1,1],[1,-2]]).svd()
 
-        self._tensors[0]=ncon.ncon([lam.diag(),V,invx,self.get_tensor(0)],[[-1,1],[1,2],[2,3],[3,-2,-3]])
-        self._tensors[-1]=ncon.ncon([self.get_tensor(len(self)-1),invy,U],[[-1,1,-3],[1,2],[2,-2]])
+        self._tensors[0]=ncon.ncon([lam.diag(),V,invx,self.mat,self._tensors[0]],[[-1, 1], [1, 2], [2, 3], [3, 4], [4, -2, -3]])
+        self._tensors[-1]=ncon.ncon([self._tensors[-1],self.connector,invy,U],[[-1, 1, -3], [1, 2], [2, 3], [3, -2]])
         self.mat=self._tensors[0].eye(0)
         self._connector=self._tensors[-1].eye(1)
         
