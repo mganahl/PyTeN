@@ -23,9 +23,9 @@ from lib.mpslib.Container import Container
 from lib.mpslib.TensorNetwork import FiniteMPS,MPS
 from scipy.sparse.linalg import ArpackNoConvergence
 import time
-comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
-anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
-herm=lambda x:np.conj(np.transpose(x))
+comm = lambda x,y:np.dot(x,y)-np.dot(y,x)
+anticomm = lambda x,y:np.dot(x,y)+np.dot(y,x)
+herm = lambda x:np.conj(np.transpose(x))
 
 class MPSSimulationBase(Container):
     def __init__(self,mps,mpo,lb,rb,name):
@@ -41,22 +41,22 @@ class MPSSimulationBase(Container):
         lb:       Tensor of shape (D,D,M), or None
                   the left environment; 
                   lb has to have shape (mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0])
-                  if None, obc are assumed, and lb=ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]))
+                  if None, obc are assumed, and lb = ones((mps[0].shape[0],mps[0].shape[0],mpo[0].shape[0]))
         rb:       Tensor of shape (D,D,M), or None
                   the right environment
                   rb has to have shape (mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1])
-                  if None, obc are assumed, and rb=ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
+                  if None, obc are assumed, and rb = ones((mps[-1].shape[1],mps[-1].shape[1],mpo[-1].shape[1]))
         """
-        super().__init__(name=name)
-        self.mps=mps
-        self.mpo=mpo
+        super().__init__(name = name)
+        self.mps = mps
+        self.mpo = mpo
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
         self.mps.position(0)        
         self.left_envs = {} 
         self.right_envs = {}
-        self.lb=lb
-        self.rb=rb
+        self.lb = lb
+        self.rb = rb
 
         
     def __len__(self):
@@ -86,9 +86,9 @@ class MPSSimulationBase(Container):
         ---------------------------
         B:        Tensor object  
                   a tensor of shape (D1,D1',M1) (for direction>0) or (D2,D2',M2) (for direction>0)
-        mps:      Tensor object of shape =(Dl,Dr,d)
-        mpo:      Tensor object of shape = (Ml,Mr,d,d')
-        conjmps: Tensor object of shape =(Dl',Dr',d')
+        mps:      Tensor object of shape  = (Dl,Dr,d)
+        mpo:      Tensor object of shape  =  (Ml,Mr,d,d')
+        conjmps: Tensor object of shape  = (Dl',Dr',d')
                  the mps tensor on the conjugated side
                  this tensor will be complex conjugated inside the routine; usually, the user will like to pass 
                  the unconjugated tensor
@@ -125,11 +125,11 @@ class MPSSimulationBase(Container):
 
 
         if n >= self.mps.pos:
-            pos = self.mps.pos
-            t1=time.time()
+            pos  =  self.mps.pos
+            t1 = time.time()
             self.mps.position(n)
             self.mps_shift_times.append(time.time()-t1)
-            t2=time.time()            
+            t2 = time.time()            
             for m in range(pos, n):
                 self.left_envs[m + 1] = self.add_layer(
                     self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1)
@@ -137,10 +137,10 @@ class MPSSimulationBase(Container):
             
         if n < self.mps.pos:
             pos = self.mps.pos
-            t1=time.time()
+            t1 = time.time()
             self.mps.position(n)
             self.mps_shift_times.append(time.time()-t1)
-            t2=time.time()                        
+            t2 = time.time()                        
             for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
                     self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
@@ -172,7 +172,7 @@ class MPSSimulationBase(Container):
 
 
 class DMRGEngineBase(MPSSimulationBase):
-    def __init__(self, mps, mpo, lb, rb, name='DMRG'):
+    def __init__(self, mps, mpo, lb, rb, name = 'DMRG'):
         """
         initialize an MPS object
         mps:      MPS object
@@ -188,7 +188,7 @@ class DMRGEngineBase(MPSSimulationBase):
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
 
-        super().__init__(mps=mps, mpo=mpo,lb=lb, rb=rb,name=name)
+        super().__init__(mps = mps, mpo = mpo,lb = lb, rb = rb,name = name)
     def compute_left_envs(self):
         """
         compute all left environment blocks
@@ -198,11 +198,11 @@ class DMRGEngineBase(MPSSimulationBase):
         self.left_envs[0] = self.lb
         for n in range(self.mps.pos):
             self.left_envs[n + 1] = self.add_layer(
-                B=self.left_envs[n],
-                mps=self.mps[n],
-                mpo=self.mpo[n],
-                conjmps=self.mps[n],
-                direction=1)
+                B = self.left_envs[n],
+                mps = self.mps[n],
+                mpo = self.mpo[n],
+                conjmps = self.mps[n],
+                direction = 1)
 
     def compute_right_envs(self):
         """
@@ -213,48 +213,48 @@ class DMRGEngineBase(MPSSimulationBase):
         self.right_envs[len(self.mps) - 1] = self.rb
         for n in reversed(range(self.mps.pos, len(self.mps))):
             self.right_envs[n - 1] = self.add_layer(
-                B=self.right_envs[n],
-                mps=self.mps[n],
-                mpo=self.mpo[n],
-                conjmps=self.mps[n],
-                direction=-1)
+                B = self.right_envs[n],
+                mps = self.mps[n],
+                mpo = self.mpo[n],
+                conjmps = self.mps[n],
+                direction = -1)
 
-    def _optimize_2s_local(self,thresh=1E-10,D=None,ncv=40,Ndiag=10,landelta=1E-5,landeltaEta=1E-5,verbose=0,solver='AR'):
+    def _optimize_2s_local(self,thresh = 1E-10,D = None,ncv = 40,Ndiag = 10,landelta = 1E-5,landeltaEta = 1E-5,verbose = 0,solver = 'AR'):
 
         def HAproduct(L,mpo,R,mps):
             return ncon.ncon([L,mps,mpo,R],[[1,-1,2],[1,4,3],[2,5,-3,3],[4,-2,5]])
 
-        mpo,mpo_merge_data=ncon.ncon([self.mpo[self.mps.pos-1],self.mpo[self.mps.pos]],[[-1,1,-3,-5],[1,-2,-4,-6]]).merge([[0],[1],[2,3],[4,5]])        
+        mpo,mpo_merge_data = ncon.ncon([self.mpo[self.mps.pos-1],self.mpo[self.mps.pos]],[[-1,1,-3,-5],[1,-2,-4,-6]]).merge([[0],[1],[2,3],[4,5]])        
 
 
 
-        initial,mps_merge_data=ncon.ncon([self.mps[self.mps.pos-1],self.mps.mat,self.mps[self.mps.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).merge([[0],[1],[2,3]])
+        initial,mps_merge_data = ncon.ncon([self.mps[self.mps.pos-1],self.mps.mat,self.mps[self.mps.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).merge([[0],[1],[2,3]])
         
         if solver.lower()== 'lan':
-            mv=fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])            
-            lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
-            t1=time.time()
-            e,opt,nit=lan.simulate(initial)
+            mv = fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])            
+            lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
+            t1 = time.time()
+            e,opt,nit = lan.simulate(initial)
             self.lan_times.extend([(time.time()-t1)/nit]*nit)                        
         elif solver.lower() == 'ar':
-            e,opt=mf.eigsh(self.left_envs[self.mps.pos-1],
+            e,opt = mf.eigsh(self.left_envs[self.mps.pos-1],
                            mpo,self.right_envs[self.mps.pos],
-                           initial,precision=landeltaEta,
-                           numvecs=1,ncv=ncv,numvecs_calculated=1)
+                           initial,precision = landeltaEta,
+                           numvecs = 1,ncv = ncv,numvecs_calculated = 1)
         elif solver.lower() == 'lobpcg':
-            e,opt=mf.lobpcg(self.left_envs[self.mps.pos-1],
+            e,opt = mf.lobpcg(self.left_envs[self.mps.pos-1],
                             mpo,self.right_envs[self.mps.pos],
-                            initial,precision=landeltaEta)
+                            initial,precision = landeltaEta)
 
 
         
-        temp,merge_data=opt.split(mps_merge_data).transpose(0,2,3,1).merge([[0,1],[2,3]])
+        temp,merge_data = opt.split(mps_merge_data).transpose(0,2,3,1).merge([[0,1],[2,3]])
 
-        U,S,V=temp.svd(truncation_threshold=thresh,D=D)
-        Dnew=S.shape[0]
+        U,S,V = temp.svd(truncation_threshold = thresh,D = D)
+        Dnew = S.shape[0]
         if verbose>0:
-            stdout.write("\rTS-DMRG (%s) it=%i/%i, sites=(%i,%i)/%i:"
-                         " optimized E=%.16f+%.16f at D=%i"%(solver,self._it,self.Nsweeps,
+            stdout.write("\rTS-DMRG (%s) it = %i/%i, sites = (%i,%i)/%i:"
+                         " optimized E = %.16f+%.16f at D = %i"%(solver,self._it,self.Nsweeps,
                                                              self.mps.pos-1,
                                                              self.mps.pos,
                                                              len(self.mps),
@@ -262,57 +262,65 @@ class DMRGEngineBase(MPSSimulationBase):
             stdout.flush()
         if verbose>1:
             print("")
-        Z=np.sqrt(ncon.ncon([S,S],[[1],[1]]))
-        self.mps.mat=S.diag()/Z
+        Z = np.sqrt(ncon.ncon([S,S],[[1],[1]]))
+        self.mps.mat = S.diag()/Z
 
-        self.mps[self.mps.pos-1]=U.split([merge_data[0],[U.shape[1]]]).transpose(0,2,1)
-        self.mps[self.mps.pos]=V.split([[V.shape[0]],merge_data[1]]).transpose(0,2,1)
-        self.left_envs[self.mps.pos]=mf.add_layer(B=self.left_envs[self.mps.pos-1],mps=self.mps[self.mps.pos-1],mpo=self.mpo[self.mps.pos-1],conjmps=self.mps[self.mps.pos-1],direction=1)
-        self.right_envs[self.mps.pos-1]=mf.add_layer(B=self.right_envs[self.mps.pos],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
+        self.mps[self.mps.pos-1] = U.split([merge_data[0],[U.shape[1]]]).transpose(0,2,1)
+        self.mps[self.mps.pos] = V.split([[V.shape[0]],merge_data[1]]).transpose(0,2,1)
+        self.left_envs[self.mps.pos] = mf.add_layer(B = self.left_envs[self.mps.pos-1],
+                                                    mps = self.mps[self.mps.pos-1],
+                                                    mpo = self.mpo[self.mps.pos-1],
+                                                    conjmps = self.mps[self.mps.pos-1],
+                                                    direction = 1)
+        self.right_envs[self.mps.pos-1] = mf.add_layer(B = self.right_envs[self.mps.pos],
+                                                       mps = self.mps[self.mps.pos],
+                                                       mpo = self.mpo[self.mps.pos],
+                                                       conjmps = self.mps[self.mps.pos],
+                                                       direction = -1)
         return e
         
-    def _optimize_1s_local(self,ncv=40,Ndiag=10,landelta=1E-5,landeltaEta=1E-5,verbose=0,solver='AR'):
+    def _optimize_1s_local(self,ncv = 40,Ndiag = 10,landelta = 1E-5,landeltaEta = 1E-5,verbose = 0,solver = 'AR'):
         """
         local single-site optimization routine 
         """
         if self.mps.pos==len(self.mps):
             self.position(self.mps.pos-1)
-            e=self._optimize_1s_local(ncv=ncv,Ndiag=Ndiag,landelta=landelta,landeltaEta=landeltaEta,verbose=verbose)
+            e = self._optimize_1s_local(ncv = ncv,Ndiag = Ndiag,landelta = landelta,landeltaEta = landeltaEta,verbose = verbose)
             self.position(self.mps.pos+1)
             return e
 
         
-        initial=ncon.ncon([self.mps.mat,self.mps[self.mps.pos]],[[-1,1],[1,-2,-3]])
+        initial = ncon.ncon([self.mps.mat,self.mps[self.mps.pos]],[[-1,1],[1,-2,-3]])
         if solver.lower()== 'lan':
-            mv=fct.partial(mf.HA_product,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
-            t1=time.time()
-            lan=LZ.LanczosEngine(mv,Ndiag=Ndiag,ncv=ncv,numeig=1,delta=landelta,deltaEta=landeltaEta)
-            e,opt,nit=lan.simulate(initial)
+            mv = fct.partial(mf.HA_product,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
+            t1 = time.time()
+            lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
+            e,opt,nit = lan.simulate(initial)
             self.lan_times.extend([(time.time()-t1)/nit]*nit)            
         elif solver.lower() == 'ar':
-            e,opt=mf.eigsh(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision=landeltaEta,numvecs=1,ncv=ncv,numvecs_calculated=1)
+            e,opt=mf.eigsh(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision = landeltaEta,numvecs = 1,ncv = ncv,numvecs_calculated = 1)
         elif solver.lower() == 'lobpcg':
-            e,opt=mf.lobpcg(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision=landeltaEta)
+            e,opt = mf.lobpcg(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision = landeltaEta)
             
-        Dnew=opt.shape[1]
+        Dnew = opt.shape[1]
         if verbose>0:
-            stdout.write("\rSS-DMRG (%s) it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"%(solver,self._it,self.Nsweeps,self.mps.pos,len(self.mps),np.real(e),np.imag(e),Dnew))
+            stdout.write("\rSS-DMRG (%s) it = %i/%i, site = %i/%i: optimized E = %.16f+%.16f at D = %i"%(solver,self._it,self.Nsweeps,self.mps.pos,len(self.mps),np.real(e),np.imag(e),Dnew))
             stdout.flush()
         if verbose>1:
             print("")
 
-        t1=time.time()
-        mat,B,Z=mf.prepare_tensor_QR(opt,direction='r')
+        t1 = time.time()
+        mat,B,Z = mf.prepare_tensor_QR(opt,direction = 'r')
         self.mps_shift_times.append(time.time()-t1)                    
-        self.mps.mat=mat
-        self.mps[self.mps.pos]=B
+        self.mps.mat = mat
+        self.mps[self.mps.pos] = B
         
-        t2=time.time()        
-        self.right_envs[self.mps.pos-1]=mf.add_layer(B=self.right_envs[self.mps.pos],mps=self.mps[self.mps.pos],mpo=self.mpo[self.mps.pos],conjmps=self.mps[self.mps.pos],direction=-1)
+        t2 = time.time()        
+        self.right_envs[self.mps.pos-1] = mf.add_layer(B = self.right_envs[self.mps.pos],mps = self.mps[self.mps.pos],mpo = self.mpo[self.mps.pos],conjmps = self.mps[self.mps.pos],direction = -1)
         self.add_layer_times.append(time.time()-t2)        
         return e
     
-    def run_one_site(self,Nsweeps=4,precision=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5,solver='AR'):
+    def run_one_site(self,Nsweeps = 4,precision = 1E-6,ncv = 40,cp = None,verbose = 0,Ndiag = 10,landelta = 1E-8,landeltaEta = 1E-5,solver = 'AR'):
         """
         do a one-site finite DMRG optimzation for an open system
         Paramerters:
@@ -337,56 +345,56 @@ class DMRGEngineBase(MPSSimulationBase):
         solver:          str
                          'AR' or 'LAN'
         """
-        self.lan_times=[]
-        self.mps_shift_times=[]
-        self.add_layer_times=[]
+        self.lan_times = []
+        self.mps_shift_times = []
+        self.add_layer_times = []
         
         self.mps.position(0)        
         self.compute_left_envs()
         self.compute_right_envs()
 
-        self.Nsweeps=Nsweeps
-        converged=False
-        energy=100000.0
-        self._it=1
+        self.Nsweeps = Nsweeps
+        converged = False
+        energy = 100000.0
+        self._it = 1
 
         while not converged:
             self.position(
-                0)  #the part outside the loop covers the len(self)==1 case
-            e = self._optimize_1s_local(
-                ncv=ncv,
-                Ndiag=Ndiag,
-                landelta=landelta,
-                landeltaEta=landeltaEta,
-                verbose=verbose,
-                solver=solver)
+                0)  #the part outside the loop covers the len(self) = =1 case
+            e  =  self._optimize_1s_local(
+                ncv = ncv,
+                Ndiag = Ndiag,
+                landelta = landelta,
+                landeltaEta = landeltaEta,
+                verbose = verbose,
+                solver = solver)
 
             for n in range(1, len(self.mps) - 1):
                 self.position(n)
-                e = self._optimize_1s_local(
-                    ncv=ncv,
-                    Ndiag=Ndiag,
-                    landelta=landelta,
-                    landeltaEta=landeltaEta,
-                    verbose=verbose,
-                    solver=solver)
+                e  =  self._optimize_1s_local(
+                    ncv = ncv,
+                    Ndiag = Ndiag,
+                    landelta = landelta,
+                    landeltaEta = landeltaEta,
+                    verbose = verbose,
+                    solver = solver)
 
             for n in range(len(self.mps) - 1, 0, -1):
                 self.position(n)
                 e = self._optimize_1s_local(
-                    ncv=ncv,
-                    Ndiag=Ndiag,
-                    landelta=landelta,
-                    landeltaEta=landeltaEta,
-                    verbose=verbose,
-                    solver=solver)
+                    ncv = ncv,
+                    Ndiag = Ndiag,
+                    landelta = landelta,
+                    landeltaEta = landeltaEta,
+                    verbose = verbose,
+                    solver = solver)
             if np.abs(e-energy)<precision:
-                converged=True
-            energy=e
+                converged = True
+            energy = e
 
             if (cp!=None) and (cp!=0) and (self._it>0) and (self._it%cp==0):
                 self.save(self.name+'_dmrg_cp')                
-            self._it=self._it+1
+            self._it = self._it+1
             if self._it>Nsweeps:
                 if verbose>0:
                     print()
@@ -396,7 +404,7 @@ class DMRGEngineBase(MPSSimulationBase):
         return e
 
 
-    def run_two_site(self,Nsweeps=4,thresh=1E-10,D=None,precision=1E-6,ncv=40,cp=None,verbose=0,Ndiag=10,landelta=1E-8,landeltaEta=1E-5,solver='AR'):
+    def run_two_site(self,Nsweeps = 4,thresh = 1E-10,D = None,precision = 1E-6,ncv = 40,cp = None,verbose = 0,Ndiag = 10,landelta = 1E-8,landeltaEta = 1E-5,solver = 'AR'):
         """
         do a two-site finite DMRG optimzation for an open system
         Paramerters:
@@ -405,7 +413,7 @@ class DMRGEngineBase(MPSSimulationBase):
         thresh:          float
                          truncation  threshold for SVD truncation of the MPS
         D:               int
-                         maximally allowed bond dimension; if D=None, no bound on D is assumed (can become expensive)
+                         maximally allowed bond dimension; if D = None, no bound on D is assumed (can become expensive)
         precision:       float    
                          desired precision of the ground state energy
         ncv:             int
@@ -430,48 +438,48 @@ class DMRGEngineBase(MPSSimulationBase):
         self.compute_left_envs()
         self.compute_right_envs()
 
-        self.Nsweeps=Nsweeps
-        converged=False
-        energy=100000.0
-        self._it=1
+        self.Nsweeps = Nsweeps
+        converged = False
+        energy = 100000.0
+        self._it = 1
         while not converged:
             self.position(1)
-            e=self._optimize_2s_local(
-                thresh=thresh,
-                D=D,
-                ncv=ncv,
-                Ndiag=Ndiag,
-                landelta=landelta,
-                landeltaEta=landeltaEta,
-                verbose=verbose,
-                solver=solver)
+            e = self._optimize_2s_local(
+                thresh = thresh,
+                D = D,
+                ncv = ncv,
+                Ndiag = Ndiag,
+                landelta = landelta,
+                landeltaEta = landeltaEta,
+                verbose = verbose,
+                solver = solver)
 
             for n in range(2,len(self.mps)):
                 self.position(n)
-                e=self._optimize_2s_local(
-                    thresh=thresh,D=D,
-                    ncv=ncv,Ndiag=Ndiag,
-                    landelta=landelta,
-                    landeltaEta=landeltaEta,
-                    verbose=verbose,
-                    solver=solver)                
+                e = self._optimize_2s_local(
+                    thresh = thresh,D = D,
+                    ncv = ncv,Ndiag = Ndiag,
+                    landelta = landelta,
+                    landeltaEta = landeltaEta,
+                    verbose = verbose,
+                    solver = solver)                
             for n in range(len(self.mps)-2,1,-1):
                 self.position(n)
-                e=self._optimize_2s_local(thresh=thresh,
-                                          D=D,ncv=ncv,
-                                          Ndiag=Ndiag,
-                                          landelta=landelta,
-                                          landeltaEta=landeltaEta,
-                                          verbose=verbose,
-                                          solver=solver)                                
+                e = self._optimize_2s_local(thresh = thresh,
+                                          D = D,ncv = ncv,
+                                          Ndiag = Ndiag,
+                                          landelta = landelta,
+                                          landeltaEta = landeltaEta,
+                                          verbose = verbose,
+                                          solver = solver)                                
 
             if np.abs(e-energy)<precision:
-                converged=True
-            energy=e
+                converged = True
+            energy = e
 
             if (cp!=None) and (cp!=0) and (self._it>0) and (self._it%cp==0):
                 self.save(self.name+'_dmrg_cp')                
-            self._it=self._it+1
+            self._it = self._it+1
             if self._it>Nsweeps:
                 if verbose>0:
                     print()
@@ -486,7 +494,7 @@ class FiniteDMRGengine(DMRGEngineBase):
     simulation container for density matrix renormalization group optimization
 
     """
-    def __init__(self, mps, mpo, name='FiniteDMRG'):
+    def __init__(self, mps, mpo, name = 'FiniteDMRG'):
         """
         initialize an finite DMRG simulation
         mps:      MPS object
@@ -497,14 +505,14 @@ class FiniteDMRGengine(DMRGEngineBase):
                   the name of the simulation
         """
         
-        if not isinstance(mps, FiniteMPS):
-            raise TypeError(
-                'in FiniteDMRGEngine.__init__(...): mps of type FiniteMPS expected, got {0}'
-                .format(type(mps)))
+        # if not isinstance(mps, FiniteMPS):
+        #     raise TypeError(
+        #         'in FiniteDMRGEngine.__init__(...): mps of type FiniteMPS expected, got {0}'
+        #         .format(type(mps)))
 
-        lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
-        rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]], dtype=mps.dtype)        
-        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+        lb  =  type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype = mps.dtype)
+        rb  =  type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]], dtype = mps.dtype)        
+        super().__init__(mps = mps, mpo = mpo, lb = lb, rb = rb, name = name)
     
 
 
@@ -514,141 +522,141 @@ class InfiniteDMRGEngine(DMRGEngineBase):
     def __init__(self,
                  mps,
                  mpo,
-                 name='InfiniteDMRG',
-                 precision=1E-12,
-                 precision_canonize=1E-12,
-                 nmax=1000,
-                 nmax_canonize=1000,
-                 ncv=40,
-                 numeig=1,
-                 pinv=1E-20):
+                 name = 'InfiniteDMRG',
+                 precision = 1E-12,
+                 precision_canonize = 1E-12,
+                 nmax = 1000,
+                 nmax_canonize = 1000,
+                 ncv = 40,
+                 numeig = 1,
+                 pinv = 1E-20):
 
-        if not isinstance(mps, MPS):
-            raise TypeError(
-                'in InfiniteDMRGEngine.__init__(...): mps of type InfiniteMPSCentralGauge expected, got {0}'
-                .format(type(mps)))
+        # if not isinstance(mps, MPS):
+        #     raise TypeError(
+        #         'in InfiniteDMRGEngine.__init__(...): mps of type InfiniteMPSCentralGauge expected, got {0}'
+        #         .format(type(mps)))
 
         mps.canonize(
-            precision=precision_canonize,
-            ncv=ncv,
-            nmax=nmax_canonize,
-            numeig=numeig,
-            pinv=pinv)  #this leaves state in left-orthogonal form
+            precision = precision_canonize,
+            ncv = ncv,
+            nmax = nmax_canonize,
+            numeig = numeig,
+            pinv = pinv)  #this leaves state in left-orthogonal form
 
-        lb, hl = mf.compute_steady_state_Hamiltonian_GMRES(
+        lb, hl  =  mf.compute_steady_state_Hamiltonian_GMRES(
             'l',
             mps,
             mpo,
-            left_dominant=mps[-1].eye(1),
-            right_dominant=ncon.ncon([mps.mat, mps.mat.conj()],
+            left_dominant = mps[-1].eye(1),
+            right_dominant = ncon.ncon([mps.mat, mps.mat.conj()],
                                      [[-1, 1], [-2, 1]]),
-            precision=precision,
-            nmax=nmax)
+            precision = precision,
+            nmax = nmax)
 
-        rmps = mps.get_right_orthogonal_imps(
-            precision=precision_canonize,
-            ncv=ncv,
-            nmax=nmax_canonize,
-            numeig=numeig,
-            pinv=pinv,
-            canonize=False)
+        rmps  =  mps.get_right_orthogonal_imps(
+            precision = precision_canonize,
+            ncv = ncv,
+            nmax = nmax_canonize,
+            numeig = numeig,
+            pinv = pinv,
+            canonize = False)
 
-        rb, hr = mf.compute_steady_state_Hamiltonian_GMRES(
+        rb, hr  =  mf.compute_steady_state_Hamiltonian_GMRES(
             'r',
             rmps,
             mpo,
-            right_dominant=mps[0].eye(0),
-            left_dominant=ncon.ncon([mps.mat, mps.mat.conj()],
+            right_dominant = mps[0].eye(0),
+            left_dominant = ncon.ncon([mps.mat, mps.mat.conj()],
                                     [[1, -1], [1, -2]]),
-            precision=precision,
-            nmax=nmax)
+            precision = precision,
+            nmax = nmax)
 
-        left_dominant = ncon.ncon([mps.mat, mps.mat.conj()],
+        left_dominant  =  ncon.ncon([mps.mat, mps.mat.conj()],
                                   [[1, -1], [1, -2]])
-        out = mps.unitcell_transfer_op('l', left_dominant)
+        out  =  mps.unitcell_transfer_op('l', left_dominant)
 
-        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+        super().__init__(mps = mps, mpo = mpo, lb = lb, rb = rb, name = name)
 
 
-    def compute_infinite_envs(self,precision=1E-8,ncv=40,nmax=10000,numeig=1,pinv=1E-20):
+    def compute_infinite_envs(self,precision = 1E-8,ncv = 40,nmax = 10000,numeig = 1,pinv = 1E-20):
         self.mps.canonize(
-            precision=precision,
-            ncv=ncv,
-            nmax=nmax,
-            numeig=numeig,
-            pinv=pinv)  #this leaves state in left-orthogonal form
+            precision = precision,
+            ncv = ncv,
+            nmax = nmax,
+            numeig = numeig,
+            pinv = pinv)  #this leaves state in left-orthogonal form
 
-        self.lb, hl = mf.compute_steady_state_Hamiltonian_GMRES(
+        self.lb, hl  =  mf.compute_steady_state_Hamiltonian_GMRES(
             'l',
             self.mps,
             self.mpo,
-            left_dominant=self.mps[-1].eye(1),
-            right_dominant=ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+            left_dominant = self.mps[-1].eye(1),
+            right_dominant = ncon.ncon([self.mps.mat, self.mps.mat.conj()],
                                      [[-1, 1], [-2, 1]]),
-            precision=precision,
-            nmax=nmax)
-        self.left_envs[0]=self.lb
-        rmps = self.mps.get_right_orthogonal_imps(
-            precision=precision,
-            ncv=ncv,
-            nmax=nmax,
-            numeig=numeig,
-            pinv=pinv,
-            canonize=False)
+            precision = precision,
+            nmax = nmax)
+        self.left_envs[0] = self.lb
+        rmps  =  self.mps.get_right_orthogonal_imps(
+            precision = precision,
+            ncv = ncv,
+            nmax = nmax,
+            numeig = numeig,
+            pinv = pinv,
+            canonize = False)
 
-        self.rb, hr = mf.compute_steady_state_Hamiltonian_GMRES(
+        self.rb, hr  =  mf.compute_steady_state_Hamiltonian_GMRES(
             'r',
             rmps,
             self.mpo,
-            right_dominant=self.mps[0].eye(0),
-            left_dominant=ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+            right_dominant = self.mps[0].eye(0),
+            left_dominant = ncon.ncon([self.mps.mat, self.mps.mat.conj()],
                                     [[1, -1], [1, -2]]),
-            precision=precision,
-            nmax=nmax)
-        self.right_envs[len(self.mps)-1]=self.rb
-        left_dominant = ncon.ncon([self.mps.mat, self.mps.mat.conj()],
+            precision = precision,
+            nmax = nmax)
+        self.right_envs[len(self.mps)-1] = self.rb
+        left_dominant  =  ncon.ncon([self.mps.mat, self.mps.mat.conj()],
                                   [[1, -1], [1, -2]])
-        out = self.mps.unitcell_transfer_op('l', left_dominant)
+        out  =  self.mps.unitcell_transfer_op('l', left_dominant)
 
     def roll(self, sites):
         """
         
         """
         self.position(sites)
-        new_lb = self.left_envs[sites]
-        new_rb = self.right_envs[sites - 1]
-        centermatrix = self.mps.mat  #copy the center matrix
+        new_lb  =  self.left_envs[sites]
+        new_rb  =  self.right_envs[sites - 1]
+        centermatrix  =  self.mps.mat  #copy the center matrix
         self.mps.position(len(self.mps))  #move cenermatrix to the right
-        new_center_matrix = ncon.ncon([self.mps.mat, self.mps.connector],
+        new_center_matrix  =  ncon.ncon([self.mps.mat, self.mps.connector],
                                       [[-1, 1], [1, -2]])
 
-        self.mps._position = sites
-        self.mps.mat = centermatrix
+        self.mps._position  =  sites
+        self.mps.mat  =  centermatrix
         self.mps.position(0)
-        new_center_matrix = ncon.ncon([new_center_matrix, self.mps.mat],
+        new_center_matrix  =  ncon.ncon([new_center_matrix, self.mps.mat],
                                       [[-1, 1], [1, -2]])
-        tensors = [self.mps[n] for n in range(sites, len(self.mps))
+        tensors  =  [self.mps[n] for n in range(sites, len(self.mps))
                   ] + [self.mps[n] for n in range(sites)]
         self.mps.set_tensors(tensors)
         self.mpo.set_tensors([self.mpo[n] for n in range(sites, len(self.mps))
                             ] + [self.mpo[n] for n in range(sites)])
-        self.mps._connector = centermatrix.inv()
-        self.mps._left_mat = centermatrix
-        self.mps.mat = new_center_matrix
-        self.mps._position = len(self.mps) - sites
-        self.lb = new_lb
-        self.rb = new_rb
+        self.mps._connector  =  centermatrix.inv()
+        self.mps._right_mat  =  centermatrix
+        self.mps.mat  =  new_center_matrix
+        self.mps._position  =  len(self.mps) - sites
+        self.lb  =  new_lb
+        self.rb  =  new_rb
         self.update()
 
     def run_one_site(self,
-                     Nsweeps=10,
-                     precision=1E-6,
-                     ncv=40,
-                     verbose=0,
-                     Ndiag=10,
-                     landelta=1E-10,
-                     landeltaEta=1E-10,
-                     solver='AR'):
+                     Nsweeps = 10,
+                     precision = 1E-6,
+                     ncv = 40,
+                     verbose = 0,
+                     Ndiag = 10,
+                     landelta = 1E-10,
+                     landeltaEta = 1E-10,
+                     solver = 'AR'):
         """
         do a one-site infinite DMRG optimzation for an open system
         Paramerters:
@@ -677,19 +685,19 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         eold = 0.0
         while not converged:
             e = super().run_one_site(
-                Nsweeps=1,
-                precision=precision,
-                ncv=ncv,
-                verbose=verbose - 1,
-                Ndiag=Ndiag,
-                landelta=landelta,
-                landeltaEta=landeltaEta,
-                solver=solver)
+                Nsweeps = 1,
+                precision = precision,
+                ncv = ncv,
+                verbose = verbose - 1,
+                Ndiag = Ndiag,
+                landelta = landelta,
+                landeltaEta = landeltaEta,
+                solver = solver)
 
-            self.roll(sites=len(self.mps) // 2)
+            self.roll(sites = len(self.mps) // 2)
             if verbose > 0:
                 stdout.write(
-                    "\rSS-IDMRG (%s) it=%i/%i, energy per unit-cell E/N=%.16f+%.16f"
+                    "\rSS-IDMRG (%s) it = %i/%i, energy per unit-cell E/N = %.16f+%.16f"
                     % (solver,self._idmrg_it, Nsweeps,
                        np.real((e - eold) / len(self.mps)),
                        np.imag((e - eold) / len(self.mps))))
@@ -774,6 +782,169 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                 converged = True
                 break
 
+class TEBDEngine(Container):
+    """
+    TimeEvolutionEngine(Container):
+    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    """
+
+    def __init__(self,mps,mpo,name):
+        """
+        TEBD.__init__(mps,mpo,name):
+        initialize a TEBD  simulation for finite systems; this is an engine for real or imaginary time evolution
+        Parameters:
+        --------------------------------------------------------
+        mps:           MPS object
+                       the initial state 
+        mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m), or a nearest neighbor MPO
+                       The Hamiltonian/generator of time evolution
+        name:          str
+                       the filename under which cp results will be stored (not yet implemented)
+        """
+
+        super().__init__(name)
+        self.mps=mps
+        self.gates=mpo
+        self.mps.position(0)
+        self.t0=0.0
+        self.it=0
+        self.tw=0
+        
+    @property
+    def iteration(self):
+        """
+        return the current value of the iteration counter
+        """
+        return self.it
+    
+    @property
+    def time(self):
+        """
+        return the current time self._t0 of the simulation
+        """
+        return self.t0
+    
+    @property
+    def truncated_weight(self):
+        """
+        returns the accumulated truncated weight of the simulation (if accessible)
+        """
+        return self.tw
+
+    def reset(self):
+        """
+        resets iteration counter, time-accumulator and truncated-weight accumulator,
+        i.e. self.time=0.0 self.iteration=0, self.truncatedWeight=0.0 afterwards.
+        """
+        self.t0=0.0
+        self.it=0
+        self.tw=0.0
+        
+
+    def apply_even_gates(self,tau,D,tr_thresh):
+        """
+        apply the TEBD gates on all even sites
+        Parameters:
+        ------------------------------------------
+        tau:       float
+                   the time-stepsize
+        D:         int
+                   The maximally allowed bond dimension after the gate application (overrides tr_thresh)
+        tr_tresh:  float
+                   threshold for truncation
+        """
+        for n in range(0,len(self.mps)-1,2):
+            tw=self.mps.apply_2site_gate(gate=self.gates.get_2site_gate(n,n+1,tau),site=n,D=D,truncation_threshold=tr_thresh)
+            self.tw+=tw
+
+    def apply_odd_gates(self,tau,D,tr_thresh):
+        """
+        apply the TEBD gates on all odd sites
+        Parameters:
+        ------------------------------------------
+        tau:       float
+                   the time-stepsize
+        D:         int
+                   The maximally allowed bond dimension after the gate application (overrides tr_thresh)
+        tr_tresh:  float
+                   threshold for truncation
+        """
+        
+        if len(self.mps)%2==0:
+            lstart=len(self.mps)-3
+        elif len(self.mps)%2==1:
+            lstart=len(self.mps)-2
+        for n in range(lstart,-1,-2):
+            tw=self.mps.apply_2site_gate(gate=self.gates.get_2site_gate(n,n+1,tau),site=n,D=D,truncation_threshold=tr_thresh)
+            self.tw+=tw
+
+    def doTEBD(self,dt,numsteps,D,tr_thresh=1E-10,verbose=1,cp=None,keep_cp=False):
+        """
+        TEBDengine.doTEBD(self,dt,numsteps,D,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
+        uses a second order trotter decomposition to evolve the state using TEBD
+        Parameters:
+        -------------------------------
+        dt:        float
+                   step size (scalar)
+        numsteps:  int
+                   total number of evolution steps
+        D:         int
+                   maximum bond dimension to be kept
+        tr_thresh: float
+                   truncation threshold 
+        verbose:   int
+                   verbosity flag; put to 0 for no output
+        cp:        int or None
+                   checkpointing flag: checkpoint every cp steps
+        keep_cp:   bool
+                   if True, keep all checkpointed files, if False, only keep the last one
+
+        Returns:
+        a tuple containing the truncated weight and the simulated time
+        """
+
+        #even half-step:
+        current='None'
+        self.apply_even_gates(tau=dt/2.0,D=D,tr_thresh=tr_thresh)
+        for step in range(numsteps):
+            #odd step updates:
+            self.apply_odd_gates(tau=dt,D=D,tr_thresh=tr_thresh)
+            if verbose>=1:
+                self.t0+=np.abs(dt)
+                stdout.write("\rTEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"%(self.t0,self.tw,np.max(self.mps.D),D,tr_thresh,np.abs(dt)))
+                stdout.flush()
+            if verbose>=2:
+                print('')
+            #if this is a cp step, save between two half-steps
+            if (cp!=None) and (self.it>0) and (self.it%cp==0):
+                #if the cp step does not coincide with the last step, do a half step, save, and do another half step
+                if step<(numsteps-1):                
+                    self.apply_even_gates(tau=dt/2.0,D=D,tr_thresh=tr_thresh)
+                    if not keep_cp:
+                        if os.path.exists(current+'.pickle'):
+                            os.remove(current+'.pickle')
+                        current=self.name+'_tebd_cp'+str(self.it)
+                        self.save(current)
+                    else:
+                        current=self.name+'_tebd_cp'+str(self.it)
+                        self.save(current)
+                    self.apply_even_gates(tau = dt/2.0,D = D,tr_thresh = tr_thresh)
+                #if the cp step coincides with the last step, only do a half step and save the state
+                else:
+                    self.apply_even_gates(tau = dt/2.0,D = D,tr_thresh = tr_thresh)
+                    newname=self.name+'_tebd_cp'+str(self.it)
+                    self.save(newname)                    
+            #if step is not a cp step:
+            else:
+                #do a regular full step, unless step is the last step
+                if step<(numsteps-1):
+                    self.apply_even_gates(tau=dt,D=D,tr_thresh=tr_thresh)
+                #if step is the last step, do a half step
+                else:
+                    self.apply_even_gates(tau=dt/2.0,D=D,tr_thresh=tr_thresh)
+            self.it=self.it+1
+            self.mps.normalize()
+        return self.tw,self.t0
 
 class VUMPSengine(InfiniteDMRGEngine):
     """
