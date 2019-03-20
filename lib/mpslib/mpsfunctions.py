@@ -137,14 +137,6 @@ def mps_tensor_adder(A,B,boundary_type,ZA=1.0,ZB=1.0):
         else:
             return NotImplemented
     
-# def transfer_operator(A,B,direction,x):
-#     """
-#     """
-#     if direction in ('l','left',1):
-#         return ncon.ncon([x,A,B.conj()],[[1,2],[1,-1,3],[2,-2,3]])
-#     if direction in ('r','right',-1):
-#         return ncon.ncon([A,B.conj(),x],[[-1,1,3],[-2,2,3],[1,2]])
-
 def transfer_operator(tensors_a,tensors_b,direction,x):
     """
     """
