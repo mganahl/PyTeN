@@ -137,14 +137,30 @@ def mps_tensor_adder(A,B,boundary_type,ZA=1.0,ZB=1.0):
         else:
             return NotImplemented
     
-def transfer_operator(A,B,direction,x):
-    """
-    """
-    if direction in ('l','left',1):
-        return ncon.ncon([x,A,B.conj()],[[1,2],[1,-1,3],[2,-2,3]])
-    if direction in ('r','right',-1):
-        return ncon.ncon([A,B.conj(),x],[[-1,1,3],[-2,2,3],[1,2]])
+# def transfer_operator(A,B,direction,x):
+#     """
+#     """
+#     if direction in ('l','left',1):
+#         return ncon.ncon([x,A,B.conj()],[[1,2],[1,-1,3],[2,-2,3]])
+#     if direction in ('r','right',-1):
+#         return ncon.ncon([A,B.conj(),x],[[-1,1,3],[-2,2,3],[1,2]])
 
+def transfer_operator(tensors_a,tensors_b,direction,x):
+    """
+    """
+    if len(tensors_a)!=len(tensors_b):
+        raise ValueError('transfer_operator(): lengths of tensors_a and tensors_b are different')
+    if direction in ('l','left',1):
+        for n in range(len(tensors_a)):
+            x = ncon.ncon([x,tensors_a[n],
+                           tensors_b[n].conj()],
+                          [[1,2],[1,-1,3],[2,-2,3]])
+    if direction in ('r','right',-1):
+        for n in reversed(range(len(tensors_a))):
+            x = ncon.ncon([tensors_a[n],
+                           tensors_b[n].conj(),x],
+                          [[-1,1,3],[-2,2,3],[1,2]])
+    return x
 
 def prepare_tensor_SVD(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
     """
@@ -637,4 +653,71 @@ def lobpcg(L,mpo,R,initial,precision=1e-6,*args,**kwargs):
     e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False,tol=precision,*args,**kwargs)
     return e[0],initial.from_dense(v,[chilp,chirp,dp])
 
+
+def TMeigs(tensors,direction,init=None,precision=1E-12,ncv=50,nmax=1000,numeig=6,which='LR'):
+    """
+    calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
+
+    Parameters:
+    ------------------------------
+    direction:     int or str
+
+                   if direction in (1,'l','left')   return the left dominant EV
+                   if direction in (-1,'r','right') return the right dominant EV
+    init:          tf.tensor
+                   initial guess for the eigenvector
+    precision:     float
+                   desired precision of the dominant eigenvalue
+    ncv:           int
+                   number of Krylov vectors
+    nmax:          int
+                   max number of iterations
+    numeig:        int
+                   hyperparameter, passed to scipy.sparse.linalg.eigs; number of eigenvectors 
+                   to be returned by scipy.sparse.linalg.eigs; leave at 6 to avoid problems with arpack
+                   use numeig=1 for best performance (and sacrificing stability)
+    which:         str
+                   hyperparameter, passed to scipy.sparse.linalg.eigs; which eigen-vector to target
+                   can be ('LM','LA,'SA','LR'), refer to scipy.sparse.linalg.eigs documentation for details
+
+    Returns:
+    ------------------------------
+    (eta,x):
+    eta: float
+         the eigenvalue
+    x:   tf.tensor
+         the dominant eigenvector (in matrix form)
+    """
+    if not np.all([tensors[0].dtype==tensors[m].dtype for m in range(len(tensors))]):
+        raise TypeError('TMeigs: all tensors have to have the same dtype')
+    dtype=tensors[0].dtype
+    if np.sum(tensors[0].shape[0])!=np.sum(tensors[-1].shape[1]):
+        raise ValueError(" in TMeigs: left and right ancillary dimensions of the MPS do not match")
+    if np.all(init!=None):
+        initial=init
+    def mv(vector):
+        return transfer_operator(tensors,tensors,direction,type(tensors[0]).from_dense(vector,[tensors[0].shape[0],tensors[0].shape[0]])).to_dense()
+
+    LOP=LinearOperator((np.sum(tensors[0].shape[0])*np.sum(tensors[0].shape[0]),
+                        np.sum(tensors[-1].shape[1])*np.sum(tensors[-1].shape[1])),
+                       matvec=mv,dtype=dtype)
+    if numeig>=LOP.shape[0]-1:
+        warnings.warn('TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
+        while numeig>=(LOP.shape[0]-1):
+            numeig-=1
     
+    eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)        
+    m=np.argmax(np.real(eta))
+    while np.abs(np.imag(eta[m]))/np.abs(np.real(eta[m]))>1E-4:
+        numeig=numeig+1
+        print ('found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'.format(numeig))
+        eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)
+        m=np.argmax(np.real(eta))
+        
+    if np.issubdtype(dtype,np.floating):
+        out=type(tensors[0]).from_dense(vec[:,m],[tensors[0].shape[0],tensors[0].shape[0]])
+        if np.linalg.norm(np.imag(out))>1E-10:
+            raise TypeError("TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
+        return np.real(eta[m]),out.real
+    elif np.issubdtype(dtype,np.complexfloating):    
+        return eta[m],type(tensors[0]).from_dense(vec[:,m],[tensors[0].shape[0],tensors[0].shape[0]])
