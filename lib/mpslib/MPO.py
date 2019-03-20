@@ -8,6 +8,7 @@ import os
 import operator as opr
 import copy
 import numbers
+import scipy as sp
 import numpy as np
 import lib.mpslib.mpsfunctions as mf
 import lib.ncon as ncon
@@ -84,12 +85,12 @@ class MPO(TensorNetwork):
         if side.lower() in ('l','left'):
             v=np.zeros(self.D[0],dtype=self.dtype)
             v[-1]=1.0
-            return v
+            return v.view(type(self._tensors[0]))
         
         if side.lower() in ('r','right'):
             v=np.zeros(self.D[-1],dtype=self.dtype)
             v[0]=1.0
-            return v
+            return v.view(type(self._tensors[-1]))
 
     def get_boundary_mpo(self,side):
         if side.lower() in ('l','left'):
@@ -100,7 +101,7 @@ class MPO(TensorNetwork):
             out[-1,:,:]*=0.0           
         return out.squeeze()
         
-    def getTwositeMPO(self,site1,site2,obc):
+    def get_2site_mpo(self,site1,site2):
         if site2<site1:
             mpo1=self[site2][-1,:,:,:]
             mpo2=self[site1][:,0,:,:]
@@ -125,9 +126,9 @@ class MPO(TensorNetwork):
         d1=mpo1.shape[1]
         d2=mpo2.shape[1]
 
-        return [np.expand_dims(mpo1,0),np.expand_dims(mpo2,1)]
+        return [np.expand_dims(mpo1,0).view(type(mpo1)),np.expand_dims(mpo2,1).view(type(mpo2))]
     
-    def getTwoSiteHamiltonian(self,site1,site2,obc=True):
+    def get_2site_hamiltonian(self,site1,site2,obc=True):
         """
         obtain a two-site Hamiltonian H_{mn} from MPO
         Parameters:
@@ -150,7 +151,13 @@ class MPO(TensorNetwork):
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
         """
-        mpo1,mpo2=self.getTwositeMPO(site1,site2)
+
+
+        """
+        FIXME: the current convention is that obc and pbc cases are treated differently: local terms in the mpo away from the boundary
+               are divided by two. There should be a better way of doing this
+        """
+        mpo1,mpo2=self.get_2site_mpo(site1,site2)
         if site2<site1:
             nl=site2
             mr=site1
@@ -184,7 +191,7 @@ class MPO(TensorNetwork):
                 h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
                 for s in range(1,mpo1.shape[0]):
                     h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-            return np.reshape(h,(d1,d2,d1,d2))
+            return np.reshape(h,(d1,d2,d1,d2)).view()
         elif not obc:
             assert(mpo1.shape[0]==mpo2.shape[0])
             h=np.kron(mpo1[0,:,:]/2.0,mpo2[0,:,:])
@@ -192,9 +199,9 @@ class MPO(TensorNetwork):
                 h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
             h+=np.kron(mpo1[-1,:,:],mpo2[-1,:,:]/2.0)
 
-            return np.reshape(h,(d1,d2,d1,d2))
+            return np.reshape(h,(d1,d2,d1,d2)).view(type(mpo1))
                 
-    def twoSiteGate(self,site1,site2,tau,obc=True):
+    def get_2site_gate(self,site1,site2,tau,obc=True):
         """
         calculate the unitary two-site gates exp(tau*H(m,n))
         The MPO has to have the member self.obc initialized in the derived class (obc is not an attribute of the base MPO class)
@@ -226,8 +233,8 @@ class MPO(TensorNetwork):
             d2=self[site2].shape[2]
         else:
             raise ValuError('MPO.twoSiteGate: site1 has to be different from site2!')
-        h=np.reshape(self.getTwoSiteHamiltonian(site1,site2,obc),(d1*d2,d1*d2))
-        return np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2))
+        h=np.reshape(self.get_2site_hamiltonian(site1,site2,obc),(d1*d2,d1*d2))
+        return np.reshape(sp.linalg.expm(tau*h),(d1,d2,d1,d2)).view(type(h))
             
     
 class TFI(MPO):
