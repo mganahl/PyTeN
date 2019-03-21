@@ -5,14 +5,13 @@
 from __future__ import absolute_import, division, print_function
 from distutils.version import StrictVersion
 from sys import stdout
-import sys,time,copy,warnings
+import sys, time, copy, warnings
 import numpy as np
 import lib.mpslib.sexpmv as sexpmv
 try:
-    MPSL=sys.modules['lib.mpslib.mps']
+    MPSL = sys.modules['lib.mpslib.mps']
 except KeyError:
     import lib.mpslib.mps as MPSL
-
 
 import lib.ncon as ncon
 import scipy as sp
@@ -30,12 +29,12 @@ from scipy.sparse.linalg import lgmres
 from numpy.linalg.linalg import LinAlgError
 import lib.Lanczos.LanczosEngine as lanEn
 import lib.mpslib.Tensor as tnsr
-comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
-anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
-herm=lambda x:np.conj(np.transpose(x))
+comm = lambda x, y: np.dot(x, y) - np.dot(y, x)
+anticomm = lambda x, y: np.dot(x, y) + np.dot(y, x)
+herm = lambda x: np.conj(np.transpose(x))
 
 
-def svd(mat,full_matrices=False,compute_uv=True,r_thresh=1E-14):
+def svd(mat, full_matrices=False, compute_uv=True, r_thresh=1E-14):
     """
     wrapper around numpy svd
     catches a weird LinAlgError exception sometimes thrown by lapack (cause not entirely clear, but seems 
@@ -72,89 +71,103 @@ def svd(mat,full_matrices=False,compute_uv=True,r_thresh=1E-14):
         depends on the value of `full_matrices`. Only returned when
         `compute_uv` is True.
     """
-    try: 
-        [u,s,v]=np.linalg.svd(mat,full_matrices=False)
+    try:
+        [u, s, v] = np.linalg.svd(mat, full_matrices=False)
     except np.linalg.linalg.LinAlgError:
-        [q,r]=np.linalg.qr(mat)
-        r[np.abs(r)<r_thresh]=0.0
-        u_,s,v=np.linalg.svd(r)
-        u=q.dot(u_)
+        [q, r] = np.linalg.qr(mat)
+        r[np.abs(r) < r_thresh] = 0.0
+        u_, s, v = np.linalg.svd(r)
+        u = q.dot(u_)
         print('caught a LinAlgError with dir>0')
-    return u,s,v
+    return u, s, v
 
 
-def qr(mat,signfix):
+def qr(mat, signfix):
     """
     a simple wrapper around numpy qr, allows signfixing of the diagonal of r or q
     """
-    dtype=type(mat[0,0])
-    q,r=np.linalg.qr(mat)
-    if signfix=='q':
-        sign=np.sign(np.diag(q))
-        unit=np.diag(sign)
-        return q.dot(unit),herm(unit).dot(r)
-    if signfix=='r':
-        sign=np.sign(np.diag(r))
-        unit=np.diag(sign)
-        return q.dot(herm(unit)),unit.dot(r)
+    dtype = type(mat[0, 0])
+    q, r = np.linalg.qr(mat)
+    if signfix == 'q':
+        sign = np.sign(np.diag(q))
+        unit = np.diag(sign)
+        return q.dot(unit), herm(unit).dot(r)
+    if signfix == 'r':
+        sign = np.sign(np.diag(r))
+        unit = np.diag(sign)
+        return q.dot(herm(unit)), unit.dot(r)
 
-def mps_tensor_adder(A,B,boundary_type,ZA=1.0,ZB=1.0):
+
+def mps_tensor_adder(A, B, boundary_type, ZA=1.0, ZB=1.0):
     """
     adds to Tensors A and B in the MPS fashion
     A,B:    Tensor objects
     boundary_type:  str
                     can be ('l','left',-1) or ('r','right',1) or ('b','bulk',0)
     """
-    dtype=np.result_type(A,B)
-    if A.shape[2]!=B.shape[2]:
+    dtype = np.result_type(A, B)
+    if A.shape[2] != B.shape[2]:
         raise ValueError('physical dimensions  of A and B are not compatible')
-    if len(A.shape)!=3:
+    if len(A.shape) != 3:
         raise ValueError('A is not an MPS tensor')
-    if len(B.shape)!=3:
+    if len(B.shape) != 3:
         raise ValueError('B is not an MPS tensor')
-    if not type(A)==type(B):
+    if not type(A) == type(B):
         raise TypeError('type(A)!=type(B)')
-    if boundary_type in ('left','l',-1):
-        if np.sum(A.shape[0])!=1:
-            raise ValueError('A.shape[0] is not one dimensional; this is incompatible with left open boundary conditions')
-        if np.sum(B.shape[0])!=1:
-            raise ValueError('B.shape[0] is not one dimensional; this is incompatible with left open boundary conditions')
-        return A.concatenate([A*ZA,B*ZB],axis=1).view(type(A))
-    
-    elif boundary_type in ('right','r',1):
-        if np.sum(A.shape[1])!=1:
-            raise ValueError('A.shape[1] is not one dimensional; this is incompatible with right open boundary conditions')
-        if np.sum(B.shape[1])!=1:
-            raise ValueError('B.shape[1] is not one dimensional; this is incompatible with rig open boundary conditions')
-        return A.concatenate([A*ZA,B*ZB],axis=0).view(type(A))
-        
-    elif boundary_type in (0,'b','bulk'):
-        if isinstance(A,tnsr.Tensor) and isinstance(B,tnsr.Tensor):
-            res=A.zeros((A.shape[0]+B.shape[0],A.shape[1]+B.shape[1],A.shape[2]),dtype=dtype)
+    if boundary_type in ('left', 'l', -1):
+        if np.sum(A.shape[0]) != 1:
+            raise ValueError(
+                'A.shape[0] is not one dimensional; this is incompatible with left open boundary conditions'
+            )
+        if np.sum(B.shape[0]) != 1:
+            raise ValueError(
+                'B.shape[0] is not one dimensional; this is incompatible with left open boundary conditions'
+            )
+        return A.concatenate([A * ZA, B * ZB], axis=1).view(type(A))
+
+    elif boundary_type in ('right', 'r', 1):
+        if np.sum(A.shape[1]) != 1:
+            raise ValueError(
+                'A.shape[1] is not one dimensional; this is incompatible with right open boundary conditions'
+            )
+        if np.sum(B.shape[1]) != 1:
+            raise ValueError(
+                'B.shape[1] is not one dimensional; this is incompatible with rig open boundary conditions'
+            )
+        return A.concatenate([A * ZA, B * ZB], axis=0).view(type(A))
+
+    elif boundary_type in (0, 'b', 'bulk'):
+        if isinstance(A, tnsr.Tensor) and isinstance(B, tnsr.Tensor):
+            res = A.zeros(
+                (A.shape[0] + B.shape[0], A.shape[1] + B.shape[1], A.shape[2]),
+                dtype=dtype)
             for indx in range(A.shape[2]):
-                res[:,:,indx]=A.directSum(A[:,:,indx]*ZA,B[:,:,indx]*ZB)
+                res[:, :, indx] = A.directSum(A[:, :, indx] * ZA,
+                                              B[:, :, indx] * ZB)
             return res
         else:
             return NotImplemented
-    
-def transfer_operator(tensors_a,tensors_b,direction,x):
+
+
+def transfer_operator(tensors_a, tensors_b, direction, x):
     """
     """
-    if len(tensors_a)!=len(tensors_b):
-        raise ValueError('transfer_operator(): lengths of tensors_a and tensors_b are different')
-    if direction in ('l','left',1):
+    if len(tensors_a) != len(tensors_b):
+        raise ValueError(
+            'transfer_operator(): lengths of tensors_a and tensors_b are different'
+        )
+    if direction in ('l', 'left', 1):
         for n in range(len(tensors_a)):
-            x = ncon.ncon([x,tensors_a[n],
-                           tensors_b[n].conj()],
-                          [[1,2],[1,-1,3],[2,-2,3]])
-    if direction in ('r','right',-1):
+            x = ncon.ncon([x, tensors_a[n], tensors_b[n].conj()],
+                          [[1, 2], [1, -1, 3], [2, -2, 3]])
+    if direction in ('r', 'right', -1):
         for n in reversed(range(len(tensors_a))):
-            x = ncon.ncon([tensors_a[n],
-                           tensors_b[n].conj(),x],
-                          [[-1,1,3],[-2,2,3],[1,2]])
+            x = ncon.ncon([tensors_a[n], tensors_b[n].conj(), x],
+                          [[-1, 1, 3], [-2, 2, 3], [1, 2]])
     return x
 
-def prepare_tensor_SVD(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
+
+def prepare_tensor_SVD(tensor, direction, D=None, thresh=1E-32, r_thresh=1E-14):
     """
     prepares and truncates an mps tensor using svd
     Parameters:
@@ -185,27 +198,30 @@ def prepare_tensor_SVD(tensor,direction,D=None,thresh=1E-32,r_thresh=1E-14):
 
     """
 
-    assert(direction!=0),'do NOT use direction=0!'
-    [l1,l2,d]=tensor.shape
-    if direction in (1,'l','left'):
-        temp,merge_data=tensor.merge([[0,2],[1]])
-        u,s,v,_=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
-        Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
-        s/=Z
-        [size1,size2]=u.shape
-        out=u.split([merge_data[0],[size2]]).transpose(0,2,1)
-        return out,s,v,Z
+    assert (direction != 0), 'do NOT use direction=0!'
+    [l1, l2, d] = tensor.shape
+    if direction in (1, 'l', 'left'):
+        temp, merge_data = tensor.merge([[0, 2], [1]])
+        u, s, v, _ = temp.svd(
+            full_matrices=False, truncation_threshold=thresh, D=D)
+        Z = np.sqrt(ncon.ncon([s, s], [[1], [1]]))
+        s /= Z
+        [size1, size2] = u.shape
+        out = u.split([merge_data[0], [size2]]).transpose(0, 2, 1)
+        return out, s, v, Z
 
-    if direction in (-1,'r','right'):
-        temp,merge_data=tensor.merge([[0],[1,2]])
-        u,s,v,_=temp.svd(full_matrices=False,truncation_threshold=thresh,D=D)
-        Z=np.sqrt(ncon.ncon([s,s],[[1],[1]]))
-        s/=Z
-        [size1,size2]=v.shape
-        out=v.split([[size1],merge_data[1]])
-        return u,s,out,Z
-    
-def prepare_tensor_QR(tensor,direction):
+    if direction in (-1, 'r', 'right'):
+        temp, merge_data = tensor.merge([[0], [1, 2]])
+        u, s, v, _ = temp.svd(
+            full_matrices=False, truncation_threshold=thresh, D=D)
+        Z = np.sqrt(ncon.ncon([s, s], [[1], [1]]))
+        s /= Z
+        [size1, size2] = v.shape
+        out = v.split([[size1], merge_data[1]])
+        return u, s, out, Z
+
+
+def prepare_tensor_QR(tensor, direction):
     """
     orthogonalizes an mps tensor using qr decomposition 
 
@@ -229,55 +245,65 @@ def prepare_tensor_QR(tensor,direction):
     Z:   float
          the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
     """
-    
-    if len(tensor.shape)!=3:
-        raise ValueError('prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'.format(len(tensor.shape)))
-    [l1,l2,d]=tensor.shape
-    if direction in (1,'l','left'):
-        temp,merge_data=tensor.merge([[0,2],[1]])
-        q,r=temp.qr()
-        #normalize the bond matrix
-        Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
-        r/=Z
-        [size1,size2]=q.shape
-        out=q.split([merge_data[0],[size2]]).transpose(0,2,1)
-        return out,r,Z            
-    elif direction in (-1,'r','right'):
-        temp,merge_data=tensor.merge([[1,2],[0]])
-        temp=np.conj(temp)
-        q,r_=temp.qr()
 
-        [size1,size2]=q.shape
-        out=np.conj(q.split([merge_data[0],[size2]]).transpose(2,0,1))
-        r=np.conj(np.transpose(r_,(1,0)))
+    if len(tensor.shape) != 3:
+        raise ValueError(
+            'prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'
+            .format(len(tensor.shape)))
+    [l1, l2, d] = tensor.shape
+    if direction in (1, 'l', 'left'):
+        temp, merge_data = tensor.merge([[0, 2], [1]])
+        q, r = temp.qr()
         #normalize the bond matrix
-        Z=np.sqrt(ncon.ncon([r,np.conj(r)],[[1,2],[1,2]]))
-        r/=Z
-        return r,out,Z
+        Z = np.sqrt(ncon.ncon([r, np.conj(r)], [[1, 2], [1, 2]]))
+        r /= Z
+        [size1, size2] = q.shape
+        out = q.split([merge_data[0], [size2]]).transpose(0, 2, 1)
+        return out, r, Z
+    elif direction in (-1, 'r', 'right'):
+        temp, merge_data = tensor.merge([[1, 2], [0]])
+        temp = np.conj(temp)
+        q, r_ = temp.qr()
+
+        [size1, size2] = q.shape
+        out = np.conj(q.split([merge_data[0], [size2]]).transpose(2, 0, 1))
+        r = np.conj(np.transpose(r_, (1, 0)))
+        #normalize the bond matrix
+        Z = np.sqrt(ncon.ncon([r, np.conj(r)], [[1, 2], [1, 2]]))
+        r /= Z
+        return r, out, Z
     else:
-        raise ValueError("unkown value {} for input parameter direction".format(direction))
+        raise ValueError(
+            "unkown value {} for input parameter direction".format(direction))
 
 
-def ortho_deviation(tensor,which):
+def ortho_deviation(tensor, which):
     """
     returns the deviation from left or right orthonormalization of the MPS tensors
     """
-    if which in ('l','left',1):
-        return np.linalg.norm(ncon.ncon([tensor,tensor.conj()],[[1,-1,2],[1,-2,2]])-tensor.eye(1))
-    if which in ('r','right',-1):
-        return np.linalg.norm(ncon.ncon([tensor,tensor.conj()],[[-1,1,2],[-2,1,2]])-tensor.eye(0))
+    if which in ('l', 'left', 1):
+        return np.linalg.norm(
+            ncon.ncon([tensor, tensor.conj()], [[1, -1, 2], [1, -2, 2]]) -
+            tensor.eye(1))
+    if which in ('r', 'right', -1):
+        return np.linalg.norm(
+            ncon.ncon([tensor, tensor.conj()], [[-1, 1, 2], [-2, 1, 2]]) -
+            tensor.eye(0))
     else:
-        raise ValueError("wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')".format(which))
-        
+        raise ValueError(
+            "wrong value {0} for variable ```which```; use ('l','r',1,-1,'left,'right')"
+            .format(which))
 
-def check_ortho(tensor,which,thresh=1E-8):
+
+def check_ortho(tensor, which, thresh=1E-8):
     """
     checks if orthogonality condition on tensor is obeyed up to ```thresh```
     """
-    return MPS.ortho_deviation(tensor,which)<thresh
+    return MPS.ortho_deviation(tensor, which) < thresh
 
-def add_layer(B,mps,mpo,conjmps,direction):
-        """
+
+def add_layer(B, mps, mpo, conjmps, direction):
+    """
         adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
         environments
         Parameters:
@@ -298,13 +324,14 @@ def add_layer(B,mps,mpo,conjmps,direction):
         Tensor of shape (Dr,Dr',Mr) for direction in (1,'l','left')
         Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
-        
-        if direction in ('l','left',1):
-            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[1,-1,2],[3,-3,5,2],[4,-2,5]])
-        if direction in ('r','right',-1):
-            return ncon.ncon([B,mps,mpo,np.conj(conjmps)],[[1,4,3],[-1,1,2],[-3,3,5,2],[-2,4,5]])
 
-        
+    if direction in ('l', 'left', 1):
+        return ncon.ncon([B, mps, mpo, np.conj(conjmps)],
+                         [[1, 4, 3], [1, -1, 2], [3, -3, 5, 2], [4, -2, 5]])
+    if direction in ('r', 'right', -1):
+        return ncon.ncon([B, mps, mpo, np.conj(conjmps)],
+                         [[1, 4, 3], [-1, 1, 2], [-3, 3, 5, 2], [-2, 4, 5]])
+
 
 def one_minus_pseudo_unitcell_transfer_op(direction, mps, left_dominant,
                                           right_dominant, vector):
@@ -330,13 +357,13 @@ def one_minus_pseudo_unitcell_transfer_op(direction, mps, left_dominant,
     """
 
     if direction in (1, 'l', 'left'):
-        x = type(mps[0]).from_dense(vector,[mps.D[0], mps.D[0]])
+        x = type(mps[0]).from_dense(vector, [mps.D[0], mps.D[0]])
         temp = x - mps.unitcell_transfer_op('left', x) + ncon.ncon(
             [x, right_dominant], [[1, 2], [1, 2]]) * left_dominant
         return temp.to_dense()
 
     if direction in (-1, 'r', 'right'):
-        x = type(mps[-1]).from_dense(vector,[mps.D[-1], mps.D[-1]])
+        x = type(mps[-1]).from_dense(vector, [mps.D[-1], mps.D[-1]])
         temp = x - mps.unitcell_transfer_op('right', x) + ncon.ncon(
             [left_dominant, x], [[1, 2], [1, 2]]) * right_dominant
         return temp.to_dense()
@@ -372,7 +399,7 @@ def LGMRES_solver(mps,
         maxiter=nmax,
         **kwargs)
 
-    return type(mps[0]).from_dense(out,[mps.D[0], mps.D[0]]), info
+    return type(mps[0]).from_dense(out, [mps.D[0], mps.D[0]]), info
 
 
 def compute_steady_state_Hamiltonian_GMRES(direction,
@@ -410,15 +437,17 @@ def compute_steady_state_Hamiltonian_GMRES(direction,
           average energy per unitcell 
     """
     dummy1 = mpo.get_boundary_vector('l')
-    dummy2 = mpo.get_boundary_vector('r')    
+    dummy2 = mpo.get_boundary_vector('r')
 
     if direction in (1, 'l', 'left'):
-        L = ncon.ncon([
-            mps.get_tensor(mps.num_sites-1),
-            #mpo.get_tensor(mps.num_sites-1),
-            mpo.get_boundary_mpo('left'),            
-            mps.get_tensor(mps.num_sites-1).conj()
-        ], [[1, -1, 2], [-3, 4, 2], [1, -2, 4]])
+        L = ncon.ncon(
+            [
+                mps.get_tensor(mps.num_sites - 1),
+                #mpo.get_tensor(mps.num_sites-1),
+                mpo.get_boundary_mpo('left'),
+                mps.get_tensor(mps.num_sites - 1).conj()
+            ],
+            [[1, -1, 2], [-3, 4, 2], [1, -2, 4]])
         for n in range(len(mps)):
             L = add_layer(
                 L,
@@ -442,12 +471,14 @@ def compute_steady_state_Hamiltonian_GMRES(direction,
         return L, h
 
     if direction in (-1, 'r', 'right'):
-        R = ncon.ncon([
-            mps.get_tensor(0),
-            #mpo.get_tensor(0),
-            mpo.get_boundary_mpo('right'),            
-            mps.get_tensor(0).conj()
-        ], [[-1, 1, 2], [-3, 4, 2], [-2, 1, 4]])
+        R = ncon.ncon(
+            [
+                mps.get_tensor(0),
+                #mpo.get_tensor(0),
+                mpo.get_boundary_mpo('right'),
+                mps.get_tensor(0).conj()
+            ],
+            [[-1, 1, 2], [-3, 4, 2], [-2, 1, 4]])
         for n in reversed(range(len(mps))):
             R = add_layer(
                 R,
@@ -528,7 +559,7 @@ def compute_Hamiltonian_environments(mps,
         mps,
         mpo,
         left_dominant=mps[-1].eye(1),
-        right_dominant=ncon.ncon([mps.mat, mps.mat.conj()],[[-1, 1], [-2, 1]]),
+        right_dominant=ncon.ncon([mps.mat, mps.mat.conj()], [[-1, 1], [-2, 1]]),
         precision=precision,
         nmax=nmax)
     rmps = mps.get_right_orthogonal_imps(
@@ -543,7 +574,7 @@ def compute_Hamiltonian_environments(mps,
         rmps,
         mpo,
         right_dominant=mps[0].eye(0),
-        left_dominant=ncon.ncon([mps.mat, mps.mat.conj()],[[1, -1], [1, -2]]),
+        left_dominant=ncon.ncon([mps.mat, mps.mat.conj()], [[1, -1], [1, -2]]),
         precision=precision,
         nmax=nmax)
     return lb, rb, hl, hr
@@ -568,14 +599,24 @@ def HA_product(L, mpo, R, mps):
     
     """
     return ncon.ncon([L, mps, mpo, R],
-                     [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])                     
+                     [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
 
-def HA_product_vectorized(L,mpo,R,vector):
-    x = type(L).from_dense(vector,[L.shape[0], R.shape[0],mpo.shape[2]])
-    return HA_product(L,mpo,R,x).to_dense()
 
-def eigsh(L,mpo,R,initial,precision=1e-6,numvecs=1,ncv=20,numvecs_calculated=1,*args,**kwargs):
-    
+def HA_product_vectorized(L, mpo, R, vector):
+    x = type(L).from_dense(vector, [L.shape[0], R.shape[0], mpo.shape[2]])
+    return HA_product(L, mpo, R, x).to_dense()
+
+
+def eigsh(L,
+          mpo,
+          R,
+          initial,
+          precision=1e-6,
+          numvecs=1,
+          ncv=20,
+          numvecs_calculated=1,
+          *args,
+          **kwargs):
     """
     sparse diagonalization of DMRG local hamiltonian
     L:                  Tensor object of shape (Dl,Dl',Ml)
@@ -588,38 +629,48 @@ def eigsh(L,mpo,R,initial,precision=1e-6,numvecs=1,ncv=20,numvecs_calculated=1,*
     numvecs_calculated: int 
 
     """
-    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,initial.dtype)
-    chil=np.sum(L.shape[0])
-    chir=np.sum(R.shape[0])
-    chilp=np.sum(L.shape[1])
-    chirp=np.sum(R.shape[1])
-    d=mpo.shape[2]
-    dp=mpo.shape[3]
+    dtype = np.result_type(L.dtype, mpo.dtype, R.dtype, initial.dtype)
+    chil = np.sum(L.shape[0])
+    chir = np.sum(R.shape[0])
+    chilp = np.sum(L.shape[1])
+    chirp = np.sum(R.shape[1])
+    d = mpo.shape[2]
+    dp = mpo.shape[3]
 
-    mv=fct.partial(HA_product_vectorized,*[L,mpo,R])
-    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,dtype=dtype)
-    e,v=sp.sparse.linalg.eigsh(LOP,k=numvecs,which='SA',tol=precision,v0=initial.to_dense(),ncv=ncv)
+    mv = fct.partial(HA_product_vectorized, *[L, mpo, R])
+    LOP = LinearOperator((chil * chir * d, chilp * chirp * dp),
+                         matvec=mv,
+                         dtype=dtype)
+    e, v = sp.sparse.linalg.eigsh(
+        LOP,
+        k=numvecs,
+        which='SA',
+        tol=precision,
+        v0=initial.to_dense(),
+        ncv=ncv)
 
-    if numvecs==1:
-        ind=np.nonzero(e==min(e))
-        return e[ind[0][0]],initial.from_dense(v[:,ind[0][0]],(chilp,chirp,dp))
+    if numvecs == 1:
+        ind = np.nonzero(e == min(e))
+        return e[ind[0][0]], initial.from_dense(v[:, ind[0][0]],
+                                                (chilp, chirp, dp))
 
-    elif numvecs>1:
-        if (numvecs>numvecs_calculated):
-            warnings.warn('mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',stacklevel=2)
-            numvecs=numvecs_calculated
-        es=[]
-        vs=[]
-        esorted=np.sort(e)
+    elif numvecs > 1:
+        if (numvecs > numvecs_calculated):
+            warnings.warn(
+                'mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',
+                stacklevel=2)
+            numvecs = numvecs_calculated
+        es = []
+        vs = []
+        esorted = np.sort(e)
         for n in range(numvecs):
             es.append(esorted[n])
-            ind=np.nonzero(e==esorted[n])
-            vs.append(initial.from_dense(v[:,ind[0][0]],(chilp,chirp,dp)))
-        return es,vs
+            ind = np.nonzero(e == esorted[n])
+            vs.append(initial.from_dense(v[:, ind[0][0]], (chilp, chirp, dp)))
+        return es, vs
 
 
-def lobpcg(L,mpo,R,initial,precision=1e-6,*args,**kwargs):
-    
+def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
     """
     calls a sparse eigensolver to find the lowest eigenvalues and eigenvectors
     of the4 effective DMRG hamiltonian as given by L, mpo and R
@@ -630,49 +681,49 @@ def lobpcg(L,mpo,R,initial,precision=1e-6,*args,**kwargs):
     see scipy eigsh documentation for details on the other parameters
     """
 
-    dtype=np.result_type(L.dtype,mpo.dtype,R.dtype,initial.dtype)
-    chil=np.sum(L.shape[0])
-    chir=np.sum(R.shape[0])
-    chilp=np.sum(L.shape[1])
-    chirp=np.sum(R.shape[1])
-    d=mpo.shape[2]
-    dp=mpo.shape[3]
-    mv=fct.partial(HA_product_vectorized,*[L,mpo,R])
-    LOP=LinearOperator((chil*chir*d,chilp*chirp*dp),matvec=mv,dtype=dtype)
+    dtype = np.result_type(L.dtype, mpo.dtype, R.dtype, initial.dtype)
+    chil = np.sum(L.shape[0])
+    chir = np.sum(R.shape[0])
+    chilp = np.sum(L.shape[1])
+    chirp = np.sum(R.shape[1])
+    d = mpo.shape[2]
+    dp = mpo.shape[3]
+    mv = fct.partial(HA_product_vectorized, *[L, mpo, R])
+    LOP = LinearOperator((chil * chir * d, chilp * chirp * dp),
+                         matvec=mv,
+                         dtype=dtype)
 
-    X=np.expand_dims(initial.to_dense(),1)
+    X = np.expand_dims(initial.to_dense(), 1)
 
-    e,v=sp.sparse.linalg.lobpcg(LOP,X=X,largest=False,tol=precision,*args,**kwargs)
-    return e[0],initial.from_dense(v,[chilp,chirp,dp])
+    e, v = sp.sparse.linalg.lobpcg(
+        LOP, X=X, largest=False, tol=precision, *args, **kwargs)
+    return e[0], initial.from_dense(v, [chilp, chirp, dp])
 
-def TMeigs_naive(tensors,
-                 direction,
-                 init=None,
-                 precision=1E-12,
-                 nmax=100000):
 
-    if not np.all(tensors[0].dtype==t.dtype for t in tensors):
+def TMeigs_naive(tensors, direction, init=None, precision=1E-12, nmax=100000):
+
+    if not np.all(tensors[0].dtype == t.dtype for t in tensors):
         raise TypeError('TMeigs_naive: all tensors have to have the same dtype')
 
     if init:
         x = init
     else:
         x = tensors[0].eye(1)
-    if not tensors[0].dtype==x.dtype:
+    if not tensors[0].dtype == x.dtype:
         raise TypeError('TMeigs_naive: `init` has other dtype than `tensors`')
 
-    x/=x.norm()
-    diff=1101001010001.0
-    it=0
-    while diff>precision:
-        x_new=transfer_operator(tensors, tensors, direction, x)
-        eta=x_new.norm()
-        x_new/=eta
-        diff=(x-x_new).norm()
-        x=x_new
-        if it>=nmax:
+    x /= x.norm()
+    diff = 1101001010001.0
+    it = 0
+    while diff > precision:
+        x_new = transfer_operator(tensors, tensors, direction, x)
+        eta = x_new.norm()
+        x_new /= eta
+        diff = (x - x_new).norm()
+        x = x_new
+        if it >= nmax:
             break
-    return eta,x,it,diff
+    return eta, x, it, diff
 
 
 def TMeigs(tensors,
@@ -716,36 +767,67 @@ def TMeigs(tensors,
     x:   tf.tensor
          the dominant eigenvector (in matrix form)
     """
-    if not np.all([tensors[0].dtype==tensors[m].dtype for m in range(len(tensors))]):
+    if not np.all(
+        [tensors[0].dtype == tensors[m].dtype for m in range(len(tensors))]):
         raise TypeError('TMeigs: all tensors have to have the same dtype')
-    dtype=tensors[0].dtype
-    if np.sum(tensors[0].shape[0])!=np.sum(tensors[-1].shape[1]):
-        raise ValueError(" in TMeigs: left and right ancillary dimensions of the MPS do not match")
-    if np.all(init!=None):
-        initial=init
-    def mv(vector):
-        return transfer_operator(tensors,tensors,direction,type(tensors[0]).from_dense(vector,[tensors[0].shape[0],tensors[0].shape[0]])).to_dense()
+    dtype = tensors[0].dtype
+    if np.sum(tensors[0].shape[0]) != np.sum(tensors[-1].shape[1]):
+        raise ValueError(
+            " in TMeigs: left and right ancillary dimensions of the MPS do not match"
+        )
+    if np.all(init != None):
+        initial = init
 
-    LOP=LinearOperator((np.sum(tensors[0].shape[0])*np.sum(tensors[0].shape[0]),
-                        np.sum(tensors[-1].shape[1])*np.sum(tensors[-1].shape[1])),
-                       matvec=mv,dtype=dtype)
-    if numeig>=LOP.shape[0]-1:
-        warnings.warn('TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'.format(numeig+1,LOP.shape[0],LOP.shape[0]-2))
-        while numeig>=(LOP.shape[0]-1):
-            numeig-=1
-    
-    eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)        
-    m=np.argmax(np.real(eta))
-    while np.abs(np.imag(eta[m]))/np.abs(np.real(eta[m]))>1E-4:
-        numeig=numeig+1
-        print ('found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'.format(numeig))
-        eta,vec=eigs(LOP,k=numeig,which=which,v0=init,maxiter=nmax,tol=precision,ncv=ncv)
-        m=np.argmax(np.real(eta))
-        
-    if np.issubdtype(dtype,np.floating):
-        out=type(tensors[0]).from_dense(vec[:,m],[tensors[0].shape[0],tensors[0].shape[0]])
-        if np.linalg.norm(np.imag(out))>1E-10:
-            raise TypeError("TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!")
-        return np.real(eta[m]),out.real
-    elif np.issubdtype(dtype,np.complexfloating):    
-        return eta[m],type(tensors[0]).from_dense(vec[:,m],[tensors[0].shape[0],tensors[0].shape[0]])
+    def mv(vector):
+        return transfer_operator(
+            tensors, tensors, direction,
+            type(tensors[0]).from_dense(
+                vector, [tensors[0].shape[0], tensors[0].shape[0]])).to_dense()
+
+    LOP = LinearOperator(
+        (np.sum(tensors[0].shape[0]) * np.sum(tensors[0].shape[0]),
+         np.sum(tensors[-1].shape[1]) * np.sum(tensors[-1].shape[1])),
+        matvec=mv,
+        dtype=dtype)
+    if numeig >= LOP.shape[0] - 1:
+        warnings.warn(
+            'TMeigs: numeig+1 ({0}) > dimension of transfer operator ({1}) changing value to numeig={2}'
+            .format(numeig + 1, LOP.shape[0], LOP.shape[0] - 2))
+        while numeig >= (LOP.shape[0] - 1):
+            numeig -= 1
+
+    eta, vec = eigs(
+        LOP,
+        k=numeig,
+        which=which,
+        v0=init,
+        maxiter=nmax,
+        tol=precision,
+        ncv=ncv)
+    m = np.argmax(np.real(eta))
+    while np.abs(np.imag(eta[m])) / np.abs(np.real(eta[m])) > 1E-4:
+        numeig = numeig + 1
+        print(
+            'found TM eigenvalue with large imaginary part (ARPACK BUG); recalculating with larger numeig={0}'
+            .format(numeig))
+        eta, vec = eigs(
+            LOP,
+            k=numeig,
+            which=which,
+            v0=init,
+            maxiter=nmax,
+            tol=precision,
+            ncv=ncv)
+        m = np.argmax(np.real(eta))
+
+    if np.issubdtype(dtype, np.floating):
+        out = type(tensors[0]).from_dense(
+            vec[:, m], [tensors[0].shape[0], tensors[0].shape[0]])
+        if np.linalg.norm(np.imag(out)) > 1E-10:
+            raise TypeError(
+                "TMeigs: dtype was float, but returned eigenvector had a large imaginary part; something went wrong here!"
+            )
+        return np.real(eta[m]), out.real
+    elif np.issubdtype(dtype, np.complexfloating):
+        return eta[m], type(tensors[0]).from_dense(
+            vec[:, m], [tensors[0].shape[0], tensors[0].shape[0]])
