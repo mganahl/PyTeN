@@ -250,7 +250,7 @@ class DMRGEngineBase(MPSSimulationBase):
         
         temp,merge_data = opt.split(mps_merge_data).transpose(0,2,3,1).merge([[0,1],[2,3]])
 
-        U,S,V = temp.svd(truncation_threshold = thresh,D = D)
+        U,S,V,_ = temp.svd(truncation_threshold = thresh,D = D)
         Dnew = S.shape[0]
         if verbose>0:
             stdout.write("\rTS-DMRG (%s) it = %i/%i, sites = (%i,%i)/%i:"
