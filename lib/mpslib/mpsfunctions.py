@@ -700,7 +700,11 @@ def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
     return e[0], initial.from_dense(v, [chilp, chirp, dp])
 
 
-def TMeigs_naive(tensors, direction, init=None, precision=1E-12, nmax=100000):
+def TMeigs_naive(tensors,
+                 direction,
+                 init=None,
+                 precision=1E-12,
+                 nmax=100000):
 
     if not np.all(tensors[0].dtype == t.dtype for t in tensors):
         raise TypeError('TMeigs_naive: all tensors have to have the same dtype')
@@ -708,7 +712,7 @@ def TMeigs_naive(tensors, direction, init=None, precision=1E-12, nmax=100000):
     if init:
         x = init
     else:
-        x = tensors[0].eye(1)
+        x = tensors[0].eye(0)
     if not tensors[0].dtype == x.dtype:
         raise TypeError('TMeigs_naive: `init` has other dtype than `tensors`')
 
