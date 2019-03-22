@@ -231,8 +231,16 @@ class DMRGEngineBase(MPSSimulationBase):
         initial,mps_merge_data = ncon.ncon([self.mps[self.mps.pos-1],self.mps.mat,self.mps[self.mps.pos]],[[-1,1,-3],[1,2],[2,-2,-4]]).merge([[0],[1],[2,3]])
         
         if solver.lower()== 'lan':
-            mv = fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])            
-            lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
+            mv = fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])
+            def scalar_product(a,b):
+                return ncon.ncon([a.conj(),b],[[1,2,3],[1,2,3]])
+            lan = LZ.LanczosEngine(matvec=mv,
+                                   scalar_product=scalar_product,
+                                   Ndiag=Ndiag,
+                                   ncv=ncv,
+                                   numeig=1,
+                                   delta=landelta,
+                                   deltaEta=landeltaEta)
             # t1 = time.time()
             e,opt,nit = lan.simulate(initial)
             # self.lan_times.extend([(time.time()-t1)/nit]*nit)                        
@@ -294,7 +302,17 @@ class DMRGEngineBase(MPSSimulationBase):
         if solver.lower()== 'lan':
             mv = fct.partial(mf.HA_product,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
             # t1 = time.time()
-            lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
+            def scalar_product(a,b):
+                return ncon.ncon([a.conj(),b],[[1,2,3],[1,2,3]])
+
+            lan = LZ.LanczosEngine(matvec=mv,
+                                   scalar_product=scalar_product,
+                                   Ndiag = Ndiag,
+                                   ncv = ncv,
+                                   numeig = 1,
+                                   delta = landelta,
+                                   deltaEta = landeltaEta)
+            
             e,opt,nit = lan.simulate(initial)
             # self.lan_times.extend([(time.time()-t1)/nit]*nit)            
         elif solver.lower() == 'ar':
