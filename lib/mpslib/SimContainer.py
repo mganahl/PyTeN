@@ -287,7 +287,13 @@ class DMRGEngineBase(MPSSimulationBase):
                                                        direction = -1)
         return e
         
-    def _optimize_1s_local(self,ncv = 40,Ndiag = 10,landelta = 1E-5,landeltaEta = 1E-5,verbose = 0,solver = 'AR'):
+    def _optimize_1s_local(self,
+                           ncv = 40,
+                           Ndiag = 10,
+                           landelta = 1E-5,
+                           landeltaEta = 1E-5,
+                           verbose = 0,
+                           solver = 'AR'):
         """
         local single-site optimization routine 
         """
