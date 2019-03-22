@@ -10,7 +10,7 @@ class LanczosEngine(object):
     of a Hamiltonian, defined by the matrix-vector product matvec. 
     """
     
-    def __init__(self,matvec,Ndiag,ncv,numeig,delta,deltaEta):
+    def __init__(self,matvec,scalar_product,Ndiag,ncv,numeig,delta,deltaEta):
         assert(ncv>=numeig)
 
         self.Ndiag=Ndiag
@@ -19,7 +19,10 @@ class LanczosEngine(object):
         self.delta=delta
         self.deltaEta=deltaEta
         self.matvec=matvec
-        assert(Ndiag>0)
+        self.scalar_product=scalar_product
+        if not Ndiag>0:
+            raise ValueError('LanczosEngine: Ndiag has to be > 0')
+
         
     def simulate(self,initialstate,reortho=False,verbose=False):
         """
@@ -32,7 +35,8 @@ class LanczosEngine(object):
         dtype=np.result_type(self.matvec(initialstate).dtype)
         #initialization:
         xn=copy.deepcopy(initialstate)
-        Z=np.sqrt(ncon.ncon([xn,xn.conj()],[range(len(xn.shape)),range(len(xn.shape))]))
+        #Z=np.sqrt(ncon.ncon([xn,xn.conj()],[range(len(xn.shape)),range(len(xn.shape))]))
+        Z=np.linalg.norm(xn)
         xn/=Z
 
         xn_minus_1=xn.zeros(initialstate.shape,dtype=dtype)
@@ -44,7 +48,7 @@ class LanczosEngine(object):
         first=True
         while converged==False:
             #normalize the current vector:
-            knval=np.sqrt(ncon.ncon([xn,xn.conj()],[range(len(xn.shape)),range(len(xn.shape))]))            
+            knval=np.sqrt(self.scalar_product(xn,xn))
             if knval<self.delta:
                 converged=True
                 break
@@ -53,10 +57,11 @@ class LanczosEngine(object):
             #store the Lanczos vector for later
             if reortho==True:
                 for v in self.vecs:
-                    xn-=ncon.ncon([v.conj(),xn],[range(len(v.shape)),range(len(xn.shape))])*v
+                    xn-=self.scalar_product(v,xn)*v
             self.vecs.append(xn)                    
             Hxn=self.matvec(xn)
-            epsn.append(ncon.ncon([xn.conj(),Hxn],[range(len(xn.shape)),range(len(Hxn.shape))]))
+            epsn.append(self.scalar_product(xn,Hxn))
+            
             if ((it>0) and (it%self.Ndiag)==0)&(len(epsn)>=self.numeig):
                 #diagonalize the effective Hamiltonian
                 Heff=np.diag(epsn)+np.diag(kn[1:],1)+np.diag(np.conj(kn[1:]),-1)
@@ -83,8 +88,7 @@ class LanczosEngine(object):
             state=initialstate.zeros(initialstate.shape,dtype=initialstate.dtype)
             for n1 in range(len(self.vecs)):
                 state+=self.vecs[n1]*u[n1,n2]
-                
-            states.append(state/np.sqrt(ncon.ncon([state.conj(),state],[range(len(state.shape)),range(len(state.shape))])))
+            states.append(state/self.scalar_product(state,state))
         return eta[0:min(self.numeig,len(eta))],states[0],it
                 
 class LanczosTimeEvolution(LanczosEngine,object):
