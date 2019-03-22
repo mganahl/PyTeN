@@ -191,7 +191,7 @@ class Tensor(np.ndarray,TensorBase):
             s*=Z
             return u,s.view(type(self)),v,tw
         except LinAlgError:
-            [q,r]=temp.qr()
+            [q,r]=self.qr()
             r[np.abs(r)<r_thresh]=0.0
             u_,s,v=r.svd(*args,**kwargs)
             s/=Z            
