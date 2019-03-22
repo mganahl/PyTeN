@@ -53,10 +53,10 @@ class MPSSimulationBase(Container):
         if len(mps)!=len(mpo):
             raise ValueError('len(mps)!=len(mpo)')
         self.mps.position(0)        
-        self.left_envs = {} 
-        self.right_envs = {}
         self.lb = lb
         self.rb = rb
+        self.left_envs = {0:self.lb} 
+        self.right_envs = {len(mps)-1:self.rb}
 
         
     def __len__(self):
@@ -126,25 +126,25 @@ class MPSSimulationBase(Container):
 
         if n >= self.mps.pos:
             pos  =  self.mps.pos
-            t1 = time.time()
+            # t1 = time.time()
             self.mps.position(n)
-            self.mps_shift_times.append(time.time()-t1)
-            t2 = time.time()            
+            # self.mps_shift_times.append(time.time()-t1)
+            # t2 = time.time()            
             for m in range(pos, n):
                 self.left_envs[m + 1] = self.add_layer(
                     self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1)
-            self.add_layer_times.append(time.time()-t2)
+            # self.add_layer_times.append(time.time()-t2)
             
         if n < self.mps.pos:
             pos = self.mps.pos
-            t1 = time.time()
+            # t1 = time.time()
             self.mps.position(n)
-            self.mps_shift_times.append(time.time()-t1)
-            t2 = time.time()                        
+            # self.mps_shift_times.append(time.time()-t1)
+            # t2 = time.time()                        
             for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
                     self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
-            self.add_layer_times.append(time.time()-t2)
+            # self.add_layer_times.append(time.time()-t2)
             
         for m in range(n + 1, len(self.mps)):
             try:
@@ -189,13 +189,14 @@ class DMRGEngineBase(MPSSimulationBase):
         """
 
         super().__init__(mps = mps, mpo = mpo,lb = lb, rb = rb,name = name)
+        self.compute_right_envs()
+        
     def compute_left_envs(self):
         """
         compute all left environment blocks
         up to self.mps.position; all blocks for site > self.mps.position are set to None
         """
-        self.left_envs = {}
-        self.left_envs[0] = self.lb
+        self.left_envs = {0:self.lb}
         for n in range(self.mps.pos):
             self.left_envs[n + 1] = self.add_layer(
                 B = self.left_envs[n],
@@ -209,8 +210,7 @@ class DMRGEngineBase(MPSSimulationBase):
         compute all right environment blocks
         up to self.mps.position; all blocks for site < self.mps.position are set to None
         """
-        self.right_envs = {}
-        self.right_envs[len(self.mps) - 1] = self.rb
+        self.right_envs = {len(self.mps) - 1: self.rb}
         for n in reversed(range(self.mps.pos, len(self.mps))):
             self.right_envs[n - 1] = self.add_layer(
                 B = self.right_envs[n],
@@ -233,9 +233,9 @@ class DMRGEngineBase(MPSSimulationBase):
         if solver.lower()== 'lan':
             mv = fct.partial(HAproduct,*[self.left_envs[self.mps.pos-1],mpo,self.right_envs[self.mps.pos]])            
             lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
-            t1 = time.time()
+            # t1 = time.time()
             e,opt,nit = lan.simulate(initial)
-            self.lan_times.extend([(time.time()-t1)/nit]*nit)                        
+            # self.lan_times.extend([(time.time()-t1)/nit]*nit)                        
         elif solver.lower() == 'ar':
             e,opt = mf.eigsh(self.left_envs[self.mps.pos-1],
                            mpo,self.right_envs[self.mps.pos],
@@ -293,10 +293,10 @@ class DMRGEngineBase(MPSSimulationBase):
         initial = ncon.ncon([self.mps.mat,self.mps[self.mps.pos]],[[-1,1],[1,-2,-3]])
         if solver.lower()== 'lan':
             mv = fct.partial(mf.HA_product,*[self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos]])
-            t1 = time.time()
+            # t1 = time.time()
             lan = LZ.LanczosEngine(mv,Ndiag = Ndiag,ncv = ncv,numeig = 1,delta = landelta,deltaEta = landeltaEta)
             e,opt,nit = lan.simulate(initial)
-            self.lan_times.extend([(time.time()-t1)/nit]*nit)            
+            # self.lan_times.extend([(time.time()-t1)/nit]*nit)            
         elif solver.lower() == 'ar':
             e,opt=mf.eigsh(self.left_envs[self.mps.pos],self.mpo[self.mps.pos],self.right_envs[self.mps.pos],initial,precision = landeltaEta,numvecs = 1,ncv = ncv,numvecs_calculated = 1)
         elif solver.lower() == 'lobpcg':
@@ -309,15 +309,15 @@ class DMRGEngineBase(MPSSimulationBase):
         if verbose>1:
             print("")
 
-        t1 = time.time()
+        # t1 = time.time()
         mat,B,Z = mf.prepare_tensor_QR(opt,direction = 'r')
-        self.mps_shift_times.append(time.time()-t1)                    
+        # self.mps_shift_times.append(time.time()-t1)                    
         self.mps.mat = mat
         self.mps[self.mps.pos] = B
         
-        t2 = time.time()        
+        # t2 = time.time()        
         self.right_envs[self.mps.pos-1] = mf.add_layer(B = self.right_envs[self.mps.pos],mps = self.mps[self.mps.pos],mpo = self.mpo[self.mps.pos],conjmps = self.mps[self.mps.pos],direction = -1)
-        self.add_layer_times.append(time.time()-t2)        
+        # self.add_layer_times.append(time.time()-t2)        
         return e
     
     def run_one_site(self,Nsweeps = 4,precision = 1E-6,ncv = 40,cp = None,verbose = 0,Ndiag = 10,landelta = 1E-8,landeltaEta = 1E-5,solver = 'AR'):
@@ -345,14 +345,10 @@ class DMRGEngineBase(MPSSimulationBase):
         solver:          str
                          'AR' or 'LAN'
         """
-        self.lan_times = []
-        self.mps_shift_times = []
-        self.add_layer_times = []
-        
-        self.mps.position(0)        
-        self.compute_left_envs()
-        self.compute_right_envs()
-
+        # self.lan_times = []
+        # self.mps_shift_times = []
+        # self.add_layer_times = []
+        self.position(0)        
         self.Nsweeps = Nsweeps
         converged = False
         energy = 100000.0
@@ -434,10 +430,7 @@ class DMRGEngineBase(MPSSimulationBase):
                          'AR' or 'LAN'
 
         """
-        self.mps.position(0)
-        self.compute_left_envs()
-        self.compute_right_envs()
-
+        self.position(0)
         self.Nsweeps = Nsweeps
         converged = False
         energy = 100000.0
@@ -695,12 +688,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                 solver = solver)
 
             self.roll(sites = len(self.mps) // 2)
+            energy=(e-eold)/len(self.mps)            
             if verbose > 0:
+
                 stdout.write(
                     "\rSS-IDMRG (%s) it = %i/%i, energy per unit-cell E/N = %.16f+%.16f"
                     % (solver,self._idmrg_it, Nsweeps,
-                       np.real((e - eold) / len(self.mps)),
-                       np.imag((e - eold) / len(self.mps))))
+                       np.real(energy),
+                       np.imag(energy)))
                 stdout.flush()
                 if verbose > 1:
                     print('')
@@ -709,7 +704,7 @@ class InfiniteDMRGEngine(DMRGEngineBase):
             if self._idmrg_it > Nsweeps:
                 converged = True
                 break
-
+        return energy
 
     def run_two_site(self,
                      Nsweeps=10,
@@ -766,12 +761,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                 solver=solver)
 
             self.roll(sites=len(self.mps) // 2)
+            energy=(e-eold)/len(self.mps)
             if verbose > 0:
+
                 stdout.write(
                     "\rTS-IDMRG (%s) it=%i/%i, energy per unit-cell E/N=%.16f+%.16f, D=%i"
                     % (solver,self._idmrg_it, Nsweeps,
-                       np.real((e - eold) / len(self.mps)),
-                       np.imag((e - eold) / len(self.mps)),
+                       np.real(energy),
+                       np.imag(energy),
                        np.max([np.sum(dim) for dim in self.mps.D])))
                 stdout.flush()
                 if verbose > 1:
@@ -781,7 +778,8 @@ class InfiniteDMRGEngine(DMRGEngineBase):
             if self._idmrg_it > Nsweeps:
                 converged = True
                 break
-
+        return energy
+    
 class TEBDEngine(Container):
     """
     TimeEvolutionEngine(Container):
