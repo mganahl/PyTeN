@@ -12,26 +12,26 @@ import numpy as np
 import lib.mpslib.mpsfunctions as mf
 import lib.ncon as ncon
 
-comm=lambda x,y:np.dot(x,y)-np.dot(y,x)
-anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
-herm=lambda x:np.conj(np.transpose(x))
+comm = lambda x, y: np.dot(x, y) - np.dot(y, x)
+anticomm = lambda x, y: np.dot(x, y) + np.dot(y, x)
+herm = lambda x: np.conj(np.transpose(x))
 from lib.mpslib.Tensor import TensorBase, Tensor
 
-        
-    
+
 class Container(object):
     """
     Base class for all tensor networks; implements loading, saving and copying
     """
-    def __init__(self,name=None):
+
+    def __init__(self, name=None):
         """
         Base class for holdig all objects
         filename: str
                   the name of the object, used for storing things
         """
-        self.name=name        
-        
-    def save(self,filename=None):
+        self.name = name
+
+    def save(self, filename=None):
         """
         dumps the container into a pickle file named "filename"
         Parameters:
@@ -40,11 +40,11 @@ class Container(object):
                   the filename of the file
         """
         if filename != None:
-            with open(filename+'.pickle', 'wb') as f:
-                pickle.dump(self,f)
+            with open(filename + '.pickle', 'wb') as f:
+                pickle.dump(self, f)
         elif self.name != None:
-            with open(self.name+'.pickle', 'wb') as f:
-                pickle.dump(self,f)
+            with open(self.name + '.pickle', 'wb') as f:
+                pickle.dump(self, f)
         else:
             raise ValueError('Cotainer has no name; cannot save it')
 
@@ -53,9 +53,9 @@ class Container(object):
         for now this does a deep copy using copy module
         """
         return copy.deepcopy(self)
-            
+
     @classmethod
-    def read(self,filename=None):
+    def read(self, filename=None):
         """
         reads a Container from a pickle file "filename".pickle
         and returns a Container object
@@ -69,46 +69,40 @@ class Container(object):
         """
         if filename is not None:
             with open(filename, 'rb') as f:
-                out=pickle.load(f)
+                out = pickle.load(f)
         elif self.name is not None:
             with open(self.name, 'rb') as f:
-                out=pickle.load(f)
+                out = pickle.load(f)
         else:
-            raise ValueError('cannot read Container-file: all no name given')            
+            raise ValueError('cannot read Container-file: all no name given')
         return out
 
-    
-    def load(self,filename):
+    def load(self, filename):
         """
         Container.load(filename):
         unpickles a Container object from a file "filename".pickle
         and stores the result in self
         """
-        if filename is not None:        
+        if filename is not None:
             with open(filename, 'rb') as f:
-                cls=pickle.load(f)
+                cls = pickle.load(f)
             #delete all attributes of self which are not present in cls
-            todelete=[attr for attr in vars(self) if not hasattr(cls,attr)]
+            todelete = [attr for attr in vars(self) if not hasattr(cls, attr)]
             for attr in todelete:
-                delattr(self,attr)
-                
+                delattr(self, attr)
+
             for attr in cls.__dict__.keys():
-                setattr(self,attr,getattr(cls,attr))
+                setattr(self, attr, getattr(cls, attr))
         elif self.name is not None:
             with open(self.name, 'rb') as f:
-                cls=pickle.load(f)
+                cls = pickle.load(f)
             #delete all attributes of self which are not present in cls
-            todelete=[attr for attr in vars(self) if not hasattr(cls,attr)]
+            todelete = [attr for attr in vars(self) if not hasattr(cls, attr)]
             for attr in todelete:
-                delattr(self,attr)
-                
+                delattr(self, attr)
+
             for attr in cls.__dict__.keys():
-                setattr(self,attr,getattr(cls,attr))
+                setattr(self, attr, getattr(cls, attr))
 
         else:
-            raise ValueError('cannot load Container-file: all no name given')            
-
-        
-
-
-        
+            raise ValueError('cannot load Container-file: all no name given')
