@@ -159,7 +159,7 @@ class TestTimeEvolution(unittest.TestCase):
                 vnew=lan.__doStep__(vnew,self.dt)
                 vnew/=np.linalg.norm(vnew)
 
-
+        np.save('Szexact',Szexact)
         mps=mpslib.MPS.random(self.N,10,d,obc=True,dtype=complex,schmidt_thresh=1E-16)
         mps._D=D
         mps.position(self.N)
