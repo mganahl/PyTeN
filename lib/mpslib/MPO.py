@@ -91,7 +91,7 @@ class FiniteMPO(MPOBase):
     def __init__(self, tensors, name=None, fromview=True):
         super().__init__(tensors=tensors, name=name, fromview=fromview)
         if not (np.sum(self.D[0]) == 1 and np.sum(self.D[-1]) == 1):
-            raise ValueError('FiniteMPO: left and right MPO ancicllary dimension is different from 1')
+            raise ValueError('FiniteMPO: left and right MPO ancillary dimension is different from 1')
 
     def get_2site_mpo(self, site1, site2):
         if site2 < site1:
@@ -110,17 +110,13 @@ class FiniteMPO(MPOBase):
             np.expand_dims(mpo2, 1).view(type(mpo2))
         ]
 
-    def get_2site_hamiltonian(self, site1, site2, obc):
+    def get_2site_hamiltonian(self, site1, site2):
         """
         obtain a two-site Hamiltonian H_{mn} from MPO
         Parameters:
         --------------------------------------
         site1,site2: int
                      lattice sites for which to calculate the Hamiltonian
-        obc:         bool
-                     boundary condition to be applied when calculting the Hamiltonian
-                     if True: the local contributions at the boundaries of the MPO are NOT divided by two
-                     if False: the local contribution at the boundaries ARE divided by two
         Returns:
         --------------------------------------------------
         np.ndarray of shape (d1,d2,d3,d4)
@@ -132,10 +128,6 @@ class FiniteMPO(MPOBase):
         the returned np.ndarray is a rank-4 tensor with shape (dsite1,dsite2,dsite1,dsite2), with
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
-        """
-        """
-        FIXME: the current convention is that obc and pbc cases are treated differently: local terms in the mpo away from the boundary
-               are divided by two. There should be a better way of doing this
         """
         mpo1, mpo2 = self.get_2site_mpo(site1, site2)
         if site2 < site1:
@@ -149,54 +141,38 @@ class FiniteMPO(MPOBase):
         mpo2 = mpo2[:, 0, :, :]
         d1 = mpo1.shape[1]
         d2 = mpo2.shape[1]
-        if obc:
-            if nl != 0 and nr != (len(self) - 1):
-                h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
-                for s in range(1, mpo1.shape[0] - 1):
-                    h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-                h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
-
-            elif nl != 0 and nr == (len(self) - 1):
-                h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
-                for s in range(1, mpo1.shape[0]):
-                    h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-
-            elif nl == 0 and nr != (len(self) - 1):
-                h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
-                for s in range(1, mpo1.shape[0] - 1):
-                    h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-                h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
-
-            elif nl == 0 and nr == (len(self) - 1):
-                h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
-                for s in range(1, mpo1.shape[0]):
-                    h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-            return np.reshape(h, (d1, d2, d1, d2)).view()
-        elif not obc:
-            assert (mpo1.shape[0] == mpo2.shape[0])
+        if nl != 0 and nr != (len(self) - 1):
             h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
             for s in range(1, mpo1.shape[0] - 1):
                 h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
             h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
 
-            return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+        elif nl != 0 and nr == (len(self) - 1):
+            h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
+            for s in range(1, mpo1.shape[0]):
+                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
 
-    def get_2site_gate(self, site1, site2, tau, obc):
+        elif nl == 0 and nr != (len(self) - 1):
+            h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
+            for s in range(1, mpo1.shape[0] - 1):
+                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+            h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
+
+        elif nl == 0 and nr == (len(self) - 1):
+            h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
+            for s in range(1, mpo1.shape[0]):
+                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+        return np.reshape(h, (d1, d2, d1, d2)).view()
+
+    def get_2site_gate(self, site1, site2, tau):
         """
         calculate the unitary two-site gates exp(tau*H(m,n))
-        The MPO has to have the member self.obc initialized in the derived class (obc is not an attribute of the base MPO class)
-        The user has to tell if he wants obc or not
         Parameters:
         --------------------------------------
         site1,site2: int
                      lattice sites for which to calculate the gate
         tau:         float or complex
                      time-increment
-        obc:         bool
-                     boundary condition to be applied when calculting the Hamiltonian
-                     if True: the local contributions at the boundaries of the MPO are NOT divided by two
-                     if False: the local contribution at the boundaries ARE divided by two
-
         Returns:
         --------------------------------------------------
         A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
@@ -215,7 +191,7 @@ class FiniteMPO(MPOBase):
             raise ValuError(
                 'MPO.twoSiteGate: site1 has to be different from site2!')
         h = np.reshape(
-            self.get_2site_hamiltonian(site1, site2, obc), (d1 * d2, d1 * d2))
+            self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
         return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
             type(h))
 
@@ -272,6 +248,40 @@ class InfiniteMPO(MPOBase):
             np.expand_dims(mpo2, 1).view(type(mpo2))
         ]
 
+
+    def get_2site_hamiltonian(self, site1, site2):
+        """
+        obtain a two-site Hamiltonian H_{mn} from MPO
+        Parameters:
+        --------------------------------------
+        site1,site2: int
+                     lattice sites for which to calculate the Hamiltonian
+        Returns:
+        --------------------------------------------------
+        np.ndarray of shape (d1,d2,d3,d4)
+        A two-site Hamiltonian between sites ```site1``` and ```site2``` by summing up  
+        (for site1<site2, and site1!=0, site2!=0)
+        h=np.kron(mpo[m][-1,s=0,:,:]/2,mpo[n][s=0,0,:,:])+
+          \sum_s={1}^{M-2} np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:])+
+          np.kron(mpo[m][-1,s=M-1,:,:],mpo[n][s=M-1,0,:,:])+
+        the returned np.ndarray is a rank-4 tensor with shape (dsite1,dsite2,dsite1,dsite2), with
+        dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
+        
+        """
+        mpo1, mpo2 = self.get_2site_mpo(site1, site2)
+        if site2 < site1:
+            nl = site2
+            mr = site1
+        elif site2 > site1:
+            nl = site1
+            nr = site2
+
+        mpo1 = mpo1[0, :, :, :]
+        mpo2 = mpo2[:, 0, :, :]
+        d1 = mpo1.shape[1]
+        d2 = mpo2.shape[1]
+        return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+    
 class FiniteTFI(FiniteMPO):
     """ 
     the good old transverse field Ising MPO
@@ -280,7 +290,7 @@ class FiniteTFI(FiniteMPO):
     """
 
     def __init__(self, Jx, Bz, dtype=np.float64):
-        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)        
+        dtype=np.result_type(Jx.dtype,Bz.dtype,dtype)                
         self.Jx = Jx.astype(dtype)
         self.Bz = Bz.astype(dtype)
         N = len(Bz)
@@ -333,7 +343,7 @@ class InfiniteTFI(InfiniteMPO):
     """
 
     def __init__(self, Jx, Bz, dtype=np.float64):
-        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)        
+        dtype=np.result_type(Jx.dtype,Bz.dtype,dtype)        
         self.Jx = Jx.astype(dtype)
         self.Bz = Bz.astype(dtype)
         N = len(Bz)
@@ -437,12 +447,13 @@ class FiniteXXZ(FiniteMPO):
         super().__init__(mpo)
 
 
-class InfiniteXXZ(FiniteMPO):
+class InfiniteXXZ(InfiniteMPO):
     def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
         dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
         self.Jz = Jz.astype(dtype)
         self.Jxy = Jxy.astype(dtype)        
         self.Bz = Bz.astype(dtype)
+        N = len(Bz)        
         mpo = []
         for n in range(0, N):
 
