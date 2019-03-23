@@ -255,10 +255,11 @@ class DMRGEngineBase(MPSSimulationBase):
                 delta=landelta,
                 deltaEta=landeltaEta)
             # t1 = time.time()
-            e, opt, nit = lan.simulate(initial)
+            energies, opt_result, nit = lan.simulate(initial)
             # self.lan_times.extend([(time.time()-t1)/nit]*nit)
+            
         elif solver.lower() == 'ar':
-            e, opt = mf.eigsh(
+            energies, opt_result = mf.eigsh(
                 self.left_envs[self.mps.pos - 1],
                 mpo,
                 self.right_envs[self.mps.pos],
@@ -268,12 +269,14 @@ class DMRGEngineBase(MPSSimulationBase):
                 ncv=ncv,
                 numvecs_calculated=1)
         elif solver.lower() == 'lobpcg':
-            e, opt = mf.lobpcg(
+            energies, opt_result = mf.lobpcg(
                 self.left_envs[self.mps.pos - 1],
                 mpo,
                 self.right_envs[self.mps.pos],
                 initial,
                 precision=landeltaEta)
+        opt=opt_result[0]
+        e=energies[0]
 
         temp, merge_data = opt.split(mps_merge_data).transpose(
             0, 2, 3, 1).merge([[0, 1], [2, 3]])
@@ -353,10 +356,10 @@ class DMRGEngineBase(MPSSimulationBase):
                 delta=landelta,
                 deltaEta=landeltaEta)
 
-            e, opt, nit = lan.simulate(initial)
+            energies, opt_result, nit = lan.simulate(initial)
             # self.lan_times.extend([(time.time()-t1)/nit]*nit)
         elif solver.lower() == 'ar':
-            e, opt = mf.eigsh(
+            energies, opt_result = mf.eigsh(
                 self.left_envs[self.mps.pos],
                 self.mpo[self.mps.pos],
                 self.right_envs[self.mps.pos],
@@ -366,13 +369,14 @@ class DMRGEngineBase(MPSSimulationBase):
                 ncv=ncv,
                 numvecs_calculated=1)
         elif solver.lower() == 'lobpcg':
-            e, opt = mf.lobpcg(
+            energies, opt_result = mf.lobpcg(
                 self.left_envs[self.mps.pos],
                 self.mpo[self.mps.pos],
                 self.right_envs[self.mps.pos],
                 initial,
                 precision=landeltaEta)
-
+        opt=opt_result[0]
+        e=energies[0]
         Dnew = opt.shape[1]
         if verbose > 0:
             stdout.write(
@@ -891,7 +895,7 @@ class TEBDEngine(Container):
     container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
     """
 
-    def __init__(self, mps, mpo, name):
+    def __init__(self, mps, mpo, name='TEBD'):
         """
         TEBD.__init__(mps,mpo,name):
         initialize a TEBD  simulation for finite systems; this is an engine for real or imaginary time evolution
@@ -988,16 +992,15 @@ class TEBDEngine(Container):
                 truncation_threshold=tr_thresh)
             self.tw += tw
 
-    def doTEBD(self,
-               dt,
-               numsteps,
-               D,
-               tr_thresh=1E-10,
-               verbose=1,
-               cp=None,
-               keep_cp=False):
+    def do_steps(self,
+                 dt,
+                 numsteps,
+                 D,
+                 tr_thresh=1E-10,
+                 verbose=1,
+                 cp=None,
+                 keep_cp=False):
         """
-        TEBDengine.doTEBD(self,dt,numsteps,D,tr_thresh,verbose=1,cnterset=0,tw=0,cp=None):
         uses a second order trotter decomposition to evolve the state using TEBD
         Parameters:
         -------------------------------
