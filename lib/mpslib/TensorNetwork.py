@@ -686,8 +686,9 @@ class MPSBase(TensorNetwork):
             if n < n2_max:
                 l = self.transfer_op(n % N, 'left', l)
 
-        return c
+        return np.array(c)
 
+    
     def measure_1site_ops(self, ops, sites):
         """
         Expectation value of list of  single-site operators on sites
@@ -757,7 +758,8 @@ class MPS(MPSBase):
         return self._connector
 
     def normalize(self, **kwargs):
-        self.canonize(numeig=1, **kwargs)
+        self.mat/=np.sqrt(self.mat.norm())        
+        #self.canonize(numeig=1, **kwargs)
         self._norm = self.dtype.type(1)
 
     def roll(self, num_sites):
@@ -765,22 +767,22 @@ class MPS(MPSBase):
         roll the mps unitcell by num_sites (shift it by num_sites)
         """
         self.position(num_sites)
-        centermatrix = tf.Variable(self.mat)  #copy the center matrix
+        centermatrix = self.mat  #copy the center matrix
         self.position(len(self))  #move cenermatrix to the right
-        new_center_matrix = ncon([self.mat, self.connector], [[-1, 1], [1, -2]])
+        new_center_matrix = ncon.ncon([self.mat, self.connector], [[-1, 1], [1, -2]])
 
-        self.pos = num_sites
-        self.mat = tf.Variable(centermatrix)
+        self._position = num_sites
+        self.mat = centermatrix
         self.position(0)
-        new_center_matrix = ncon([new_center_matrix, self.mat],
+        new_center_matrix = ncon.ncon([new_center_matrix, self.mat],
                                  [[-1, 1], [1, -2]])
         tensors=[self._tensors[n] for n in range(num_sites,len(self._tensors))]\
             + [self._tensors[n] for n in range(num_sites)]
-        self._tensors = tensors
-        self.connector = tf.linalg.inv(centermatrix)
+        self.set_tensors(tensors)
+        self._connector = np.linalg.inv(centermatrix)
         self._right_mat = centermatrix
         self.mat = new_center_matrix
-        self.pos = len(self) - num_sites
+        self._position = len(self) - num_sites
 
     def schmidt_spectrum(self, n, canonize=True, **kwargs):
         """
@@ -905,7 +907,7 @@ class MPS(MPSBase):
 
                        if direction in (1,'l','left')   return the left dominant EV
                        if direction in (-1,'r','right') return the right dominant EV
-        init:          tf.tensor
+        init:          Tensor
                        initial guess for the eigenvector
         precision:     float
                        desired precision of the dominant eigenvalue
@@ -917,7 +919,7 @@ class MPS(MPSBase):
         (eta,x,it,diff):
         eta:  float
               the eigenvalue
-        x:    tf.tensor
+        x:    Tensor
               the dominant eigenvector (in matrix form)
         it:   int 
               number of iterations
@@ -957,7 +959,7 @@ class MPS(MPSBase):
 
                        if direction in (1,'l','left')   return the left dominant EV
                        if direction in (-1,'r','right') return the right dominant EV
-        init:          tf.tensor
+        init:          Tensor
                        initial guess for the eigenvector
         precision:     float
                        desired precision of the dominant eigenvalue
@@ -978,7 +980,7 @@ class MPS(MPSBase):
         (eta,x):
         eta: float
              the eigenvalue
-        x:   tf.tensor
+        x:   Tensor
              the dominant eigenvector (in matrix form)
         """
         if self.D[0] != self.D[-1]:
@@ -1018,7 +1020,7 @@ class MPS(MPSBase):
                        for (1,'l','left'): bring into left gauge
                        for (-1,'r','right'): bring into right gauge
 
-        init:          tf.tensor
+        init:          Tensor
                        initial guess for the eigenvector
         precision:     float
                        desired precision of the dominant eigenvalue
@@ -1157,7 +1159,7 @@ class MPS(MPSBase):
 
         Parameters:
         ------------------------------
-        init:          tf.tensor
+        init:          Tensor
                        initial guess for the eigenvector
         precision:     float
                        desired precision of the dominant eigenvalue
@@ -1670,10 +1672,11 @@ class MPS(MPSBase):
         """
 
         self.position(site + 1)
+        
         newState = ncon.ncon(
-            [self.get_tensor(site),
-             self.get_tensor(site + 1), gate],
-            [[-1, 1, 2], [1, -4, 3], [-2, -3, 2, 3]])
+            [self._tensors[site],self.mat,
+             self._tensors[site + 1], gate],
+            [[-1, 1, 3], [1,2], [2, -4, 4], [-2, -3, 3, 4]])
         [Dl, d1, d2, Dr] = newState.shape
         newState, merge_data = newState.merge([[0, 1], [2, 3]])
         U, S, V, tw = newState.svd(
@@ -1692,11 +1695,11 @@ class MPS(MPSBase):
         the _Z norm of the mps is changed
         """
         self.position(site)
-        tensor = ncon.ncon([self.get_tensor(site), gate],
-                           [[-1, -2, 1], [-3, 1]])
-        A, mat, Z = mf.prepare_tensor_QR(tensor, 1)
+        tensor = ncon.ncon([self.mat,self._tensors[site], gate],
+                           [[-1,1],[1, -2, 2], [-3, 2]])
+        mat,B, Z = mf.prepare_tensor_QR(tensor, -1)
         self._norm *= Z
-        self[site] = A
+        self._tensors[site] = B
         self.mat = mat
         return self
 
@@ -1778,16 +1781,19 @@ class FiniteMPS(MPS):
         return FiniteMPS(tensors=tensors)  #out is an unnormalized MPS
 
     def normalize(self):
-        pos = self.pos
-        if self.pos == len(self):
-            self.position(0)
-        elif self.pos == 0:
-            self.position(len(self))
-        else:
-            self.position(0)
-            self.position(len(self))
-        self.position(self.pos)
+        self.mat/=np.sqrt(self.mat.norm())
+        # if self.pos == len(self):
+        #     self.position(0)
+        # elif self.pos == 0:
+        #     self.position(len(self))
+        # else:
+        #     self.position(0)
+        #     self.position(len(self))
+        # self.position(self.pos)
         self._norm = self.dtype.type(1)
+        
+    def norm(self):
+        return self._norm*self.mat.norm()
 
     #def norm(self):
     #    return np.sqrt(ncon.ncon([self.centermatrix,self.centermatrix.conj()],[[1,2],[1,2]]))
