@@ -198,16 +198,17 @@ class Tensor(np.ndarray, TensorBase):
             s /= Z
             if truncation_threshold > 1E-16:
                 mask = s > truncation_threshold
-                tw = np.sum(s[~mask])
+                tw = np.sum(s[~mask]**2)
                 s = s[mask]
-            if D != None:
+            if D:
                 if D < len(s):
                     warnings.warn(
                         'Tensors.svd: desired thresh imcompatible with max bond dimension; truncating',
                         stacklevel=3)
                 tw += np.sum(s[min(D, len(s))::])
                 s = s[0:min(D, len(s))]
-
+            if len(s)==0:
+                s=np.array([1.0],dtype=s.dtype)
             u = u[:, 0:len(s)]
             v = v[0:len(s), :]
             s *= Z
@@ -222,7 +223,7 @@ class Tensor(np.ndarray, TensorBase):
                 'svd: prepareTruncate caught a LinAlgError with dir>0')
             if truncation_threshold > 1E-16:
                 mask = s > truncation_threshold
-                tw = np.sum(s[~mask])
+                tw = np.sum(s[~mask]**2)
                 s = s[mask]
 
             if D != None:
@@ -233,6 +234,9 @@ class Tensor(np.ndarray, TensorBase):
                 tw += np.sum(s[min(D, len(s))::])
                 s = s[0:min(D, len(s))]
 
+            if len(s)==0:
+                s=np.array([1.0],dtype=s.dtype)
+                
             u = u[:, 0:len(s)]
             v = v[0:len(s), :]
 
