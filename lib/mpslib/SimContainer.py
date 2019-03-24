@@ -183,6 +183,7 @@ class DMRGEngineBase(MPSSimulationBase):
         """
 
         super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+        self.mps.position(0)
         self.compute_right_envs()
 
     def compute_left_envs(self):
@@ -684,6 +685,7 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                               nmax=10000,
                               numeig=1,
                               pinv=1E-20):
+        
         self.mps.canonize(
             precision=precision, ncv=ncv, nmax=nmax, numeig=numeig,
             pinv=pinv)  #this leaves state in left-orthogonal form
@@ -782,10 +784,13 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                          desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
                          iteration is terminated
         """
-
+        
         self._idmrg_it = 0
         converged = False
         eold = 0.0
+        self.mps.position(0)
+        self.compute_right_envs()
+        
         while not converged:
             e = super().run_one_site(
                 Nsweeps=1,
@@ -856,6 +861,9 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         self._idmrg_it = 0
         converged = False
         eold = 0.0
+        self.mps.position(0)
+        self.compute_right_envs()
+        
         while not converged:
             e = super().run_two_site(
                 Nsweeps=1,
@@ -889,13 +897,13 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         return energy
 
 
-class TEBDEngine(Container):
+
+class TEBDBase(Container):
     """
     TimeEvolutionEngine(Container):
     container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
     """
-
-    def __init__(self, mps, mpo, name='TEBD'):
+    def __init__(self, mps, mpo, name=None):
         """
         TEBD.__init__(mps,mpo,name):
         initialize a TEBD  simulation for finite systems; this is an engine for real or imaginary time evolution
@@ -992,6 +1000,16 @@ class TEBDEngine(Container):
                 truncation_threshold=tr_thresh)
             self.tw += tw
 
+
+    
+class FiniteTEBDEngine(TEBDBase):
+    """
+    TimeEvolutionEngine(Container):
+    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    """
+    def __init__(self, mps, mpo, name='FiniteTEBD'):
+        super().__init__(mps=mps, mpo=mpo, name=name)
+
     def do_steps(self,
                  dt,
                  numsteps,
@@ -1004,8 +1022,9 @@ class TEBDEngine(Container):
         uses a second order trotter decomposition to evolve the state using TEBD
         Parameters:
         -------------------------------
-        dt:        float
-                   step size (scalar)
+        dt:        float or complex
+                   step size (scalar); use dt (float) < 0 for imaginary time evolution, 
+                   and (imag(dt) < 0, real(tau) = 0) for real time evolution
         numsteps:  int
                    total number of evolution steps
         D:         int
@@ -1074,6 +1093,109 @@ class TEBDEngine(Container):
         return self.tw, self.t0
 
 
+class InfiniteTEBDEngine(TEBDBase):
+    """
+    TimeEvolutionEngine(Container):
+    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    """
+    def __init__(self, mps, mpo, name='InfiniteTEBD'):
+        if not len(mps)%2==0:
+            raise ValueError('InfiniteTEBDEngine for nearest neighbors needs an even number of sites per unit cell; got {}'.format(len(mps)))
+        super().__init__(mps=mps, mpo=mpo, name=name)
+        
+        self.is_canonized=False
+        
+    def canonize_mps(self,
+                     init=None,
+                     precision=1E-12,
+                     ncv=50,
+                     nmax=1000,
+                     numeig=1,
+                     power_method=False,
+                     pinv=1E-30,
+                     truncation_threshold=1E-15,
+                     D=None,
+                     warn_thresh=1E-8):
+
+        self.mps.canonize(init=init,
+                          precision=precision,
+                          ncv=ncv,
+                          nmax=nmax,
+                          power_method=power_method,
+                          pinv=pinv,
+                          truncation_threshold=truncation_threshold,
+                          D=D,
+                          warn_thresh=warn_thresh)
+        self.is_canonized=True
+        
+    def do_steps(self,
+                 dt,
+                 numsteps,
+                 D,
+                 tr_thresh=1E-10,
+                 verbose=1,
+                 cp=None,
+                 keep_cp=False,
+                 power_method=False):
+        
+        if not self.is_canonized:
+            raise ValueError('InfiniteTEBDengine: the state is not canonized!')
+        #even half-step:
+        current = 'None'
+        self.apply_even_gates(tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
+        self.mps.roll(1)
+        for step in range(numsteps):
+            self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
+            self.mps.roll(1)
+            if verbose >= 1:
+                self.t0 += np.abs(dt)
+                stdout.write(
+                    "\rTEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"
+                    % (self.t0, self.tw, np.max(self.mps.D), D, tr_thresh,
+                       np.abs(dt)))
+                stdout.flush()
+            if verbose >= 2:
+                print('')
+            #if this is a cp step, save between two half-steps
+            if (cp != None) and (self.it > 0) and (self.it % cp == 0):
+                #if the cp step does not coincide with the last step, do a half step, save, and do another half step
+                if step < (numsteps - 1):
+                    self.apply_even_gates(
+                        tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
+                    if not keep_cp:
+                        if os.path.exists(current + '.pickle'):
+                            os.remove(current + '.pickle')
+                        current = self.name + '_tebd_cp' + str(self.it)
+                        self.save(current)
+                    else:
+                        current = self.name + '_tebd_cp' + str(self.it)
+                        self.save(current)
+                    self.apply_even_gates(
+                        tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
+                    self.mps.roll(1)                    
+                #if the cp step coincides with the last step, only do a half step and save the state
+                else:
+                    self.apply_even_gates(
+                        tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
+            
+                    newname = self.name + '_tebd_cp' + str(self.it)
+                    self.save(newname)
+            #if step is not a cp step do a regular step
+            else:
+                #do a regular full step, unless step is the last step
+                if step < (numsteps - 1):
+                    self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
+                    self.mps.roll(1)                                        
+                    #if step is the last step, do a half step
+                else:
+                    self.apply_even_gates(
+                        tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
+
+            self.mps.canonize(power_method=power_method)            
+            self.it = self.it + 1
+
+        return self.tw, self.t0
+    
 class VUMPSengine(InfiniteDMRGEngine):
     """
     VUMPSengine
