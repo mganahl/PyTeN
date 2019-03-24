@@ -82,8 +82,37 @@ class MPOBase(TensorNetwork):
         raise NotImplementedError()
     def get_2site_hamiltonian(self, *args, **kwargs):
         raise NotImplementedError()
-    def get_2site_gate(self, *args, **kwargs):
-        raise NotImplementedError()
+    
+    def get_2site_gate(self, site1, site2, tau):
+        """
+        calculate the unitary two-site gates exp(tau*H(m,n))
+        Parameters:
+        --------------------------------------
+        site1,site2: int
+                     lattice sites for which to calculate the gate
+        tau:         float or complex
+                     time-increment
+        Returns:
+        --------------------------------------------------
+        A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
+        h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
+        Gate=scipy.linalg..expm(tau*h); 
+        Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
+        dm, dn the local hilbert space dimension at site m and n, respectively
+        """
+        if site2 < site1:
+            d1 = self[site2].shape[2]
+            d2 = self[site1].shape[2]
+        elif site2 > site1:
+            d1 = self[site1].shape[2]
+            d2 = self[site2].shape[2]
+        else:
+            raise ValuError(
+                'MPO.twoSiteGate: site1 has to be different from site2!')
+        h = np.reshape(
+            self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
+        return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
+            type(h))
 
     
 class FiniteMPO(MPOBase):
@@ -162,38 +191,8 @@ class FiniteMPO(MPOBase):
             h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
             for s in range(1, mpo1.shape[0]):
                 h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-        return np.reshape(h, (d1, d2, d1, d2)).view()
+        return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
 
-    def get_2site_gate(self, site1, site2, tau):
-        """
-        calculate the unitary two-site gates exp(tau*H(m,n))
-        Parameters:
-        --------------------------------------
-        site1,site2: int
-                     lattice sites for which to calculate the gate
-        tau:         float or complex
-                     time-increment
-        Returns:
-        --------------------------------------------------
-        A two-site gate "Gate" between sites m and n by summing up  (morally, for m<n)
-        h=\sum_s np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:]) and exponentiating the result:
-        Gate=scipy.linalg..expm(tau*h); 
-        Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
-        dm, dn the local hilbert space dimension at site m and n, respectively
-        """
-        if site2 < site1:
-            d1 = self[site2].shape[2]
-            d2 = self[site1].shape[2]
-        elif site2 > site1:
-            d1 = self[site1].shape[2]
-            d2 = self[site2].shape[2]
-        else:
-            raise ValuError(
-                'MPO.twoSiteGate: site1 has to be different from site2!')
-        h = np.reshape(
-            self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
-        return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
-            type(h))
 
         
 class InfiniteMPO(MPOBase):
@@ -224,16 +223,16 @@ class InfiniteMPO(MPOBase):
 
     def get_2site_mpo(self, site1, site2):
         if site2 < site1:
-            mpo1 = self[site2][-1, :, :, :]
-            mpo2 = self[site1][:, 0, :, :]
+            mpo1 = copy.deepcopy(self[site2][-1, :, :, :])
+            mpo2 = copy.deepcopy(self[site1][:, 0, :, :])
             if site2 == 0:
                 mpo1[0, :, :] /= 2.0
             if site1 == (len(self) - 1):
                 mpo2[-1, :, :] /= 2.0
 
         if site2 > site1:
-            mpo1 = self[site1][-1, :, :, :]
-            mpo2 = self[site2][:, 0, :, :]
+            mpo1 = copy.deepcopy(self[site1][-1, :, :, :])
+            mpo2 = copy.deepcopy(self[site2][:, 0, :, :])
             if site1 == 0:
                 mpo1[0, :, :] /= 2.0
             if site2 == (len(self) - 1):
@@ -275,11 +274,16 @@ class InfiniteMPO(MPOBase):
         elif site2 > site1:
             nl = site1
             nr = site2
-
         mpo1 = mpo1[0, :, :, :]
         mpo2 = mpo2[:, 0, :, :]
+            
         d1 = mpo1.shape[1]
         d2 = mpo2.shape[1]
+
+        h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
+        for s in range(1,mpo1.shape[0]):
+            h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
+
         return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
     
 class FiniteTFI(FiniteMPO):
