@@ -649,25 +649,25 @@ def eigsh(L,
         v0=initial.to_dense(),
         ncv=ncv)
 
-    if numvecs == 1:
-        ind = np.nonzero(e == min(e))
-        return e[ind[0][0]], initial.from_dense(v[:, ind[0][0]],
-                                                (chilp, chirp, dp))
+    # if numvecs == 1:
+    #     ind = np.nonzero(e == min(e))
+    #     return e[ind[0][0]], initial.from_dense(v[:, ind[0][0]],
+    #                                             (chilp, chirp, dp))
 
-    elif numvecs > 1:
-        if (numvecs > numvecs_calculated):
-            warnings.warn(
-                'mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',
-                stacklevel=2)
-            numvecs = numvecs_calculated
-        es = []
-        vs = []
-        esorted = np.sort(e)
-        for n in range(numvecs):
-            es.append(esorted[n])
-            ind = np.nonzero(e == esorted[n])
-            vs.append(initial.from_dense(v[:, ind[0][0]], (chilp, chirp, dp)))
-        return es, vs
+    # elif numvecs > 1:
+    if (numvecs > numvecs_calculated):
+        warnings.warn(
+            'mpsfunctions.eigsh: requestion to return more vectors than calcuated: setting numvecs_returned=numvecs',
+            stacklevel=2)
+        numvecs = numvecs_calculated
+    es = []
+    vs = []
+    esorted = np.sort(e)
+    for n in range(numvecs):
+        es.append(esorted[n])
+        ind = np.nonzero(e == esorted[n])
+        vs.append(initial.from_dense(v[:, ind[0][0]], (chilp, chirp, dp)))
+    return es, vs
 
 
 def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
@@ -697,7 +697,7 @@ def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
 
     e, v = sp.sparse.linalg.lobpcg(
         LOP, X=X, largest=False, tol=precision, *args, **kwargs)
-    return e[0], initial.from_dense(v, [chilp, chirp, dp])
+    return e, [initial.from_dense(v, [chilp, chirp, dp])]
 
 
 def TMeigs_naive(tensors,
