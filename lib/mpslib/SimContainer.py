@@ -796,9 +796,7 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         tensors = [self.mps[n] for n in range(sites, len(self.mps))
                   ] + [self.mps[n] for n in range(sites)]
         self.mps.set_tensors(tensors)
-        self.mpo.set_tensors([self.mpo[n]
-                              for n in range(sites, len(self.mps))] +
-                             [self.mpo[n] for n in range(sites)])
+        self.mpo.roll(num_sites=sites)
         self.mps._connector = centermatrix.inv()
         self.mps._right_mat = centermatrix
         self.mps.mat = new_center_matrix
@@ -988,7 +986,7 @@ class TEBDBase(Container):
 
         super().__init__(name)
         self.mps = mps
-        self.gates = mpo
+        self.mpo = mpo
         self.mps.position(0)
         self.t0 = 0.0
         self.it = 0
@@ -1038,7 +1036,7 @@ class TEBDBase(Container):
         """
         for n in range(0, len(self.mps) - 1, 2):
             tw = self.mps.apply_2site_gate(
-                gate=self.gates.get_2site_gate(n, n + 1, tau),
+                gate=self.mpo.get_2site_gate(n, n + 1, tau),
                 site=n,
                 D=D,
                 truncation_threshold=tr_thresh)
@@ -1063,7 +1061,7 @@ class TEBDBase(Container):
             lstart = len(self.mps) - 2
         for n in range(lstart, -1, -2):
             tw = self.mps.apply_2site_gate(
-                gate=self.gates.get_2site_gate(n, n + 1, tau),
+                gate=self.mpo.get_2site_gate(n, n + 1, tau),
                 site=n,
                 D=D,
                 truncation_threshold=tr_thresh)
@@ -1259,10 +1257,11 @@ class InfiniteTEBDEngine(TEBDBase):
         current = 'None'
         self.apply_even_gates(tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
         self.mps.roll(1)
+        self.mpo.roll(1)
         for step in range(numsteps):
             self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
             self.mps.roll(1)
-            
+            self.mpo.roll(1)
             if verbose >= 1:
                 self.t0 += np.abs(dt)
                 stdout.write(
@@ -1288,7 +1287,8 @@ class InfiniteTEBDEngine(TEBDBase):
                         self.save(current)
                     self.apply_even_gates(
                         tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
-                    self.mps.roll(1)                    
+                    self.mps.roll(1)
+                    self.mpo.roll(1)                    
                 #if the cp step coincides with the last step, only do a half step and save the state
                 else:
                     self.apply_even_gates(
@@ -1301,7 +1301,8 @@ class InfiniteTEBDEngine(TEBDBase):
                 #do a regular full step, unless step is the last step
                 if step < (numsteps - 1):
                     self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
-                    self.mps.roll(1)                                        
+                    self.mps.roll(1)
+                    self.mpo.roll(1)                    
                     #if step is the last step, do a half step
                 else:
                     self.apply_even_gates(
