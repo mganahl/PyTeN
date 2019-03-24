@@ -113,6 +113,7 @@ class MPOBase(TensorNetwork):
             self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
         return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
             type(h))
+    
 
     
 class FiniteMPO(MPOBase):
@@ -285,6 +286,11 @@ class InfiniteMPO(MPOBase):
             h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
 
         return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+
+    def roll(self,num_sites):
+        tensors=[self._tensors[n] for n in range(num_sites,len(self._tensors))]\
+            + [self._tensors[n] for n in range(num_sites)]
+        self.set_tensors(tensors)
     
 class FiniteTFI(FiniteMPO):
     """ 
