@@ -108,7 +108,7 @@ class MPOBase(TensorNetwork):
             d2 = self[site2].shape[2]
         else:
             raise ValuError(
-                'MPO.twoSiteGate: site1 has to be different from site2!')
+                'MPO.get_2site_gate: site1 has to be different from site2!')
         h = np.reshape(
             self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
         return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
@@ -261,9 +261,9 @@ class InfiniteMPO(MPOBase):
         np.ndarray of shape (d1,d2,d3,d4)
         A two-site Hamiltonian between sites ```site1``` and ```site2``` by summing up  
         (for site1<site2, and site1!=0, site2!=0)
-        h=np.kron(mpo[m][-1,s=0,:,:]/2,mpo[n][s=0,0,:,:])+
-          \sum_s={1}^{M-2} np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:])+
-          np.kron(mpo[m][-1,s=M-1,:,:],mpo[n][s=M-1,0,:,:])+
+
+        \sum_s={0}^{M-1} np.kron(mpo[m][-1,s,:,:],mpo[n][s,0,:,:])
+
         the returned np.ndarray is a rank-4 tensor with shape (dsite1,dsite2,dsite1,dsite2), with
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
