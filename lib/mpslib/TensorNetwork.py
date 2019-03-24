@@ -753,6 +753,7 @@ class MPS(MPSBase):
     def centermatrix(self):
         return self.mat
 
+
     @property
     def connector(self):
         return self._connector
@@ -1258,9 +1259,9 @@ class MPS(MPSBase):
 
         self.position(len(self) - 1)
         self._tensors[-1] = self.get_tensor(len(self) - 1)
-
         Z = ncon.ncon([self._tensors[-1], self._tensors[-1].conj()],
-                      [[1, 2, 3], [1, 2, 3]]) / np.sum(self.D[-1])
+                          [[1, 2, 3], [1, 2, 3]]) / np.sum(self.D[-1])
+        
         self._tensors[-1] /= np.sqrt(Z)
         lam_norm = np.sqrt(ncon.ncon([lam, lam], [[1], [1]]))
         lam = lam / lam_norm
