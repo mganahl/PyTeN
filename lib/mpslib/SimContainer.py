@@ -1067,7 +1067,6 @@ class TEBDBase(Container):
                 truncation_threshold=tr_thresh)
             self.tw += tw
 
-
     
 class FiniteTEBDEngine(TEBDBase):
     """
