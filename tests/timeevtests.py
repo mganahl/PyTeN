@@ -17,6 +17,7 @@ import lib.mpslib.MPO as MPO
 import lib.mpslib.mps as mpslib
 import lib.mpslib.Hamiltonians as H
 import lib.mpslib.TensorNetwork as TN
+from lib.mpslib.Tensor import Tensor
 import lib.utils.binaryoperations as bb
 import HeisED.XXZED as ed
 import scipy as sp
@@ -91,7 +92,7 @@ class TestTimeEvolution(unittest.TestCase):
         jz=1.0 
         jxy=1.0
         Bz=1.0
-        self.Nmax=10
+        self.Nmax=100
         self.dt=-1j*0.05  #time step
         self.numsteps=10  #numnber of steps to be taken in between measurements        
         Jz=np.ones(self.N)*jz
@@ -193,11 +194,11 @@ class TestTimeEvolution(unittest.TestCase):
                                 landeltaEta=1E-8,
                                 solver='LAN')
         self.dmrg.mps.position(self.N//2)
-        self.dmrg.mps.apply_1site_gate(np.array([[0.0,0.0],[1.0,0.0]]),self.N//2)
+        self.dmrg.mps.apply_1site_gate(np.array([[0.0,0.0],[1.0,0.0]]).view(Tensor),self.N//2)
         self.dmrg.mps.position(self.N)
         self.dmrg.mps.position(0)
         self.dmrg.mps.normalize()
-        tebd=SC.TEBDEngine(self.dmrg.mps,self.timeevmpo,"insert_name_here")
+        tebd=SC.FiniteTEBDEngine(self.dmrg.mps,self.timeevmpo,"insert_name_here")
         Dmax=32      #maximum bond dimension to be used during simulation; the maximally allowed bond dimension of the mps will be
         #adapted to this value in the TimeEvolutionEngine
         thresh=1E-16  #truncation threshold
