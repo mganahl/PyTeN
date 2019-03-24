@@ -30,7 +30,10 @@ class Container(object):
                   the name of the object, used for storing things
         """
         self.name = name
-
+    """
+    FIXME(martin):  saving and loading is currently done using pickle.
+                    eventually this has to be implemented more thoroughly
+    """
     def save(self, filename=None):
         """
         dumps the container into a pickle file named "filename"
