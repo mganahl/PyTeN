@@ -633,7 +633,37 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                  ncv=40,
                  numeig=1,
                  pinv=1E-20):
-
+        """
+        Infinite DMRG simulation
+        Parameters:
+        ------------------------
+        mps:                 InfiniteMPS
+                             an initial mps state
+        mpo:                 InfiniteMPO 
+                             the Hamiltonian in MPO form
+        name:                str
+                             simulation name
+        precision:           float 
+                             desired precision for initial left and right Hamiltonian environments
+        precision_canonize:  float 
+                             precision of initial canonization canonization 
+        nmax:                int 
+                             maximum iteration number of initial calculation of left 
+                             and right Hamiltonian environments
+        nmax_canonize:       int 
+                             maximum iteration number of canonization procedure
+        ncv:                 int 
+                             number of Krylov vectors used for canonization of MPS (when using sparse
+                             eigensolver)
+        numeig:              int
+                             number of eigenvector-eigenvalue pairs to be calculated in sparse eigensolver
+                             during canonization 
+        pinv:                float
+                             pseudo-inverse cutoff used during canonization (change with caution)
+        Returns:
+        ------------------------
+        an InfiniteDMRGEngine object
+        """
         # if not isinstance(mps, MPS):
         #     raise TypeError(
         #         'in InfiniteDMRGEngine.__init__(...): mps of type InfiniteMPSCentralGauge expected, got {0}'
@@ -685,7 +715,24 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                               nmax=10000,
                               numeig=1,
                               pinv=1E-20):
-        
+        """
+        compute the left and right infinite Hamiltonian environments
+        Parameters:
+        ------------------------
+        precision:           float 
+                             desired precision for initial left and right Hamiltonian environments
+        ncv:                 int 
+                             number of Krylov vectors used for canonization of MPS (when using sparse
+                             eigensolver)
+        nmax:                int 
+                             maximum iteration number of initial calculation of left 
+                             and right Hamiltonian environments
+        numeig:              int
+                             number of eigenvector-eigenvalue pairs to be calculated in sparse eigensolver
+                             during canonization 
+        pinv:                float
+                             pseudo-inverse cutoff used during canonization (change with caution)
+        """
         self.mps.canonize(
             precision=precision, ncv=ncv, nmax=nmax, numeig=numeig,
             pinv=pinv)  #this leaves state in left-orthogonal form
@@ -724,7 +771,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
 
     def roll(self, sites):
         """
-        
+        roll the unit cell by `sites` sites
+        Parameters:
+        ------------------
+        sites:    int 
+                  number of sites to roll the unitcell over (see numpy.roll())
+        Returns:
+        ------------------
+        None
         """
         self.position(sites)
         new_lb = self.left_envs[sites]
@@ -764,15 +818,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      solver='AR'):
         """
         do a one-site infinite DMRG optimzation for an open system
-        Paramerters:
+        Parameters:
+        ---------------------------
         Nsweeps:         int
                          number of left-right  sweeps
         precision:       float    
                          desired precision of the ground state energy
         ncv:             int
                          number of krylov vectors
-        cp:              int
-                         checkpoint every ```cp```steps
         verbose:         int
                          verbosity flag
         Ndiag:           int
@@ -783,6 +836,14 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         landeltaEta:     float
                          desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
                          iteration is terminated
+        solver:          str 
+                         can take values in ('LAN','AR','LOBPCG')
+                         type of solver to solve local eigenvalue problem
+
+        Returns:
+        ------------------------------
+        float: energy per unit cell
+        
         """
         
         self._idmrg_it = 0
@@ -833,7 +894,8 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      solver='AR'):
         """
         do a two-site infinite DMRG optimzation for an open system
-        Paramerters:
+        Parameters:
+        -------------------------------
         Nsweeps:         int
                          number of left-right  sweeps
         thresh:          float
@@ -856,6 +918,15 @@ class InfiniteDMRGEngine(DMRGEngineBase):
         landeltaEta:     float
                          desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
                          iteration is terminated
+        solver:          str 
+
+                         can take values in ('LAN','AR','LOBPCG')
+                         type of solver to solve local eigenvalue problem
+
+        Returns:
+        ------------------------------
+        float: energy per unit cell
+
         """
 
         self._idmrg_it = 0
@@ -900,19 +971,17 @@ class InfiniteDMRGEngine(DMRGEngineBase):
 
 class TEBDBase(Container):
     """
-    TimeEvolutionEngine(Container):
-    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    TEBD base class for performing real/imaginary time evolution for finite and infinite systems 
     """
     def __init__(self, mps, mpo, name=None):
         """
-        TEBD.__init__(mps,mpo,name):
-        initialize a TEBD  simulation for finite systems; this is an engine for real or imaginary time evolution
+        initialize a TEBDbase  simulation 
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
                        the initial state 
         mpo:           MPO object, or (for TEBD) a method f(n,m) which returns two-site gates at sites (n,m), or a nearest neighbor MPO
-                       The Hamiltonian/generator of time evolution
+                       The generator of time evolution
         name:          str
                        the filename under which cp results will be stored (not yet implemented)
         """
@@ -1004,8 +1073,16 @@ class TEBDBase(Container):
     
 class FiniteTEBDEngine(TEBDBase):
     """
-    TimeEvolutionEngine(Container):
-    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    TEBD simulation class for finite systems
+
+    Parameters:
+    --------------------------------------------------------
+    mps:           FiniteMPS object
+                   the initial state 
+    mpo:           FiniteMPO object, or a method f(n,m,tau) which returns two-site gates at sites (n,m)
+                   The generator of time evolution
+    name:          str
+                   the filename under which cp results will be stored (not yet implemented)
     """
     def __init__(self, mps, mpo, name='FiniteTEBD'):
         super().__init__(mps=mps, mpo=mpo, name=name)
@@ -1039,6 +1116,7 @@ class FiniteTEBDEngine(TEBDBase):
                    if True, keep all checkpointed files, if False, only keep the last one
 
         Returns:
+        ----------------------------------
         a tuple containing the truncated weight and the simulated time
         """
 
@@ -1095,9 +1173,18 @@ class FiniteTEBDEngine(TEBDBase):
 
 class InfiniteTEBDEngine(TEBDBase):
     """
-    TimeEvolutionEngine(Container):
-    container object for performing real/imaginary time evolution using TEBD or TDVP algorithm for finite systems 
+    TEBD simulation class for infinite systems
+
+    Parameters:
+    --------------------------------------------------------
+    mps:           InfiniteMPS object
+                   the initial state 
+    mpo:           InfiniteMPO object, or a method f(n,m,tau) which returns two-site gates at sites (n,m)
+                   The generator of time evolution
+    name:          str
+                   the filename under which cp results will be stored (not yet implemented)
     """
+
     def __init__(self, mps, mpo, name='InfiniteTEBD'):
         if not len(mps)%2==0:
             raise ValueError('InfiniteTEBDEngine for nearest neighbors needs an even number of sites per unit cell; got {}'.format(len(mps)))
@@ -1136,7 +1223,35 @@ class InfiniteTEBDEngine(TEBDBase):
                  verbose=1,
                  cp=None,
                  keep_cp=False,
+                 recanonize=None,
                  power_method=False):
+        """
+        uses a second order trotter decomposition to evolve the state using TEBD
+        Parameters:
+        -------------------------------
+        dt:             float or complex
+                        step size (scalar); use dt (float) < 0 for imaginary time evolution, 
+                        and (imag(dt) < 0, real(tau) = 0) for real time evolution
+        numsteps:       int
+                        total number of evolution steps
+        D:              int
+                        maximum bond dimension to be kept
+        tr_thresh:      float
+                        truncation threshold 
+        verbose:        int
+                        verbosity flag; put to 0 for no output
+        cp:             int or None
+                        checkpointing flag: checkpoint every cp steps
+        keep_cp:        bool
+                        if True, keep all checkpointed files, if False, only keep the last one
+        recanonize:     None or int 
+                        if not None, recanonize the state every `recanonize%it` iterations
+        power_method:   bool
+                        if True, use powermethod for recanonization
+        Returns:
+        ----------------------------------
+        a tuple containing the truncated weight and the simulated time
+        """
         
         if not self.is_canonized:
             raise ValueError('InfiniteTEBDengine: the state is not canonized!')
@@ -1147,6 +1262,7 @@ class InfiniteTEBDEngine(TEBDBase):
         for step in range(numsteps):
             self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
             self.mps.roll(1)
+            
             if verbose >= 1:
                 self.t0 += np.abs(dt)
                 stdout.write(
@@ -1190,8 +1306,8 @@ class InfiniteTEBDEngine(TEBDBase):
                 else:
                     self.apply_even_gates(
                         tau=dt / 2.0, D=D, tr_thresh=tr_thresh)
-
-            self.mps.canonize(power_method=power_method)            
+            if recanonize and self.it%recanonize==0:
+                self.mps.canonize(power_method=power_method)            
             self.it = self.it + 1
 
         return self.tw, self.t0
