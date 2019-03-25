@@ -1327,7 +1327,7 @@ class MPS(object):
         #self.position(pos)
         return tensors
 
-    def applyTwoSiteGate(self,gate,site,Dmax=None,thresh=1E-16):
+    def applyTwoSiteGate(self,gate,site,Dmax,thresh=1E-16):
         """
         applies a two-site gate to the mps at site ```site```, 
         and does a truncation with truncation threshold "thresh"
