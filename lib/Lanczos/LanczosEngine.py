@@ -25,7 +25,7 @@ class LanczosEngine(object):
         if not Ndiag > 0:
             raise ValueError('LanczosEngine: Ndiag has to be > 0')
 
-    def simulate(self, initialstate, reortho=False, verbose=False):
+    def simulate(self, initialstate, zeros=None,reortho=False, verbose=False):
         """
         do a lanczos simulation
         Parameters:
@@ -54,7 +54,6 @@ class LanczosEngine(object):
         Z = np.linalg.norm(xn)
         xn /= Z
 
-        xn_minus_1 = xn.zeros(initialstate.shape, dtype=dtype)
         converged = False
         it = 0
         kn = []
@@ -104,48 +103,47 @@ class LanczosEngine(object):
         eta, u = np.linalg.eigh(self.Heff)
         states = []
         for n2 in range(min(self.numeig, len(eta))):
-            state = initialstate.zeros(
-                initialstate.shape, dtype=initialstate.dtype)
+            if zeros is None:
+                state = initialstate.zeros(
+                    initialstate.shape, dtype=initialstate.dtype)
+            else:
+                state=copy.deepcopy(zeros)
             for n1 in range(len(self.vecs)):
                 state += self.vecs[n1] * u[n1, n2]
-            states.append(state / self.scalar_product(state, state))
-        return eta[0:min(self.numeig, len(eta))], states[0], it  #,epsn,kn
+            states.append(state / np.sqrt(self.scalar_product(state, state)))
+        return eta[0:min(self.numeig, len(eta))], states[0:min(self.numeig, len(eta))], it  #,epsn,kn
 
 
 class LanczosTimeEvolution(LanczosEngine, object):
-    """
-    Lanzcos time evolution engine
-    LanczosTimeEvolution(matvec,vecvec,zeros_initializer,ncv,delta)
-    matvec: python function performing matrix-vector multiplication (e.g. np.dot)
-    vecvec: python function performing vector-vector dot product (e.g. np.dot)
-    zeros_initializer: python function which returns a vector filled with zeros  (e.g. np.zeros), has to accept a shape and dtype argument, i.e.
-    zeros_initializer(shape,dtype); dtype should be either float or complex
-    ncv: number of krylov vectors used for time evolution; 10-20 usually works fine; larger ncv causes longer runtimes
-    delta: tolerance parameter, such that iteration stops when a vector with norm<delta
-    is encountered
-    """
+    def __init__(self, matvec, scalar_product, ncv=10, delta=1E-10):
 
-    def __init__(self, matvec, vecvec, zeros_initializer, ncv=10, delta=1E-10):
-        super(LanczosTimeEvolution, self).__init__(
-            matvec=matvec,
-            Ndiag=ncv,
-            ncv=ncv,
-            numeig=ncv,
-            delta=delta,
-            deltaEta=1E-10)
+        super().__init__(matvec=matvec,
+                         scalar_product=scalar_product,
+                         Ndiag=ncv,
+                         ncv=ncv,
+                         numeig=ncv,
+                         delta=delta,
+                         deltaEta=1E-10)
 
-    def __doStep__(self, state, dt, verbose=False):
+
+    def doStep(self, state, dt, zeros=None,verbose=False):
         """
-        do a time evolution step
-        state: initial state
-        dt: time increment
-        verbose: verbosity flag
+        Lanzcos time evolution engine
+        LanczosTimeEvolution(matvec,vecvec,zeros_initializer,ncv,delta)
+        matvec: python function performing matrix-vector multiplication (e.g. np.dot)
+        vecvec: python function performing vector-vector dot product (e.g. np.dot)
+        ncv: number of krylov vectors used for time evolution; 10-20 usually works fine; larger ncv causes longer runtimes
+        delta: tolerance parameter, such that iteration stops when a vector with norm<delta
+        is encountered
         """
         self.dtype = type(dt)
-        self.simulate(state.astype(self.dtype), verbose=True, reortho=True)
+        self.simulate(state.astype(self.dtype), zeros=zeros,verbose=True, reortho=True)
         #take the expm of self.Heff
         U = sp.linalg.expm(dt * self.Heff)
-        result = state.zeros(state.shape, dtype=self.dtype)
+        if zeros is None:
+            result = state.zeros(state.shape, dtype=self.dtype)
+        else:
+            result=zeros
         for n in range(min(self.ncv, self.Heff.shape[0])):
             result += self.vecs[n] * U[n, 0]
         return result
