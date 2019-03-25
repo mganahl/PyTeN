@@ -1,6 +1,6 @@
 import numpy as np
 import collections
-import torch
+
 """ 
 @author: Markus Hauru
 A module for the function ncon, which does contractions of several tensors.
