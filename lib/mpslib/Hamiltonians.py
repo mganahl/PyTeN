@@ -120,7 +120,7 @@ class MPO:
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
         """
-        mpo1,mpo2=self.getTwositeMPO(site1,site2)
+        mpo1,mpo2=self.getTwositeMPO(site1,site2,obc)
         if site2<site1:
             nl=site2
             mr=site1
