@@ -76,7 +76,7 @@ class MPSSimulationBase(Container):
         return np.result_type(self.mps.dtype, self.mpo.dtype)
 
     @staticmethod
-    def add_layer(B, mps, mpo, conjmps, direction):
+    def add_layer(B, mps, mpo, conjmps, direction, walltime_log=None):
         """
         adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
         environments
@@ -99,7 +99,7 @@ class MPSSimulationBase(Container):
         Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
 
-        return mf.add_layer(B, mps, mpo, conjmps, direction)
+        return mf.add_layer(B, mps, mpo, conjmps, direction, walltime_log=walltime_log)
 
     def position(self, n):
         """
@@ -120,26 +120,19 @@ class MPSSimulationBase(Container):
 
         if n >= self.mps.pos:
             pos = self.mps.pos
-            # t1 = time.time()
             self.mps.position(n)
-            # self.mps_shift_times.append(time.time()-t1)
-            # t2 = time.time()
             for m in range(pos, n):
                 self.left_envs[m + 1] = self.add_layer(
-                    self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1)
-            # self.add_layer_times.append(time.time()-t2)
+                    self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1,
+                    walltime_log=self.walltime_log)
 
         if n < self.mps.pos:
             pos = self.mps.pos
-            # t1 = time.time()
             self.mps.position(n)
-            # self.mps_shift_times.append(time.time()-t1)
-            # t2 = time.time()
             for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
-                    self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m],
-                    -1)
-            # self.add_layer_times.append(time.time()-t2)
+                    self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1,
+                    walltime_log=self.walltime_log)
 
         for m in range(n + 1, len(self.mps)):
             try:
@@ -181,7 +174,7 @@ class DMRGEngineBase(MPSSimulationBase):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-
+        self.walltime_log=None
         super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
         self.mps.position(0)
         self.compute_right_envs()
@@ -198,7 +191,8 @@ class DMRGEngineBase(MPSSimulationBase):
                 mps=self.mps[n],
                 mpo=self.mpo[n],
                 conjmps=self.mps[n],
-                direction=1)
+                direction=1,
+                walltime_log=self.walltime_log)
 
     def compute_right_envs(self):
         """
@@ -212,7 +206,8 @@ class DMRGEngineBase(MPSSimulationBase):
                 mps=self.mps[n],
                 mpo=self.mpo[n],
                 conjmps=self.mps[n],
-                direction=-1)
+                direction=-1,
+                walltime_log=self.walltime_log)
 
     def _optimize_2s_local(self,
                            thresh=1E-10,
@@ -255,9 +250,7 @@ class DMRGEngineBase(MPSSimulationBase):
                 numeig=1,
                 delta=landelta,
                 deltaEta=landeltaEta)
-            # t1 = time.time()
-            energies, opt_result, nit = lan.simulate(initial)
-            # self.lan_times.extend([(time.time()-t1)/nit]*nit)
+            energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
             
         elif solver.lower() == 'ar':
             energies, opt_result = mf.eigsh(
@@ -305,13 +298,15 @@ class DMRGEngineBase(MPSSimulationBase):
             mps=self.mps[self.mps.pos - 1],
             mpo=self.mpo[self.mps.pos - 1],
             conjmps=self.mps[self.mps.pos - 1],
-            direction=1)
+            direction=1,
+            walltime_log=self.walltime_log)
         self.right_envs[self.mps.pos - 1] = mf.add_layer(
             B=self.right_envs[self.mps.pos],
             mps=self.mps[self.mps.pos],
             mpo=self.mpo[self.mps.pos],
             conjmps=self.mps[self.mps.pos],
-            direction=-1)
+            direction=-1,
+            walltime_log=self.walltime_log)
         return e
 
     def _optimize_1s_local(self,
@@ -344,7 +339,7 @@ class DMRGEngineBase(MPSSimulationBase):
                     self.right_envs[self.mps.pos]
                 ])
 
-            # t1 = time.time()
+
             def scalar_product(a, b):
                 return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
 
@@ -356,9 +351,7 @@ class DMRGEngineBase(MPSSimulationBase):
                 numeig=1,
                 delta=landelta,
                 deltaEta=landeltaEta)
-
-            energies, opt_result, nit = lan.simulate(initial)
-            # self.lan_times.extend([(time.time()-t1)/nit]*nit)
+            energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
         elif solver.lower() == 'ar':
             energies, opt_result = mf.eigsh(
                 self.left_envs[self.mps.pos],
@@ -388,20 +381,18 @@ class DMRGEngineBase(MPSSimulationBase):
         if verbose > 1:
             print("")
 
-        # t1 = time.time()
-        mat, B, Z = mf.prepare_tensor_QR(opt, direction='r')
-        # self.mps_shift_times.append(time.time()-t1)
+        mat, B, Z = mf.prepare_tensor_QR(opt, direction='r',
+                                         walltime_log=self.walltime_log)
         self.mps.mat = mat
         self.mps[self.mps.pos] = B
 
-        # t2 = time.time()
         self.right_envs[self.mps.pos - 1] = mf.add_layer(
             B=self.right_envs[self.mps.pos],
             mps=self.mps[self.mps.pos],
             mpo=self.mpo[self.mps.pos],
             conjmps=self.mps[self.mps.pos],
-            direction=-1)
-        # self.add_layer_times.append(time.time()-t2)
+            direction=-1,
+            walltime_log=self.walltime_log)
         return e
 
     def run_one_site(self,
@@ -413,7 +404,8 @@ class DMRGEngineBase(MPSSimulationBase):
                      Ndiag=10,
                      landelta=1E-8,
                      landeltaEta=1E-5,
-                     solver='AR'):
+                     solver='AR',
+                     walltime_log=None):
         """
         do a one-site finite DMRG optimzation for an open system
         Paramerters:
@@ -438,9 +430,7 @@ class DMRGEngineBase(MPSSimulationBase):
         solver:          str
                          'AR' or 'LAN'
         """
-        # self.lan_times = []
-        # self.mps_shift_times = []
-        # self.add_layer_times = []
+        self.walltime_log=walltime_log
         self.position(0)
         self.Nsweeps = Nsweeps
         converged = False
@@ -591,7 +581,7 @@ class DMRGEngineBase(MPSSimulationBase):
         return e
 
 
-class FiniteDMRGengine(DMRGEngineBase):
+class FiniteDMRGEngine(DMRGEngineBase):
     """
     DMRGengine
     simulation container for density matrix renormalization group optimization

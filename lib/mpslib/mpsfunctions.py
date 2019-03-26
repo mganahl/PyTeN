@@ -221,7 +221,7 @@ def prepare_tensor_SVD(tensor, direction, D=None, thresh=1E-32, r_thresh=1E-14):
         return u, s, out, Z
 
 
-def prepare_tensor_QR(tensor, direction):
+def prepare_tensor_QR(tensor, direction,walltime_log=None):
     """
     orthogonalizes an mps tensor using qr decomposition 
 
@@ -251,6 +251,7 @@ def prepare_tensor_QR(tensor, direction):
             'prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'
             .format(len(tensor.shape)))
     [l1, l2, d] = tensor.shape
+    t1=time.time()
     if direction in (1, 'l', 'left'):
         temp, merge_data = tensor.merge([[0, 2], [1]])
         q, r = temp.qr()
@@ -259,7 +260,11 @@ def prepare_tensor_QR(tensor, direction):
         r /= Z
         [size1, size2] = q.shape
         out = q.split([merge_data[0], [size2]]).transpose(0, 2, 1)
+        if walltime_log:
+            walltime_log(lan=[],QR=[time.time()-t1],add_layer=[],num_lan=[])
+        
         return out, r, Z
+    
     elif direction in (-1, 'r', 'right'):
         temp, merge_data = tensor.merge([[1, 2], [0]])
         temp = np.conj(temp)
@@ -271,6 +276,8 @@ def prepare_tensor_QR(tensor, direction):
         #normalize the bond matrix
         Z = np.sqrt(ncon.ncon([r, np.conj(r)], [[1, 2], [1, 2]]))
         r /= Z
+        if walltime_log:
+            walltime_log(lan=[],QR=[time.time()-t1],add_layer=[],num_lan=[])
         return r, out, Z
     else:
         raise ValueError(
@@ -302,7 +309,7 @@ def check_ortho(tensor, which, thresh=1E-8):
     return MPS.ortho_deviation(tensor, which) < thresh
 
 
-def add_layer(B, mps, mpo, conjmps, direction):
+def add_layer(B, mps, mpo, conjmps, direction,walltime_log=None):
     """
         adds an mps-mpo-mps layer to a left or right block "E"; used in dmrg to calculate the left and right
         environments
@@ -324,14 +331,18 @@ def add_layer(B, mps, mpo, conjmps, direction):
         Tensor of shape (Dr,Dr',Mr) for direction in (1,'l','left')
         Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
-
+    
+    if walltime_log:
+        t1=time.time()
     if direction in ('l', 'left', 1):
-        return ncon.ncon([B, mps, mpo, np.conj(conjmps)],
+        out = ncon.ncon([B, mps, mpo, np.conj(conjmps)],
                          [[1, 4, 3], [1, -1, 2], [3, -3, 5, 2], [4, -2, 5]])
     if direction in ('r', 'right', -1):
-        return ncon.ncon([B, mps, mpo, np.conj(conjmps)],
+        out = ncon.ncon([B, mps, mpo, np.conj(conjmps)],
                          [[1, 4, 3], [-1, 1, 2], [-3, 3, 5, 2], [-2, 4, 5]])
-
+    if walltime_log:
+        walltime_log(lan=[],QR=[],add_layer=[time.time()-t1],num_lan=[])
+    return out
 
 def one_minus_pseudo_unitcell_transfer_op(direction, mps, left_dominant,
                                           right_dominant, vector):

@@ -3,7 +3,7 @@ import numpy as np
 import scipy as sp
 import lib.ncon as ncon
 import copy
-
+import time
 
 class LanczosEngine(object):
     """
@@ -25,7 +25,7 @@ class LanczosEngine(object):
         if not Ndiag > 0:
             raise ValueError('LanczosEngine: Ndiag has to be > 0')
 
-    def simulate(self, initialstate, zeros=None,reortho=False, verbose=False):
+    def simulate(self, initialstate, zeros=None,reortho=False, verbose=False, walltime_log=None):
         """
         do a lanczos simulation
         Parameters:
@@ -47,6 +47,8 @@ class LanczosEngine(object):
                     the lowest eigenvector
 
         """
+        if walltime_log:
+            t1=time.time()
         dtype = np.result_type(self.matvec(initialstate).dtype)
         #initialization:
         xn = copy.deepcopy(initialstate)
@@ -97,6 +99,9 @@ class LanczosEngine(object):
             it = it + 1
             if it >= self.ncv:
                 break
+            
+        if walltime_log:
+            walltime_log(lan=[(time.time()-t1)/len(epsn)]*len(epsn),QR=[],add_layer=[],num_lan=[len(epsn)])
 
         self.Heff = np.diag(epsn) + np.diag(kn[1:], 1) + np.diag(
             np.conj(kn[1:]), -1)
@@ -111,6 +116,7 @@ class LanczosEngine(object):
             for n1 in range(len(self.vecs)):
                 state += self.vecs[n1] * u[n1, n2]
             states.append(state / np.sqrt(self.scalar_product(state, state)))
+            
         return eta[0:min(self.numeig, len(eta))], states[0:min(self.numeig, len(eta))], it  #,epsn,kn
 
 
