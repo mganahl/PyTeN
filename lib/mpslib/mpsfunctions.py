@@ -251,7 +251,8 @@ def prepare_tensor_QR(tensor, direction,walltime_log=None):
             'prepareTensor: ```tensor``` has to be of rank = 3. Found ranke = {0}'
             .format(len(tensor.shape)))
     [l1, l2, d] = tensor.shape
-    t1=time.time()
+    if walltime_log:
+        t1=time.time()
     if direction in (1, 'l', 'left'):
         temp, merge_data = tensor.merge([[0, 2], [1]])
         q, r = temp.qr()
