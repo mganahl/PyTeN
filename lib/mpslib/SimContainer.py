@@ -101,7 +101,7 @@ class MPSSimulationBase(Container):
 
         return mf.add_layer(B, mps, mpo, conjmps, direction, walltime_log=walltime_log)
 
-    def position(self, n):
+    def position(self, n, walltime_log=None):
         """
         shifts the center position of mps to bond n, and updates left and right environments
         accordingly
@@ -120,7 +120,7 @@ class MPSSimulationBase(Container):
 
         if n >= self.mps.pos:
             pos = self.mps.pos
-            self.mps.position(n)
+            self.mps.position(n, walltime_log=walltime_log)
             for m in range(pos, n):
                 self.left_envs[m + 1] = self.add_layer(
                     self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1,
@@ -128,7 +128,7 @@ class MPSSimulationBase(Container):
 
         if n < self.mps.pos:
             pos = self.mps.pos
-            self.mps.position(n)
+            self.mps.position(n, walltime_log=walltime_log)
             for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
                     self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1,
@@ -151,7 +151,7 @@ class MPSSimulationBase(Container):
         """
         shift center site of the MPSSimulation to 0 and recalculate all left and right blocks
         """
-        self.mps.position(0)
+        self.mps.position(0, walltime_log=self.walltime_log)
         self.compute_left_envs()
         self.compute_right_envs()
         return self
@@ -176,7 +176,7 @@ class DMRGEngineBase(MPSSimulationBase):
         """
         self.walltime_log=None
         super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
-        self.mps.position(0)
+        self.mps.position(0, walltime_log=self.walltime_log)
         self.compute_right_envs()
 
     def compute_left_envs(self):
@@ -320,14 +320,16 @@ class DMRGEngineBase(MPSSimulationBase):
         local single-site optimization routine 
         """
         if self.mps.pos == len(self.mps):
-            self.position(self.mps.pos - 1)
+            self.position(self.mps.pos - 1,
+                          walltime_log=self.walltime_log)
             e = self._optimize_1s_local(
                 ncv=ncv,
                 Ndiag=Ndiag,
                 landelta=landelta,
                 landeltaEta=landeltaEta,
                 verbose=verbose)
-            self.position(self.mps.pos + 1)
+            self.position(self.mps.pos + 1,
+                          walltime_log=self.walltime_log)
             return e
 
         initial = ncon.ncon([self.mps.mat, self.mps[self.mps.pos]],
@@ -431,15 +433,14 @@ class DMRGEngineBase(MPSSimulationBase):
                          'AR' or 'LAN'
         """
         self.walltime_log=walltime_log
-        self.position(0)
+        self.position(0, walltime_log=self.walltime_log)
         self.Nsweeps = Nsweeps
         converged = False
         energy = 100000.0
         self._it = 1
 
         while not converged:
-            self.position(
-                0)  #the part outside the loop covers the len(self) = =1 case
+            self.position(0, walltime_log=self.walltime_log)  #the part outside the loop covers the len(self) = =1 case
             e = self._optimize_1s_local(
                 ncv=ncv,
                 Ndiag=Ndiag,
@@ -449,7 +450,7 @@ class DMRGEngineBase(MPSSimulationBase):
                 solver=solver)
 
             for n in range(1, len(self.mps) - 1):
-                self.position(n)
+                self.position(n, walltime_log=self.walltime_log)
                 e = self._optimize_1s_local(
                     ncv=ncv,
                     Ndiag=Ndiag,
@@ -459,7 +460,7 @@ class DMRGEngineBase(MPSSimulationBase):
                     solver=solver)
 
             for n in range(len(self.mps) - 1, 0, -1):
-                self.position(n)
+                self.position(n, walltime_log=self.walltime_log)
                 e = self._optimize_1s_local(
                     ncv=ncv,
                     Ndiag=Ndiag,
@@ -480,7 +481,7 @@ class DMRGEngineBase(MPSSimulationBase):
                     print()
                     print('reached maximum iteration number ', Nsweeps)
                 break
-        self.position(0)
+        self.position(0, walltime_log=self.walltime_log)
         return e
 
     def run_two_site(self,
@@ -524,13 +525,13 @@ class DMRGEngineBase(MPSSimulationBase):
                          'AR' or 'LAN'
 
         """
-        self.position(0)
+        self.position(0, walltime_log=self.walltime_log)
         self.Nsweeps = Nsweeps
         converged = False
         energy = 100000.0
         self._it = 1
         while not converged:
-            self.position(1)
+            self.position(1, walltime_log=self.walltime_log)
             e = self._optimize_2s_local(
                 thresh=thresh,
                 D=D,
@@ -542,7 +543,7 @@ class DMRGEngineBase(MPSSimulationBase):
                 solver=solver)
 
             for n in range(2, len(self.mps)):
-                self.position(n)
+                self.position(n, walltime_log=self.walltime_log)
                 e = self._optimize_2s_local(
                     thresh=thresh,
                     D=D,
@@ -553,7 +554,7 @@ class DMRGEngineBase(MPSSimulationBase):
                     verbose=verbose,
                     solver=solver)
             for n in range(len(self.mps) - 2, 1, -1):
-                self.position(n)
+                self.position(n, walltime_log=self.walltime_log)
                 e = self._optimize_2s_local(
                     thresh=thresh,
                     D=D,
@@ -577,7 +578,7 @@ class DMRGEngineBase(MPSSimulationBase):
                     print()
                     print('reached maximum iteration number ', Nsweeps)
                 break
-        self.position(0)
+        self.position(0, walltime_log=self.walltime_log)
         return e
 
 
