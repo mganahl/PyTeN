@@ -1503,7 +1503,7 @@ class MPS(MPSBase):
             self[self.pos] = ncon.ncon([V, self[self.pos]],
                                        [[-1, 1], [1, -2, -3]])
 
-    def position(self, bond, schmidt_thresh=1E-16, D=None, r_thresh=1E-14):
+    def position(self, bond, schmidt_thresh=1E-16, D=None, r_thresh=1E-14, walltime_log=None):
         """
         position(bond,schmidt_thresh=1E-16,D=None,r_thresh=1E-14):
         shifts the center site to "bond"
@@ -1535,7 +1535,7 @@ class MPS(MPSBase):
             for n in range(self._position, bond):
                 if schmidt_thresh < 1E-15 and D == None:
                     tensor, self.mat, Z = mf.prepare_tensor_QR(
-                        self[n], direction=1)
+                        self[n], direction=1, walltime_log=walltime_log)
                 else:
                     tensor,s,v,Z=mf.prepare_tensor_SVD(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                                     r_thresh=r_thresh)
@@ -1552,7 +1552,7 @@ class MPS(MPSBase):
             for n in range(self._position - 1, bond - 1, -1):
                 if schmidt_thresh < 1E-15 and D == None:
                     self.mat, tensor, Z = mf.prepare_tensor_QR(
-                        self[n], direction=-1)
+                        self[n], direction=-1, walltime_log=walltime_log)
                 else:
                     u,s,tensor,Z=mf.prepare_tensor_SVD(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                                  r_thresh=r_thresh)
