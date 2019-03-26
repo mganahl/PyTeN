@@ -69,6 +69,7 @@ def run_bench(N, D,
                       Nsweeps=Nsweeps,
                       ncv=ncv,
                       precision=1E-200,
+                      solver='lan',
                       walltime_log=walltime_log)
     out = {'lanczos':lan_times,
            'QR': QR_times,
@@ -93,9 +94,9 @@ def benchmark_1(prefix):
               the file prefix for the benchmark files
     """
     N=32 #system size
-    Ds=[32, 64, 128, 256, 512, 1024]
-    Nsweeps=6
-    ncv=10
+    Ds=[32, 64, 128, 256, 512, 1024]#bond dims
+    Nsweeps=6#number of sweeps
+    ncv=10#number of krylov vectors
     dtype = np.float64
     res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
                                     prefix=prefix,
@@ -112,9 +113,9 @@ def benchmark_2(prefix):
     """
     
     N=64 #system size
-    Ds=[32, 64, 128, 256, 512, 1024]
-    Nsweeps=6
-    ncv=10
+    Ds=[64,128,256,512, 1024] #bond dims
+    Nsweeps=6 #number of sweeps
+    ncv=10 #number of krylov vectors
     dtype = np.float64
     res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
                                     prefix=prefix,
@@ -132,9 +133,9 @@ def benchmark_3(prefix):
     """
     
     N=128 #system size
-    Ds=[32, 64, 128, 256, 512, 1024]
-    Nsweeps=6
-    ncv=10
+    Ds=[64,128,256,512, 1024]#bond dims
+    Nsweeps=6#number of sweeps
+    ncv=10#number of krylov vectors
     dtype = np.float64
     res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
                                     prefix=prefix,
