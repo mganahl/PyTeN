@@ -309,7 +309,95 @@ class DMRGEngineBase(MPSSimulationBase):
             walltime_log=self.walltime_log)
         return e
 
+
     def _optimize_1s_local(self,
+                           site,
+                           sweep_dir,
+                           ncv=40,
+                           Ndiag=10,
+                           landelta=1E-5,
+                           landeltaEta=1E-5,
+                           verbose=0):
+        
+        if sweep_dir in (-1,'r','right'):
+            if self.mps.pos != site:
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0} != mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+        if sweep_dir in (1,'l','left'):
+            if self.mps.pos!=(site+1):
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0}, mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+            
+        if sweep_dir in (-1,'r','right'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps.mat,self.mps[site]],[[-1,1],[1,-2,-3]])
+        elif sweep_dir in (1,'l','left'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps[site],self.mps.mat],[[-1,-2,1],[1,-3]])
+            
+        if self.walltime_log:
+            t1=time.time()
+        nit, vecs, alpha, beta = LZ.do_lanczos(
+            L=self.left_envs[site],
+            mpo=self.mpo[site],
+            R=self.right_envs[site],
+            initial_state=initial,
+            ncv=ncv,
+            delta=landelta
+        )
+        if self.walltime_log:
+            self.walltime_log(lan=[(time.time()-t1)/float(nit)]*int(nit),QR=[],add_layer=[],num_lan=[int(nit)])            
+
+        e, opt = LZ.tridiag(vecs, alpha, beta)
+        Dnew = opt.shape[2]
+        if verbose > 0:
+            stdout.write(
+                "\rSS-DMRG it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"
+                % (self._it, self.Nsweeps, site, len(self.mps),
+                   np.real(e), np.imag(e), Dnew))
+            stdout.flush()
+        if verbose > 1:
+            print("")
+        if self.walltime_log:
+            t1=time.time()
+
+        if sweep_dir in (-1,'r','right'):
+            A, mat,Z = mf.prepare_tensor_QR(opt, direction='l')
+            A /= Z            
+        elif sweep_dir in (1,'l','left'):
+            mat, B, Z = mf.prepare_tensor_QR(opt, direction='r')
+            B /= Z            
+        if self.walltime_log:        
+            self.walltime_log(lan=[],QR=[time.time()-t1],add_layer=[],num_lan=[])                        
+
+        
+        self.mps.mat = mat
+        if sweep_dir in (-1,'r','right'):
+            self.mps._tensors[site] = A
+            self.mps.pos+=1
+            self.left_envs[site+1]=self.add_layer(
+                B=self.left_envs[site],
+                mps_tensor=self.mps[site],
+                mpo_tensor=self.mpo[site],
+                conj_mps_tensor=self.mps[site],
+                direction=1,
+                walltime_log=self.walltime_log
+            )
+            
+        elif sweep_dir in (1,'l','left'):            
+            self.mps._tensors[site] = B
+            self.mps.pos=site
+            self.right_envs[site-1]=self.add_layer(
+                B=self.right_envs[site],
+                mps_tensor=self.mps[site],
+                mpo_tensor=self.mpo[site],
+                conj_mps_tensor=self.mps[site],
+                direction=-1,
+                walltime_log=self.walltime_log
+            )
+        return e
+    
+    def _optimize_1s_local(self,
+                           site,
+                           sweep_dir,
                            ncv=40,
                            Ndiag=10,
                            landelta=1E-5,
@@ -319,28 +407,27 @@ class DMRGEngineBase(MPSSimulationBase):
         """
         local single-site optimization routine 
         """
-        if self.mps.pos == len(self.mps):
-            self.position(self.mps.pos - 1,
-                          walltime_log=self.walltime_log)
-            e = self._optimize_1s_local(
-                ncv=ncv,
-                Ndiag=Ndiag,
-                landelta=landelta,
-                landeltaEta=landeltaEta,
-                verbose=verbose)
-            self.position(self.mps.pos + 1,
-                          walltime_log=self.walltime_log)
-            return e
 
-        initial = ncon.ncon([self.mps.mat, self.mps[self.mps.pos]],
-                            [[-1, 1], [1, -2, -3]])
+        if sweep_dir in (-1,'r','right'):
+            if self.mps.pos != site:
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0} != mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+        if sweep_dir in (1,'l','left'):
+            if self.mps.pos!=(site+1):
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0}, mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+            
+        if sweep_dir in (-1,'r','right'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps.mat,self.mps[site]],[[-1,1],[1,-2,-3]])
+        elif sweep_dir in (1,'l','left'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps[site],self.mps.mat],[[-1,1,-3],[1,-2]])
+
         if solver.lower() == 'lan':
             mv = fct.partial(
                 mf.HA_product, *[
-                    self.left_envs[self.mps.pos], self.mpo[self.mps.pos],
-                    self.right_envs[self.mps.pos]
+                    self.left_envs[site], self.mpo[site],
+                    self.right_envs[site]
                 ])
-
 
             def scalar_product(a, b):
                 return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
@@ -354,23 +441,26 @@ class DMRGEngineBase(MPSSimulationBase):
                 delta=landelta,
                 deltaEta=landeltaEta)
             energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
+            
         elif solver.lower() == 'ar':
             energies, opt_result = mf.eigsh(
-                self.left_envs[self.mps.pos],
-                self.mpo[self.mps.pos],
-                self.right_envs[self.mps.pos],
+                self.left_envs[site],
+                self.mpo[site],
+                self.right_envs[site],
                 initial,
                 precision=landeltaEta,
                 numvecs=1,
                 ncv=ncv,
                 numvecs_calculated=1)
+
         elif solver.lower() == 'lobpcg':
             energies, opt_result = mf.lobpcg(
-                self.left_envs[self.mps.pos],
-                self.mpo[self.mps.pos],
-                self.right_envs[self.mps.pos],
+                self.left_envs[site],
+                self.mpo[site],
+                self.right_envs[site],
                 initial,
                 precision=landeltaEta)
+            
         opt=opt_result[0]
         e=energies[0]
         Dnew = opt.shape[1]
@@ -383,20 +473,41 @@ class DMRGEngineBase(MPSSimulationBase):
         if verbose > 1:
             print("")
 
-        mat, B, Z = mf.prepare_tensor_QR(opt, direction='r',
-                                         walltime_log=self.walltime_log)
+
+        if sweep_dir in (-1,'r','right'):
+            A, mat,Z = mf.prepare_tensor_QR(opt, direction='l',
+                                              walltime_log=self.walltime_log)
+            A /= Z            
+        elif sweep_dir in (1,'l','left'):
+            mat, B, Z = mf.prepare_tensor_QR(opt, direction='r',
+                                               walltime_log=self.walltime_log)
+            B /= Z            
+        
         self.mps.mat = mat
-        self.mps[self.mps.pos] = B
-
-        self.right_envs[self.mps.pos - 1] = mf.add_layer(
-            B=self.right_envs[self.mps.pos],
-            mps=self.mps[self.mps.pos],
-            mpo=self.mpo[self.mps.pos],
-            conjmps=self.mps[self.mps.pos],
-            direction=-1,
-            walltime_log=self.walltime_log)
+        if sweep_dir in (-1,'r','right'):
+            self.mps._tensors[site] = A
+            self.mps._position+=1
+            self.left_envs[site+1]=self.add_layer(
+                B=self.left_envs[site],
+                mps=self.mps[site],
+                mpo=self.mpo[site],
+                conjmps=self.mps[site],
+                direction=1,
+                walltime_log=self.walltime_log
+            )
+        elif sweep_dir in (1,'l','left'):            
+            self.mps._tensors[site] = B
+            self.mps._position=site
+            self.right_envs[site-1]=self.add_layer(
+                B=self.right_envs[site],
+                mps=self.mps[site],
+                mpo=self.mpo[site],
+                conjmps=self.mps[site],
+                direction=-1,
+                walltime_log=self.walltime_log
+            )
         return e
-
+            
     def run_one_site(self,
                      Nsweeps=4,
                      precision=1E-6,
@@ -433,7 +544,6 @@ class DMRGEngineBase(MPSSimulationBase):
                          'AR' or 'LAN'
         """
         self.walltime_log=walltime_log
-        self.position(0, walltime_log=self.walltime_log)
         self.Nsweeps = Nsweeps
         converged = False
         energy = 100000.0
@@ -441,33 +551,37 @@ class DMRGEngineBase(MPSSimulationBase):
 
         while not converged:
             self.position(0, walltime_log=self.walltime_log)  #the part outside the loop covers the len(self) = =1 case
-            e = self._optimize_1s_local(
-                ncv=ncv,
-                Ndiag=Ndiag,
-                landelta=landelta,
-                landeltaEta=landeltaEta,
-                verbose=verbose,
-                solver=solver)
+            e = self._optimize_1s_local(site=0,
+                                        sweep_dir='right',
+                                        ncv=ncv,
+                                        Ndiag=Ndiag,
+                                        landelta=landelta,
+                                        landeltaEta=landeltaEta,
+                                        verbose=verbose,
+                                        solver=solver)
 
             for n in range(1, len(self.mps) - 1):
-                self.position(n, walltime_log=self.walltime_log)
-                e = self._optimize_1s_local(
-                    ncv=ncv,
-                    Ndiag=Ndiag,
-                    landelta=landelta,
-                    landeltaEta=landeltaEta,
-                    verbose=verbose,
-                    solver=solver)
-
+                #_optimize_1site_local shifts the center site internally                
+                e = self._optimize_1s_local(site=n,
+                                            sweep_dir='right',
+                                            ncv=ncv,
+                                            Ndiag=Ndiag,
+                                            landelta=landelta,
+                                            landeltaEta=landeltaEta,
+                                            verbose=verbose,
+                                            solver=solver)
+                
+            self.position(len(self.mps), walltime_log=self.walltime_log)
             for n in range(len(self.mps) - 1, 0, -1):
-                self.position(n, walltime_log=self.walltime_log)
-                e = self._optimize_1s_local(
-                    ncv=ncv,
-                    Ndiag=Ndiag,
-                    landelta=landelta,
-                    landeltaEta=landeltaEta,
-                    verbose=verbose,
-                    solver=solver)
+                #_optimize_1site_local shifts the center site internally                
+                e = self._optimize_1s_local(site=n,
+                                            sweep_dir='left',
+                                            ncv=ncv,
+                                            Ndiag=Ndiag,
+                                            landelta=landelta,
+                                            landeltaEta=landeltaEta,
+                                            verbose=verbose,
+                                            solver=solver)
             if np.abs(e - energy) < precision:
                 converged = True
             energy = e
