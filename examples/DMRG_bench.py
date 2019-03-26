@@ -6,14 +6,36 @@ import lib.mpslib.SimContainer as SCT
 import lib.mpslib.TensorNetwork as TN
 import lib.mpslib.MPO as MPO
 import os
-os.chdir('benchmarks')
 
 def run_bench(N, D,
               dtype,
+              prefix='DMRG_benchmark',
               save=True,
               Nsweeps=2,
               ncv=100,
               verbose=1):
+    """
+    runs a DMRG benchmark and produces some files with walltimes
+    
+    Parameters:
+    --------------------
+    N:              int
+                    system size
+    D:              int
+                    bond dimension
+    prefix:         str 
+                    the file prefix for the benchmark files
+    compile_graph:  bool 
+                    compile the graph
+    save:           bool 
+                    save files 
+    Nsweeps:        int 
+                    number of DMRG sweeps
+    ncv:            int 
+                    number of krylov vectors in DMRG 
+    verbose:        int 
+                    verbosity flag
+    """
     if dtype==np.float64:
         the_dtype='float64'
     if dtype==np.float32:
@@ -22,12 +44,12 @@ def run_bench(N, D,
         the_dtype='complex128'
     if dtype==np.complex64:
         the_dtype='complex64'
-        
+    
     lan_times=[]
     QR_times=[]
     add_layer_times=[]
     num_lanczos=[]
-    def walltime_log(lan=[], QR=[], add_layer=[], num_lan=[]):
+    def walltime_log(lan=[],QR=[],add_layer=[],num_lan=[]):
         lan_times.extend(lan)
         QR_times.extend(QR)
         add_layer_times.extend(add_layer)
@@ -35,10 +57,19 @@ def run_bench(N, D,
     
     mps=TN.FiniteMPS.random(d=[2]*N, D=[D]*(N-1), dtype=dtype)
     mps.position(0)
-    mpo=MPO.FiniteXXZ(Jz=np.ones([N-1]), Jxy=np.ones([N-1]), Bz=np.zeros([N]), dtype=dtype)
+    mps.position(N)
+    mps.position(0)    
+    mpo=MPO.FiniteXXZ(Jz=np.ones([N-1]),
+                      Jxy=np.ones([N-1]),
+                      Bz=np.zeros([N]),
+                      dtype=dtype)
     dmrg=SCT.FiniteDMRGEngine(mps,mpo)
     t1=time.time()
-    dmrg.run_one_site(verbose=verbose, Nsweeps=Nsweeps, ncv=ncv, precision=1E-200, solver='lan', walltime_log=walltime_log)
+    dmrg.run_one_site(verbose=verbose,
+                      Nsweeps=Nsweeps,
+                      ncv=ncv,
+                      precision=1E-200,
+                      walltime_log=walltime_log)
     out = {'lanczos':lan_times,
            'QR': QR_times,
            'add_layer': add_layer_times,
@@ -46,19 +77,71 @@ def run_bench(N, D,
            'total': time.time()-t1
     }
     if save:
-        with open('PYTEN_DMRG_benchmark_N_{0}_D_{1}_dtype_{2}_ncv_{3}.pickle'.format(N,D,the_dtype,ncv),'wb') as f:
+        with open(prefix+'_N_{1}_D_{0}_dtype_{2}_ncv_{3}.pickle'.format(D,N,the_dtype,ncv),'wb') as f:
             pickle.dump(out,f)
             
     return out
 
-if __name__ == "__main__":
-    N=32
-    Ds=[32, 64, 128, 256]#, 512, 1024]
-    names = ['DMRG_benchmark_D{0}'.format(D) for D in Ds]
+
+def benchmark_1(prefix):
+    """
+    runs a DMRG benchmark and produces some files with walltimes
+    
+    Parameters:
+    --------------------
+    prefix:   str 
+              the file prefix for the benchmark files
+    """
+    N=32 #system size
+    Ds=[32, 64, 128, 256, 512, 1024]
+    Nsweeps=6
+    ncv=10
     dtype = np.float64
-    res = {name: run_bench(N=N, D=D, dtype=dtype, save=True,  Nsweeps=2, ncv=10)     for D,name in zip(Ds,names)}
-    # with open('PYTEN_DMRG_benchmarks_all.pickle','wb') as f:
-    #     pickle.dump(res,f)
+    res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
+                                    prefix=prefix,
+                                    save=True,
+                                    Nsweeps=Nsweeps, ncv=ncv)     for D in Ds}        
+def benchmark_2(prefix):
+    """
+    runs a DMRG benchmark and produces some files with walltimes
+    
+    Parameters:
+    --------------------
+    prefix:   str 
+              the file prefix for the benchmark files
+    """
+    
+    N=64 #system size
+    Ds=[32, 64, 128, 256, 512, 1024]
+    Nsweeps=6
+    ncv=10
+    dtype = np.float64
+    res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
+                                    prefix=prefix,
+                                    save=True,
+                                    Nsweeps=Nsweeps, ncv=ncv)     for D in Ds}
+    
+def benchmark_3(prefix):
+    """
+    runs a DMRG benchmark and produces some files with walltimes
+    
+    Parameters:
+    --------------------
+    prefix:   str 
+              the file prefix for the benchmark files
+    """
+    
+    N=128 #system size
+    Ds=[32, 64, 128, 256, 512, 1024]
+    Nsweeps=6
+    ncv=10
+    dtype = np.float64
+    res_compiled = {D: run_bench(N=N, D=D, dtype=dtype,
+                                    prefix=prefix,
+                                    save=True,
+                                    Nsweeps=Nsweeps, ncv=ncv)     for D in Ds}        
+        
+    
 
         
     
