@@ -147,6 +147,7 @@ def benchmark_3(prefix):
         
     
     
-
+if __name__ == "__main__":
+    benchmark_3('CPU_GSS_DMRG_benchmark')
 
     
