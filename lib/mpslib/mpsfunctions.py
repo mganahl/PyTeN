@@ -340,7 +340,7 @@ def add_layer(B, mps, mpo, conjmps, direction,walltime_log=None):
                          [[1, 4, 3], [1, -1, 2], [3, -3, 5, 2], [4, -2, 5]])
     if direction in ('r', 'right', -1):
         out = ncon.ncon([B, mps, mpo, np.conj(conjmps)],
-                         [[1, 4, 3], [-1, 1, 2], [-3, 3, 5, 2], [-2, 4, 5]])
+                         [[1, 5, 3], [-1, 1, 2], [-3, 3, 4, 2], [-2, 5, 4]])
     if walltime_log:
         walltime_log(lan=[],QR=[],add_layer=[time.time()-t1],num_lan=[])
     return out
