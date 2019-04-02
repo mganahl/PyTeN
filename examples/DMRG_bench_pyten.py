@@ -113,7 +113,7 @@ def benchmark_2(prefix):
     """
     
     N=64 #system size
-    Ds=[64, 128, 256, 512, 1024] #bond dims
+    Ds=[32, 64, 128, 256, 512, 1024] #bond dims
     Nsweeps=6 #number of sweeps
     ncv=10 #number of krylov vectors
     dtype = np.float64
@@ -133,7 +133,7 @@ def benchmark_3(prefix):
     """
     
     N=128 #system size
-    Ds=[32,64, 128, 256, 512]#, 1024]#bond dims
+    Ds=[32, 64, 128, 256, 512, 1024]#bond dims
     Nsweeps=6#number of sweeps
     ncv=10#number of krylov vectors
     dtype = np.float64
