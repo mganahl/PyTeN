@@ -59,6 +59,10 @@ class MPSSimulationBase(Container):
         self.left_envs = {0: self.lb}
         self.right_envs = {len(mps) - 1: self.rb}
 
+    @property
+    def pos(self):
+        return self.mps.pos
+    
     def __len__(self):
         """
         return the length of the MPS 
@@ -507,7 +511,11 @@ class DMRGEngineBase(MPSSimulationBase):
                 walltime_log=self.walltime_log
             )
         return e
-            
+
+
+                       
+
+        
     def run_one_site(self,
                      Nsweeps=4,
                      precision=1E-6,
@@ -1416,7 +1424,241 @@ class InfiniteTEBDEngine(TEBDBase):
             self.it = self.it + 1
 
         return self.tw, self.t0
+
+
+
+
+
+
+
+class Optim(MPSSimulationBase):
+
+    def __init__(self, mps, mpo, name='optim'):
+        """
+        initialize an MPS object
+        mps:      MPS object
+                  the initial mps
+        mpo:      MPO object
+                  Hamiltonian in MPO format
+        name:     str
+                  the name of the simulation
+        """
+        lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]],
+                               dtype=mps.dtype)
+        rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]],
+                                dtype=mps.dtype)
+        
+        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+        self.mps.position(0)
+        self.mps.position(len(self.mps))
+        self.mps.position(0)        
+        self.left_norm_envs = {0 : self.mps[0].eye(0, dtype=self.mps.dtype)}
+        self.right_norm_envs = {len(self.mps) - 1 : self.mps[-1].eye(1, dtype=self.mps.dtype)}
+        self.left_envs = {0: self.lb}
+        self.right_envs = {len(self.mps) - 1 : self.rb}        
+        self.compute_right_envs()
+
+
+    @property
+    def pos(self):
+        return self.mps.pos
     
+    
+    def compute_left_envs(self):
+        """
+        compute all left environment blocks
+        up to self.mps.position; all blocks for site > self.mps.position are set to None
+        """
+        self.left_envs = {0: self.lb}
+        self.left_norm_envs = {0 : self.mps[0].eye(0, dtype=self.mps.dtype)}
+        for n in range(len(self.mps)):
+            self.left_envs[n + 1] = self.add_layer(
+                B=self.left_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=1)
+
+            self.left_norm_envs[n + 1] = ncon.ncon([self.left_norm_envs[n], self.mps[n], self.mps[n].conj()],
+                                                    [[1, 3], [1, -1, 2],[3, -2, 2]])
+
+    def compute_right_envs(self):
+        """
+        compute all right environment blocks
+        up to self.mps.position; all blocks for site < self.mps.position are set to None
+        """
+        self.right_envs = {len(self.mps) - 1 : self.rb}
+        self.right_norm_envs = {len(self.mps) - 1 : self.mps[-1].eye(1, dtype=self.mps.dtype)}
+        for n in reversed(range(len(self.mps))):
+            self.right_envs[n - 1] = self.add_layer(
+                B=self.right_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=-1)
+            self.right_norm_envs[n - 1] = ncon.ncon([self.right_norm_envs[n], self.mps[n], self.mps[n].conj()],
+                                                    [[1, 3], [-1, 1, 2],[-2, 3, 2]])
+
+            
+    def position(self, site):
+        if self.mps.pos < site:
+            pos = self.mps.pos
+            self.mps.position(site)
+            for n in range(pos, site):
+                self.left_envs[n + 1] = self.add_layer(
+                    B=self.left_envs[n],
+                    mps=self.mps[n],
+                    mpo=self.mpo[n],
+                    conjmps=self.mps[n],
+                    direction=1)
+
+                self.left_norm_envs[n + 1] = ncon.ncon([self.left_norm_envs[n], self.mps[n], self.mps[n].conj()],
+                                                       [[1, 3], [1, -1, 2],[3, -2, 2]])
+
+
+        if self.mps.pos > site:
+            pos = self.mps.pos            
+            self.mps.position(site)
+            for m in reversed(range(site + 1, pos + 1)):
+                self.right_envs[m - 1] = self.add_layer(
+                    self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
+                self.right_norm_envs[m - 1] = ncon.ncon([self.right_norm_envs[m], self.mps[m], self.mps[m].conj()],
+                                                        [[1, 3], [-1, 1, 2],[-2, 3, 2]])
+            
+
+    # def position(self, site):
+    #     if self.mps.pos < site:
+    #         pos = self.mps.pos
+    #         self.mps.position(site)
+    #         for n in range(pos, site):
+    #             self.left_envs[n + 1] = self.add_layer(
+    #                 B=self.left_envs[n],
+    #                 mps=self.mps[n],
+    #                 mpo=self.mpo[n],
+    #                 conjmps=self.mps[n],
+    #                 direction=1)
+
+    #             self.left_norm_envs[n + 1] = ncon.ncon([self.left_norm_envs[n], self.mps[n], self.mps[n].conj()],
+    #                                                    [[1, 3], [1, -1, 2],[3, -2, 2]])
+
+
+    #     if self.mps.pos > site:
+    #         pos = self.mps.pos            
+    #         self.mps.position(site)
+    #         for m in reversed(range(site + 1, pos + 1)):
+    #             self.right_envs[m - 1] = self.add_layer(
+    #                 self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
+    #             self.right_norm_envs[m - 1] = ncon.ncon([self.right_norm_envs[m], self.mps[m], self.mps[m].conj()],
+    #                                                     [[1, 3], [-1, 1, 2],[-2, 3, 2]])
+            
+    #         # for n in reversed(range(site, self.mps.pos)):
+    #         #     self.right_envs[n] = self.add_layer(
+    #         #         B=self.right_envs[n + 1],
+    #         #         mps=self.mps[n + 1],
+    #         #         mpo=self.mpo[n + 1],
+    #         #         conjmps=self.mps[n + 1],
+    #         #         direction=-1)
+    #         #     self.right_norm_envs[n] = ncon.ncon([self.right_norm_envs[n + 1], self.mps[n + 1], self.mps[n + 1].conj()],
+    #         #                                             [[1, 3], [-1, 1, 2],[-2, 3, 2]])
+
+            
+    def get_gradient(self,site):
+        self.position(site)
+        A1 = ncon.ncon([self.left_envs[site], self.mps.get_tensor(site),
+                        self.mpo[site], self.right_envs[site]],
+                       [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
+
+        A2 = ncon.ncon([self.left_norm_envs[site],
+                        self.mps.get_tensor(site),
+                        self.right_norm_envs[site]],
+                       [[1, -1], [1, 2, -3], [2, -2]])
+
+        temp = self.add_layer(B=self.left_envs[site],
+                       mps=self.mps.get_tensor(site),
+                       mpo=self.mpo[site],
+                       conjmps=self.mps.get_tensor(site),
+                       direction=1)
+        energy = ncon.ncon([temp, self.right_envs[site]],[[1, 2, 3],[1, 2, 3]])
+
+        Z = ncon.ncon([self.left_norm_envs[site],
+                       self.mps.get_tensor(site),
+                       self.mps.get_tensor(site).conj(),
+                       self.right_norm_envs[site]],
+                      [[1, 2], [1, 4, 3], [2, 5, 3], [4, 5]])
+
+        return A1/Z-A2*energy/Z**2, energy, Z
+    
+    # def get_gradient(self,site):
+    #     self.position(site)
+    #     A1 = ncon.ncon([self.left_envs[self.pos], self.mps[self.pos],
+    #                     self.mpo[self.pos], self.right_envs[self.pos]],
+    #                    [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
+
+    #     A2 = ncon.ncon([self.left_norm_envs[self.pos],
+    #                     self.mps[self.pos],
+    #                     self.right_norm_envs[self.pos]],
+    #                    [[1, -1], [1, 2, -3], [2, -2]])
+
+    #     temp=self.add_layer(B=self.left_envs[self.pos],
+    #                    mps=self.mps[self.pos],
+    #                    mpo=self.mpo[self.pos],
+    #                    conjmps=self.mps[self.pos],
+    #                    direction=1)
+    #     energy = ncon.ncon([temp, self.right_envs[self.pos]],[[1, 2, 3],[1, 2, 3]])
+
+    #     Z = ncon.ncon([self.left_norm_envs[self.pos],
+    #                    self.mps[self.pos],
+    #                    self.mps[self.pos].conj(),
+    #                    self.right_norm_envs[self.pos]],
+    #                   [[1, 2], [1, 4, 3], [2, 5, 3], [4, 5]])
+    #     return A1/Z-A2*energy/Z**2, energy, Z
+
+
+    def optimize(self, Nsweeps=4, alpha=1E-6):
+
+        for sweep in range(Nsweeps):
+            for n in range(len(self.mps)):
+                g, e, Z = self.get_gradient(n)
+                self.mps[n] -= (alpha*g)
+                self.mps.mat = self.mps[n].eye(0, dtype=self.mps.dtype)
+                #self.mps[n] /= np.sqrt(Z)
+                stdout.write(
+                    "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, e/Z, Z))
+                stdout.flush()
+                
+            # for n in reversed(range(1, len(self.mps))):
+            #     g, e, Z = self.get_gradient(n)
+            #     self.mps[n] -= (alpha*g)
+            #     self.mps.mat = self.mps[n].eye(0, dtype=self.mps.dtype)                
+            #     #self.mps[n] /= np.sqrt(Z)
+            #     stdout.write(
+            #         "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, e/Z, Z))
+            #     stdout.flush()
+                
+        
+    def optimize_all(self, Nsweeps=4, alpha=1E-6):
+
+        for sweep in range(Nsweeps):
+            data = [self.get_gradient(site) for site in range(len(self.mps))]
+            grads= [d[0] for d in data]
+            energies= np.array([d[1] for d in data])
+            Zs= np.array([d[2] for d in data])
+            for n in range(len(self.mps)):
+                self.mps[n] -= (alpha*grads[n])
+
+            stdout.write(
+                "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, np.average(energies/Zs), np.average(Zs)))
+            stdout.flush()
+
+                
+        
+
+
+
+
+
+
+                       
 class VUMPSengine(InfiniteDMRGEngine):
     """
     VUMPSengine
