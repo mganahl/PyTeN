@@ -602,17 +602,19 @@ class MPSBase(TensorNetwork):
         return rs
 
     def get_envs_left(self, sites):
-        """left environments for ```sites```
+        """
+        left environments for `sites`
         This default implementation is not necessarily optimal.
         Returns the environments as a dictionary, indexed by site number.
+        
         Parameters:
         ----------------------
         sites:   list of int 
                  the sites for which the environments should be calculated
         Returns:
-
-        dict():  mapping int to tf.tensor
-                 the left environment for each site in ```sites```
+        ---------------------
+        dict:  mapping int to tf.tensor
+               the left environment for each site in `sites`
         """
 
         if not np.all(np.array(sites) >= 0):
@@ -629,13 +631,20 @@ class MPSBase(TensorNetwork):
 
     def get_tensor(self, n):
         """
-        get_tensor returns an mps tensors, possibly contracted with the center matrix
-        by convention, the center matrix is contracted if n==self.pos
-        the centermatrix is always absorbed from the left into the mps tensor, unless site==N-1, 
+        get_tensor returns an mps tensors, possibly contracted with the center matrix.
+        By convention the center matrix is contracted if n == self.pos.
+        The centermatrix is always absorbed from the left into the mps tensor, unless site == N-1, 
         in which case it is absorbed from the right
+        The connector matrix is always absorbed into the right-most mps tensors
+        Parameters: 
+        -------------------
+        n:  int 
+            the site for which the mps tensor should be returned
 
-        the connector matrix is always absorbed into the right-most mps tensors
-
+        Returns:
+        -------------------
+        an mps tensor
+        
         """
         n = n % self.num_sites
         if n < 0:
@@ -661,32 +670,124 @@ class MPSBase(TensorNetwork):
         else:
             return out
 
-    def measure_1site_correlator(self, op1, op2, n1, n2_max):
+    def measure_1site_correlator(self, op1, op2, site1, sites2):
         """
-        state has top be normalized
+        Correlator of <op1,op2> between sites n1 and n2 (included)
+        if site1 == sites2, op2 will be applied first
+        Parameters
+        --------------------------
+        op1, op2:    Tensor
+                     local operators to be measure
+        site1        int
+        sites2:      list of int
+        Returns:
+        --------------------------             
+        an np.ndarray of measurements
         """
-        N = self.num_sites
-        if n1 < 0 or n1 >= N:
-            raise ValueError(
-                "Site n1 out of range: {} not between 0 and {}.".format(n1, N))
-        ls = self.get_envs_left([n1])
-        rs = self.get_envs_right([n % N for n in range(n1 + 1, n2_max + 1)])
 
-        A = self.get_tensor(n1)
-        l = ncon.ncon([ls[n1], A, op1, A.conj()], [(0, 1), (0, -1, 2), (3, 2),
-                                                   (1, -2, 3)])
+        N = self.num_sites
+        if site1 < 0:
+            raise ValueError(
+                "Site site1 out of range: {} not between 0 and {}.".format(site1, N))
+        sites2 = np.array(sites2)
+
         c = []
-        for n in range(n1 + 1, n2_max + 1):
-            r = rs[n % N]
-            A = self.get_tensor(n % N)
-            res = ncon.ncon([l, A, op2, A.conj(), r],
+        
+        left_sites = sorted(sites2[sites2 < site1])
+        rs = self.get_envs_right([site1])        
+        if len(left_sites) > 0:
+            left_sites_mod = list(set([n % N for n in left_sites]))
+    
+            ls = self.get_envs_left(left_sites_mod)
+    
+    
+            A = self.get_tensor(site1)
+            r = ncon.ncon([A, A.conj(), op1, rs[site1]], [(-1 , 1, 2), (-2, 4, 3), (3, 2), (1, 4)])
+    
+            n1 = np.min(left_sites)
+            for n in range(site1 - 1, n1 - 1, -1):
+                if n in left_sites:
+                    l = ls[n % N]
+                    A = self.get_tensor(n % N)
+                    res = ncon.ncon([l, A, op2, A.conj(), r],
+                                    [[1, 4], [1, 5, 2], [3, 2], [4, 6, 3], [5, 6]])
+                    c.append(res)
+                if n > n1:
+                    r = self.transfer_op(n % N, 'right', r)
+    
+            c = list(reversed(c))
+            
+            
+
+        ls = self.get_envs_left([site1])
+
+        if site1 in sites2:
+            A = self.get_tensor(site1)
+            op = ncon.ncon([op2, op1], [[-1, 1], [1, -2]])
+            res = ncon.ncon([ls[site1], A, op, A.conj(), rs[site1]],
                             [[1, 4], [1, 5, 2], [3, 2], [4, 6, 3], [5, 6]])
             c.append(res)
-
-            if n < n2_max:
-                l = self.transfer_op(n % N, 'left', l)
+            
+        right_sites = sites2[sites2 > site1]
+        if len(right_sites) > 0:        
+            right_sites_mod = list(set([n % N for n in right_sites]))
+                
+            rs = self.get_envs_right(right_sites_mod)
+    
+            A = self.get_tensor(site1)
+            l = ncon.ncon([ls[site1], A, op1, A.conj()], [(0, 1), (0, -1, 2), (3, 2),
+                                                          (1, -2, 3)])
+    
+            n2 = np.max(right_sites)
+            for n in range(site1 + 1, n2 + 1):
+                if n in right_sites:
+                    r = rs[n % N]
+                    A = self.get_tensor(n % N)
+                    res = ncon.ncon([l, A, op2, A.conj(), r],
+                                    [[1, 4], [1, 5, 2], [3, 2], [4, 6, 3], [5, 6]])
+                    c.append(res)
+    
+                if n < n2:
+                    l = self.transfer_op(n % N, 'left', l)
 
         return np.array(c)
+        
+    
+    # def measure_1site_correlator(self, op1, op2, n1, n2_max):
+    #     """
+    #     Correlator of <op1,op2> between sites n1 and n2 (included)
+    #     Parameters
+    #     --------------------------
+    #     op1, op2:    Tensor
+    #                  local operators to be measure
+    #     n1, n2:      int
+    #                  sites where the correlator should be measured
+    #     Returns:
+    #     --------------------------             
+    #     an np.ndarray of measurements
+    #     """
+    #     N = self.num_sites
+    #     if n1 < 0 or n1 >= N:
+    #         raise ValueError(
+    #             "Site n1 out of range: {} not between 0 and {}.".format(n1, N))
+    #     ls = self.get_envs_left([n1])
+    #     rs = self.get_envs_right([n % N for n in range(n1 + 1, n2_max + 1)])
+
+    #     A = self.get_tensor(n1)
+    #     l = ncon.ncon([ls[n1], A, op1, A.conj()], [(0, 1), (0, -1, 2), (3, 2),
+    #                                                (1, -2, 3)])
+    #     c = []
+    #     for n in range(n1 + 1, n2_max + 1):
+    #         r = rs[n % N]
+    #         A = self.get_tensor(n % N)
+    #         res = ncon.ncon([l, A, op2, A.conj(), r],
+    #                         [[1, 4], [1, 5, 2], [3, 2], [4, 6, 3], [5, 6]])
+    #         c.append(res)
+
+    #         if n < n2_max:
+    #             l = self.transfer_op(n % N, 'left', l)
+
+    #     return np.array(c)
 
     
     def measure_1site_ops(self, ops, sites):
@@ -695,14 +796,14 @@ class MPSBase(TensorNetwork):
         this is still not optimal but much faster than running expval_1site on many sitesg
         Parameters
         --------------------------
-        ops:    list of tf.tensor
+        ops:    list of Tensor objects
                 local operators to be measure
         sites:  list of int 
                 sites where the operators live
                 ```sites``` can be in any order and have any number of sites appear arbitralily often
         Returns:
         --------------------------             
-        a list of measurements, in the same order as sites were passed
+        an np.ndarray of measurements, in the same order as sites were passed
         """
         if not len(ops) == len(sites):
             raise ValueError(
