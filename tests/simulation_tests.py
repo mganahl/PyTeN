@@ -272,7 +272,7 @@ class TestITEBD(unittest.TestCase):
         Nmx = 500
         Sz = np.diag([-0.5, 0.5])
         Sx = np.array([[0,0.5],[0.5,0]])
-        Sy = np.array ([[0, 0.5],[-0.5, 0]]) #i is missing on purpose to stay with float
+        Sy = np.array ([[0, 0.5j],[-0.5j, 0]]) 
         from sys import stdout
         dt = 0.01
         numsteps=20
@@ -281,13 +281,40 @@ class TestITEBD(unittest.TestCase):
             imps.canonize(precision=1E-12)
             energy = imps.measure_1site_correlator(Sz, Sz, 0, [1])
             energy += imps.measure_1site_correlator(Sx, Sx, 0, [1])
-            energy -= imps.measure_1site_correlator(Sy, Sy, 0, [1])  #the minus accounts for the missing i above
+            energy += imps.measure_1site_correlator(Sy, Sy, 0, [1])  #the minus accounts for the missing i above
             imps.roll(1)
             energy += imps.measure_1site_correlator(Sz, Sz, 0, [1])
             energy += imps.measure_1site_correlator(Sx, Sx, 0, [1])
-            energy -= imps.measure_1site_correlator(Sy, Sy, 0, [1]) #the minus accounts for the missing i above           
+            energy += imps.measure_1site_correlator(Sy, Sy, 0, [1]) #the minus accounts for the missing i above           
             
-            stdout.write('\r time: %0.4f/%0.4f, energy: %.8f (exact: %0.8f)'%(itebd.time, dt*Nmx*numsteps, energy[0]/2.0, 0.25 -np.log(2)))
+            stdout.write('\r time: %0.4f/%0.4f, energy: %.8f (exact: %0.8f)'%(itebd.time, dt*Nmx*numsteps, np.real(energy[0])/2.0, 0.25 -np.log(2)))
+        self.assertTrue(np.abs(energy[0] - self.Eexact) < 1E-4)
+        
+    def test_itebd_imag_complex(self):
+        dtype = np.complex128
+        imps = TN.MPS.random(D=[self.D]*(self.N + 1),d=[2] * self.N ,minval=-0.5,maxval=0.5)
+        impo = MPO.InfiniteXXZ(Jz=np.ones(len(imps)),Jxy = np.ones(len(imps)), Bz=np.zeros(len(imps)), dtype=imps.dtype)
+        itebd = SCT.InfiniteTEBDEngine(imps,impo)
+        itebd.canonize_mps()
+        Nmx = 500
+        Sz = np.diag([-0.5, 0.5])
+        Sx = np.array([[0,0.5],[0.5,0]])
+        Sy = np.array ([[0, 0.5j],[-0.5j, 0]]) 
+        from sys import stdout
+        dt = 0.01
+        numsteps=20
+        for n in range(Nmx):
+            itebd.do_steps(dt=-dt, numsteps=numsteps, D = self.D,recanonize = None, verbose=0)
+            imps.canonize(precision=1E-12)
+            energy = imps.measure_1site_correlator(Sz, Sz, 0, [1])
+            energy += imps.measure_1site_correlator(Sx, Sx, 0, [1])
+            energy += imps.measure_1site_correlator(Sy, Sy, 0, [1])  
+            imps.roll(1)
+            energy += imps.measure_1site_correlator(Sz, Sz, 0, [1])
+            energy += imps.measure_1site_correlator(Sx, Sx, 0, [1])
+            energy += imps.measure_1site_correlator(Sy, Sy, 0, [1]) 
+            
+            stdout.write('\r time: %0.4f/%0.4f, energy: %.8f (exact: %0.8f)'%(itebd.time, dt*Nmx*numsteps, np.real(energy[0])/2.0, 0.25 -np.log(2)))
         self.assertTrue(np.abs(energy[0] - self.Eexact) < 1E-4)
             
 if __name__ == "__main__":
@@ -295,8 +322,8 @@ if __name__ == "__main__":
     suite2 = unittest.TestLoader().loadTestsFromTestCase(TestMPSTrunc)
     suite3 = unittest.TestLoader().loadTestsFromTestCase(TestInfiniteXXZ)
     suite4 = unittest.TestLoader().loadTestsFromTestCase(TestITEBD)            
-    # unittest.TextTestRunner(verbosity=2).run(suite1)
-    # unittest.TextTestRunner(verbosity=2).run(suite2)
-    # unittest.TextTestRunner(verbosity=2).run(suite3)
-    unittest.TextTestRunner(verbosity=2).run(suite4)             
+    unittest.TextTestRunner(verbosity=2).run(suite1)
+    unittest.TextTestRunner(verbosity=2).run(suite2)
+    unittest.TextTestRunner(verbosity=2).run(suite3)
+    #unittest.TextTestRunner(verbosity=2).run(suite4)             
 
