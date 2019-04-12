@@ -15,7 +15,6 @@ import lib.mpslib.mpsfunctions as mf
 import lib.mpslib.SimContainer as SC
 import lib.mpslib.MPO as MPO
 import lib.mpslib.mps as mpslib
-import lib.mpslib.Hamiltonians as H
 import lib.mpslib.TensorNetwork as TN
 from lib.mpslib.Tensor import Tensor
 import lib.utils.binaryoperations as bb
@@ -142,7 +141,6 @@ class TestTimeEvolution(unittest.TestCase):
                 if splus==basis2[m]:
                     vnew[m]=v[n]
 
-
         def matvec(mat,vec):
             return mat.dot(vec)
         mv=fct.partial(matvec,*[Hsparse2])
@@ -171,7 +169,7 @@ class TestTimeEvolution(unittest.TestCase):
         mps.position(0)
 
         self.timeevmpo=MPO.FiniteXXZ(Jz,Jxy,Bz*np.ones(self.N))                
-        self.dmrg=SC.FiniteDMRGengine(mps,self.mpo,'testXXZ')
+        self.dmrg=SC.FiniteDMRGEngine(mps,self.mpo,'testXXZ')
         self.eps=1E-5
 
     def test_expvals(self):
