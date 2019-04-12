@@ -753,42 +753,6 @@ class MPSBase(TensorNetwork):
         return np.array(c)
         
     
-    # def measure_1site_correlator(self, op1, op2, n1, n2_max):
-    #     """
-    #     Correlator of <op1,op2> between sites n1 and n2 (included)
-    #     Parameters
-    #     --------------------------
-    #     op1, op2:    Tensor
-    #                  local operators to be measure
-    #     n1, n2:      int
-    #                  sites where the correlator should be measured
-    #     Returns:
-    #     --------------------------             
-    #     an np.ndarray of measurements
-    #     """
-    #     N = self.num_sites
-    #     if n1 < 0 or n1 >= N:
-    #         raise ValueError(
-    #             "Site n1 out of range: {} not between 0 and {}.".format(n1, N))
-    #     ls = self.get_envs_left([n1])
-    #     rs = self.get_envs_right([n % N for n in range(n1 + 1, n2_max + 1)])
-
-    #     A = self.get_tensor(n1)
-    #     l = ncon.ncon([ls[n1], A, op1, A.conj()], [(0, 1), (0, -1, 2), (3, 2),
-    #                                                (1, -2, 3)])
-    #     c = []
-    #     for n in range(n1 + 1, n2_max + 1):
-    #         r = rs[n % N]
-    #         A = self.get_tensor(n % N)
-    #         res = ncon.ncon([l, A, op2, A.conj(), r],
-    #                         [[1, 4], [1, 5, 2], [3, 2], [4, 6, 3], [5, 6]])
-    #         c.append(res)
-
-    #         if n < n2_max:
-    #             l = self.transfer_op(n % N, 'left', l)
-
-    #     return np.array(c)
-
     
     def measure_1site_ops(self, ops, sites):
         """
