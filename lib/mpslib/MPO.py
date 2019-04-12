@@ -203,6 +203,16 @@ class InfiniteMPO(MPOBase):
             raise ValueError('InfiniteMPO: left and right MPO ancicllary dimension differ')
         
     def get_boundary_vector(self, side):
+        """
+        return a one dimensional array which can be contracted with 
+        the mpo to yield a boundary mpo
+        Parameters:
+        ----------------------
+        side:  str in ('l','left','r','right)
+               the side for which the boundary vector is required
+        
+        """
+        
         if side.lower() in ('l', 'left'):
             v = np.zeros(self.D[0], dtype=self.dtype)
             v[-1] = 1.0
@@ -214,6 +224,16 @@ class InfiniteMPO(MPOBase):
             return v.view(type(self._tensors[-1]))
 
     def get_boundary_mpo(self, side):
+        """
+        return a boundary mpo
+        Parameters:
+        -------------------
+        side:  str in ('l','left','r','right)
+               the side for which the boundary vector is required
+        
+        """
+        
+        
         if side.lower() in ('l', 'left'):
             out = copy.deepcopy(self._tensors[-1][-1, :, :, :])
             out[0, :, :] *= 0.0
