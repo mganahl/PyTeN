@@ -321,91 +321,6 @@ class DMRGEngineBase(MPSSimulationBase):
                            Ndiag=10,
                            landelta=1E-5,
                            landeltaEta=1E-5,
-                           verbose=0):
-        
-        if sweep_dir in (-1,'r','right'):
-            if self.mps.pos != site:
-                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0} != mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
-        if sweep_dir in (1,'l','left'):
-            if self.mps.pos!=(site+1):
-                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0}, mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
-            
-        if sweep_dir in (-1,'r','right'):
-            #NOTE (martin) don't use get_tensor here
-            initial = ncon.ncon([self.mps.mat,self.mps[site]],[[-1,1],[1,-2,-3]])
-        elif sweep_dir in (1,'l','left'):
-            #NOTE (martin) don't use get_tensor here
-            initial = ncon.ncon([self.mps[site],self.mps.mat],[[-1,-2,1],[1,-3]])
-            
-        if self.walltime_log:
-            t1=time.time()
-        nit, vecs, alpha, beta = LZ.do_lanczos(
-            L=self.left_envs[site],
-            mpo=self.mpo[site],
-            R=self.right_envs[site],
-            initial_state=initial,
-            ncv=ncv,
-            delta=landelta
-        )
-        if self.walltime_log:
-            self.walltime_log(lan=[(time.time()-t1)/float(nit)]*int(nit),QR=[],add_layer=[],num_lan=[int(nit)])            
-
-        e, opt = LZ.tridiag(vecs, alpha, beta)
-        Dnew = opt.shape[2]
-        if verbose > 0:
-            stdout.write(
-                "\rSS-DMRG it=%i/%i, site=%i/%i: optimized E=%.16f+%.16f at D=%i"
-                % (self._it, self.Nsweeps, site, len(self.mps),
-                   np.real(e), np.imag(e), Dnew))
-            stdout.flush()
-        if verbose > 1:
-            print("")
-        if self.walltime_log:
-            t1=time.time()
-
-        if sweep_dir in (-1,'r','right'):
-            A, mat,Z = mf.prepare_tensor_QR(opt, direction='l')
-            A /= Z            
-        elif sweep_dir in (1,'l','left'):
-            mat, B, Z = mf.prepare_tensor_QR(opt, direction='r')
-            B /= Z            
-        if self.walltime_log:        
-            self.walltime_log(lan=[],QR=[time.time()-t1],add_layer=[],num_lan=[])                        
-
-        
-        self.mps.mat = mat
-        if sweep_dir in (-1,'r','right'):
-            self.mps._tensors[site] = A
-            self.mps.pos+=1
-            self.left_envs[site+1]=self.add_layer(
-                B=self.left_envs[site],
-                mps_tensor=self.mps[site],
-                mpo_tensor=self.mpo[site],
-                conj_mps_tensor=self.mps[site],
-                direction=1,
-                walltime_log=self.walltime_log
-            )
-            
-        elif sweep_dir in (1,'l','left'):            
-            self.mps._tensors[site] = B
-            self.mps.pos=site
-            self.right_envs[site-1]=self.add_layer(
-                B=self.right_envs[site],
-                mps_tensor=self.mps[site],
-                mpo_tensor=self.mpo[site],
-                conj_mps_tensor=self.mps[site],
-                direction=-1,
-                walltime_log=self.walltime_log
-            )
-        return e
-    
-    def _optimize_1s_local(self,
-                           site,
-                           sweep_dir,
-                           ncv=40,
-                           Ndiag=10,
-                           landelta=1E-5,
-                           landeltaEta=1E-5,
                            verbose=0,
                            solver='AR'):
         """
@@ -445,7 +360,6 @@ class DMRGEngineBase(MPSSimulationBase):
                 delta=landelta,
                 deltaEta=landeltaEta)
             energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
-            
         elif solver.lower() == 'ar':
             energies, opt_result = mf.eigsh(
                 self.left_envs[site],
@@ -511,9 +425,6 @@ class DMRGEngineBase(MPSSimulationBase):
                 walltime_log=self.walltime_log
             )
         return e
-
-
-                       
 
         
     def run_one_site(self,
@@ -620,7 +531,8 @@ class DMRGEngineBase(MPSSimulationBase):
                      solver='AR'):
         """
         do a two-site finite DMRG optimzation for an open system
-        Paramerters:
+        Parameters:
+        ----------------------
         Nsweeps:         int
                          number of left-right  sweeps
         thresh:          float
@@ -645,7 +557,9 @@ class DMRGEngineBase(MPSSimulationBase):
                          iteration is terminated
         solver:          str
                          'AR' or 'LAN'
-
+        Returns:
+        ------------------------------
+        float:        the energy upon leaving the simulation
         """
         self.position(0, walltime_log=self.walltime_log)
         self.Nsweeps = Nsweeps
@@ -1236,8 +1150,9 @@ class FiniteTEBDEngine(TEBDBase):
         for step in range(numsteps):
             #odd step updates:
             self.apply_odd_gates(tau=dt, D=D, tr_thresh=tr_thresh)
+            self.t0 += np.abs(dt)            
             if verbose >= 1:
-                self.t0 += np.abs(dt)
+
                 stdout.write(
                     "\rTEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"
                     % (self.t0, self.tw, np.max(self.mps.D), D, tr_thresh,
@@ -1289,8 +1204,10 @@ class InfiniteTEBDEngine(TEBDBase):
     --------------------------------------------------------
     mps:           InfiniteMPS object
                    the initial state 
-    mpo:           InfiniteMPO object, or a method f(n,m,tau) which returns two-site gates at sites (n,m)
-                   The generator of time evolution
+    mpo:           InfiniteMPO object, or a method `f(m, n, tau)` which returns two-site gates at sites (m, n)
+                   the gates returned by `f` have to be tensors of rank 4, with the index convention
+                   (d_m,d_n,d_m,d_n), with d_m, d_n the local hilbert space dimension at site m and n, respectively
+
     name:          str
                    the filename under which cp results will be stored (not yet implemented)
     """
@@ -1374,8 +1291,8 @@ class InfiniteTEBDEngine(TEBDBase):
             self.apply_even_gates(tau=dt, D=D, tr_thresh=tr_thresh)
             self.mps.roll(1)
             self.mpo.roll(1)
+            self.t0 += np.abs(dt)            
             if verbose >= 1:
-                self.t0 += np.abs(dt)
                 stdout.write(
                     "\rTEBD engine: t=%4.4f truncated weight=%.16f at D/Dmax=%i/%i, truncation threshold=%1.16f, |dt|=%1.5f"
                     % (self.t0, self.tw, np.max(self.mps.D), D, tr_thresh,
