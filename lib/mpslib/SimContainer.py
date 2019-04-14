@@ -1749,7 +1749,7 @@ class TDVPEngine(MPSSimulationBase):
 
             self.it = self.it + 1
         self.mps.position(0)
-        self.mps._norm = self.mps.dtype(1)
+        self.mps._norm = self.mps.dtype.type(1)
         return self.t0
 
     
@@ -1862,7 +1862,7 @@ class TDVPEngine(MPSSimulationBase):
                 self.mps.mat = mat
 
 
-                temp1 = ncon.ncon([self.mps.get_tensor(n), self.mps[n + 1]],[[-1, 1, -2], [1, -4, -3]])
+                temp1 = ncon.ncon([self.mps.get_tensor(n), self.mps.get_tensor(n + 1)],[[-1, 1, -2], [1, -4, -3]])
                 twositemps, old_mps_shape = temp1.merge([[0], [3], [1,2]])
                 temp2 = ncon.ncon([self.mpo[n], self.mpo[n + 1]], [[-1, 1, -3, -5], [1, -2, -4, -6]])
                 twositempo, old_mpo_shape = temp2.merge([[0], [1], [2, 3], [4, 5]])                
@@ -1905,11 +1905,15 @@ class TDVPEngine(MPSSimulationBase):
 
             self.it = self.it + 1
         self.mps.position(0)
-        self.mps._norm = self.mps.dtype(1)
+        self.mps._norm = self.mps.dtype.type(1)
         return self.tw, self.t0
 
-
-            
+class FiniteTDVPEngine(TDVPEngine):
+    def __init__(self, mps, mpo, name= 'TDVP'):
+        lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
+        rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]],
+                                dtype=mps.dtype)
+        super().__init__(mps, mpo, lb, rb, name=name)
                        
 # class VUMPSengine(InfiniteDMRGEngine):
 #     """
