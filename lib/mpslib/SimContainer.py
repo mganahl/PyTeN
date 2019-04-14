@@ -1127,8 +1127,9 @@ class FiniteTEBDEngine(TEBDBase):
         Parameters:
         -------------------------------
         dt:        float or complex
-                   step size (scalar); use dt (float) < 0 for imaginary time evolution, 
-                   and (imag(dt) < 0, real(tau) = 0) for real time evolution
+                   step size
+                   lorentzian time evolution: imag(dt) < 0, real(dt) == 0
+                   euclidean  time evolution: imag(dt) == 0, real(dt) < 0
         numsteps:  int
                    total number of evolution steps
         D:         int
@@ -1260,8 +1261,9 @@ class InfiniteTEBDEngine(TEBDBase):
         Parameters:
         -------------------------------
         dt:             float or complex
-                        step size (scalar); use dt (float) < 0 for imaginary time evolution, 
-                        and (imag(dt) < 0, real(tau) = 0) for real time evolution
+                        step size
+                        lorentzian time evolution: imag(dt) < 0, real(dt) == 0
+                        euclidean  time evolution: imag(dt) == 0, real(dt) < 0
         numsteps:       int
                         total number of evolution steps
         D:              int
@@ -1650,6 +1652,8 @@ class TDVPEngine(MPSSimulationBase):
         ----------------------------------------
         dt:         complex or float:
                     step size
+                    lorentzian time evolution: imag(dt) < 0, real(dt) == 0
+                    euclidean  time evolution: imag(dt) == 0, real(dt) < 0
         numsteps:   int
                     number of steps to be performed
         krylov_dim: int
@@ -1663,7 +1667,7 @@ class TDVPEngine(MPSSimulationBase):
 
         Returns:
         -------------------------------------
-        the simulated time
+        float or complex: the simulated time
 
         """
 
@@ -1777,8 +1781,8 @@ class TDVPEngine(MPSSimulationBase):
 
         Returns:
         ------------------------------------------------
+        (tw, time):   (float, float/complex)
         a tuple containing the truncated weight and the simulated time
-
         """
 
         converged = False
@@ -1908,13 +1912,19 @@ class TDVPEngine(MPSSimulationBase):
         self.mps._norm = self.mps.dtype.type(1)
         return self.tw, self.t0
 
+    
 class FiniteTDVPEngine(TDVPEngine):
     def __init__(self, mps, mpo, name= 'TDVP'):
         lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
         rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]],
                                 dtype=mps.dtype)
         super().__init__(mps, mpo, lb, rb, name=name)
-                       
+
+
+
+
+
+        
 # class VUMPSengine(InfiniteDMRGEngine):
 #     """
 #     VUMPSengine
