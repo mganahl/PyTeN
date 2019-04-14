@@ -132,7 +132,7 @@ class LanczosTimeEvolution(LanczosEngine, object):
                          deltaEta=1E-10)
 
 
-    def doStep(self, state, dt, zeros=None,verbose=False):
+    def do_step(self, state, dt, zeros=None, verbose=False):
         """
         Lanzcos time evolution engine
         LanczosTimeEvolution(matvec,vecvec,zeros_initializer,ncv,delta)
@@ -143,13 +143,13 @@ class LanczosTimeEvolution(LanczosEngine, object):
         is encountered
         """
         self.dtype = type(dt)
-        self.simulate(state.astype(self.dtype), zeros=zeros,verbose=True, reortho=True)
+        self.simulate(state.astype(self.dtype), zeros=zeros, verbose=True, reortho=True)
         #take the expm of self.Heff
         U = sp.linalg.expm(dt * self.Heff)
         if zeros is None:
             result = state.zeros(state.shape, dtype=self.dtype)
         else:
-            result=zeros
+            result = zeros
         for n in range(min(self.ncv, self.Heff.shape[0])):
             result += self.vecs[n] * U[n, 0]
         return result
