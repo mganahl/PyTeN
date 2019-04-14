@@ -121,8 +121,10 @@ class MPSSimulationBase(Container):
             raise IndexError("MPSSimulation.position(n): n>len(mps)")
         if n < 0:
             raise IndexError("MPSSimulation.position(n): n<0")
-
-        if n >= self.mps.pos:
+        if n == self.mps.pos:
+            return
+        
+        elif n > self.mps.pos:
             pos = self.mps.pos
             self.mps.position(n, walltime_log=walltime_log)
             for m in range(pos, n):
@@ -130,20 +132,21 @@ class MPSSimulationBase(Container):
                     self.left_envs[m], self.mps[m], self.mpo[m], self.mps[m], 1,
                     walltime_log=self.walltime_log)
 
-        if n < self.mps.pos:
+        elif n < self.mps.pos:
             pos = self.mps.pos
             self.mps.position(n, walltime_log=walltime_log)
-            for m in reversed(range(n + 1, pos + 1)):
+            for m in reversed(range(n , pos )):            
+                #for m in reversed(range(n + 1, pos + 1)):
                 self.right_envs[m - 1] = self.add_layer(
                     self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1,
                     walltime_log=self.walltime_log)
 
-        for m in range(n + 1, len(self.mps)):
+        for m in range(n + 1, len(self.mps)+1):
             try:
                 del self.left_envs[m]
             except KeyError:
                 pass
-        for m in range(n - 1):
+        for m in range(-1,n - 1):
             try:
                 del self.right_envs[m]
             except KeyError:
@@ -165,7 +168,7 @@ class DMRGEngineBase(MPSSimulationBase):
 
     def __init__(self, mps, mpo, lb, rb, name='DMRG'):
         """
-        initialize an MPS object
+        initialize a DMRG simulation object
         mps:      MPS object
                   the initial mps
         mpo:      MPO object
@@ -1347,9 +1350,10 @@ class InfiniteTEBDEngine(TEBDBase):
 
 
 
-
-class Optim(MPSSimulationBase):
-
+class BruteForceOptimizer(MPSSimulationBase):
+    """
+    A brute force optimization of an mps
+    """
     def __init__(self, mps, mpo, name='optim'):
         """
         initialize an MPS object
@@ -1442,42 +1446,6 @@ class Optim(MPSSimulationBase):
                 self.right_norm_envs[m - 1] = ncon.ncon([self.right_norm_envs[m], self.mps[m], self.mps[m].conj()],
                                                         [[1, 3], [-1, 1, 2],[-2, 3, 2]])
             
-
-    # def position(self, site):
-    #     if self.mps.pos < site:
-    #         pos = self.mps.pos
-    #         self.mps.position(site)
-    #         for n in range(pos, site):
-    #             self.left_envs[n + 1] = self.add_layer(
-    #                 B=self.left_envs[n],
-    #                 mps=self.mps[n],
-    #                 mpo=self.mpo[n],
-    #                 conjmps=self.mps[n],
-    #                 direction=1)
-
-    #             self.left_norm_envs[n + 1] = ncon.ncon([self.left_norm_envs[n], self.mps[n], self.mps[n].conj()],
-    #                                                    [[1, 3], [1, -1, 2],[3, -2, 2]])
-
-
-    #     if self.mps.pos > site:
-    #         pos = self.mps.pos            
-    #         self.mps.position(site)
-    #         for m in reversed(range(site + 1, pos + 1)):
-    #             self.right_envs[m - 1] = self.add_layer(
-    #                 self.right_envs[m], self.mps[m], self.mpo[m], self.mps[m], -1)
-    #             self.right_norm_envs[m - 1] = ncon.ncon([self.right_norm_envs[m], self.mps[m], self.mps[m].conj()],
-    #                                                     [[1, 3], [-1, 1, 2],[-2, 3, 2]])
-            
-    #         # for n in reversed(range(site, self.mps.pos)):
-    #         #     self.right_envs[n] = self.add_layer(
-    #         #         B=self.right_envs[n + 1],
-    #         #         mps=self.mps[n + 1],
-    #         #         mpo=self.mpo[n + 1],
-    #         #         conjmps=self.mps[n + 1],
-    #         #         direction=-1)
-    #         #     self.right_norm_envs[n] = ncon.ncon([self.right_norm_envs[n + 1], self.mps[n + 1], self.mps[n + 1].conj()],
-    #         #                                             [[1, 3], [-1, 1, 2],[-2, 3, 2]])
-
             
     def get_gradient(self,site):
         self.position(site)
@@ -1505,57 +1473,50 @@ class Optim(MPSSimulationBase):
 
         return A1/Z-A2*energy/Z**2, energy, Z
     
-    # def get_gradient(self,site):
-    #     self.position(site)
-    #     A1 = ncon.ncon([self.left_envs[self.pos], self.mps[self.pos],
-    #                     self.mpo[self.pos], self.right_envs[self.pos]],
-    #                    [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
-
-    #     A2 = ncon.ncon([self.left_norm_envs[self.pos],
-    #                     self.mps[self.pos],
-    #                     self.right_norm_envs[self.pos]],
-    #                    [[1, -1], [1, 2, -3], [2, -2]])
-
-    #     temp=self.add_layer(B=self.left_envs[self.pos],
-    #                    mps=self.mps[self.pos],
-    #                    mpo=self.mpo[self.pos],
-    #                    conjmps=self.mps[self.pos],
-    #                    direction=1)
-    #     energy = ncon.ncon([temp, self.right_envs[self.pos]],[[1, 2, 3],[1, 2, 3]])
-
-    #     Z = ncon.ncon([self.left_norm_envs[self.pos],
-    #                    self.mps[self.pos],
-    #                    self.mps[self.pos].conj(),
-    #                    self.right_norm_envs[self.pos]],
-    #                   [[1, 2], [1, 4, 3], [2, 5, 3], [4, 5]])
-    #     return A1/Z-A2*energy/Z**2, energy, Z
-
 
     def optimize(self, Nsweeps=4, alpha=1E-6):
+        """
+        optimize the mps by sweeping back and forth
 
+        Parameters:
+
+        Nsweeps:   int 
+                   number of sweeps 
+        alpha:     float 
+                   step size ('learning rate')
+        """
         for sweep in range(Nsweeps):
             for n in range(len(self.mps)):
                 g, e, Z = self.get_gradient(n)
                 self.mps[n] -= (alpha*g)
                 self.mps.mat = self.mps[n].eye(0, dtype=self.mps.dtype)
-                #self.mps[n] /= np.sqrt(Z)
                 stdout.write(
                     "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, e/Z, Z))
                 stdout.flush()
                 
-            # for n in reversed(range(1, len(self.mps))):
-            #     g, e, Z = self.get_gradient(n)
-            #     self.mps[n] -= (alpha*g)
-            #     self.mps.mat = self.mps[n].eye(0, dtype=self.mps.dtype)                
-            #     #self.mps[n] /= np.sqrt(Z)
-            #     stdout.write(
-            #         "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, e/Z, Z))
-            #     stdout.flush()
+            for n in reversed(range(1, len(self.mps))):
+                g, e, Z = self.get_gradient(n)
+                self.mps[n] -= (alpha*g)
+                self.mps.mat = self.mps[n].eye(0, dtype=self.mps.dtype)                
+                stdout.write(
+                    "\roptim sweep %i at site %i: E = %.16f, Z = %.16f" %( sweep, n, e/Z, Z))
+                stdout.flush()
                 
         
-    def optimize_all(self, Nsweeps=4, alpha=1E-6):
+    def optimize_all(self, Nit=4, alpha=1E-6):
+        """
+        optimize all  mps tensors at once 
 
-        for sweep in range(Nsweeps):
+        Parameters:
+        ====================================
+        Nit:      int 
+                   number of iterations
+
+        alpha:     float 
+                   step size ('learning rate')
+        """
+
+        for sweep in range(Nit):
             data = [self.get_gradient(site) for site in range(len(self.mps))]
             grads= [d[0] for d in data]
             energies= np.array([d[1] for d in data])
@@ -1568,642 +1529,1236 @@ class Optim(MPSSimulationBase):
             stdout.flush()
 
                 
-        
 
-
-
-
-
-
-                       
-class VUMPSengine(InfiniteDMRGEngine):
-    """
-    VUMPSengine
-    container object for mps ground-state optimization  using the VUMPS algorithm and time evolution using the TDVP 
-    """
-
-    def __init__(self, mps, mpo, name='VUMPS'):
-        raise NotImplementedError()
+class TDVPEngine(MPSSimulationBase):
+    
+    def __init__(self, mps, mpo, lb, rb, name='TDVP'):
         """
-        initialize a VUMPS simulation object
-
-        Parameters:
-        ---------------------------------------
-        mps:            list of a single np.ndarray of shape(D,D,d), or an MPS object of length 1
-                        the initial state
-        mpo:            MPO object
-                        Hamiltonian in MPO format
-        name:           str
-                        the name of the simulation
+        initialize a TDVP simulation
+        mps:      MPS object
+                  the initial mps
+        mpo:      MPO object
+                  Hamiltonian in MPO format
+        name:     str
+                  the name of the simulation
+        lb,rb:    None or np.ndarray
+                  left and right environment boundary conditions
+                  if None, obc are assumed
+                  user can provide lb and rb to fix the boundary condition of the mps
+                  shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
-        if len(mps) > 1:
-            raise ValueError(
-                "VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1"
-            )
-        if len(mpo) > 1:
-            raise ValueError(
-                "VUMPSengine: got an mpo of len(mps)>1; VUMPSengine can only handle len(mpo)=1"
-            )
-        super().__init__(
-            mps,
-            mpo,
-            name='VUMPS',
-            precision=1E-12,
-            precision_canonize=1E-12,
-            nmax=1000,
-            nmax_canonize=1000,
-            ncv=40,
-            numeig=1,
-            pinv=1E-20)
+        super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
+        self.mps.position(0, walltime_log=self.walltime_log)
+        self.compute_right_envs()
 
-        self._it = 1
-        #initialize the mpo again
-        mpol = np.zeros((1, B2, d1, d2), dtype=self.dtype)
-        mpor = np.zeros((B1, 1, d1, d2), dtype=self.dtype)
-        mpol[0, :, :, :] = mpo[0][-1, :, :, :]
-        mpol[0, 0, :, :] /= 2.0
-        mpor[:, 0, :, :] = mpo[0][:, 0, :, :]
-        mpor[-1, 0, :, :] /= 2.0
-        self._mpo = H.MPO.fromlist([mpol, mpo[0], mpor])
-        self._t0 = self.dtype(0.0)
-        self.mps.regauge(
-            'symmetric', tol=regaugetol, ncv=ncv, pinv=pinv, numeig=numeig)
-
-        self._A = np.copy(self.mps[0])
-        self._B = ncon.ncon(
-            [np.diag(1.0 / np.diag(self.mps._mat)), self._A, self.mps._mat],
-            [[-1, 1], [1, 2, -3], [2, -2]])
-        self._r = np.eye(self._B.shape[0], dtype=self.dtype)
-        self._l = np.eye(self._A.shape[0], dtype=self.dtype)
-        #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self.mps])
-
-    def reset(self):
+    def compute_left_envs(self):
         """
-        resets internal counters and density matrices of the VUMPS engine to self._it=1, self._t0=0.0
-        and self._l=11, self._r=11
+        compute all left environment blocks
+        up to self.mps.position; all blocks for site > self.mps.position are set to None
         """
-        self._it = 1
-        self._t0 = 0.0
-        self._r = np.eye(self._B.shape[0], dtype=self.dtype)
-        self._l = np.eye(self._A.shape[0], dtype=self.dtype)
+        self.left_envs = {0: self.lb}
+        for n in range(self.mps.pos):
+            self.left_envs[n + 1] = self.add_layer(
+                B=self.left_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=1,
+                walltime_log=self.walltime_log)
 
-    def _prepareStep(self,
-                     tol=1E-12,
-                     ncv=30,
-                     numeig=1,
-                     lgmrestol=1E-10,
-                     Nmaxlgmres=40):
-        [etar, vr, numeig] = mf.TMeigs(
-            self._A,
-            direction=-1,
-            numeig=numeig,
-            init=self._r,
-            nmax=10000,
-            tolerance=tol,
-            ncv=ncv,
-            which='LR')
-        [etal, vl, numeig] = mf.TMeigs(
-            self._B,
-            direction=1,
-            numeig=numeig,
-            init=self._l,
-            nmax=10000,
-            tolerance=tol,
-            ncv=ncv,
-            which='LR')
-        l = np.reshape(vl, (self.mps.D[0], self.mps.D[0]))
-        r = np.reshape(vr, (self.mps.D[-1], self.mps.D[-1]))
-        l = l / np.trace(l)
-        r = r / np.trace(r)
-
-        self._l = (l + herm(l)) / 2.0
-        self._r = (r + herm(r)) / 2.0
-
-        leftn = np.linalg.norm(
-            np.tensordot(self._A, np.conj(self._A), ([0, 2], [0, 2])) -
-            np.eye(self.mps.D[0], dtype=self.dtype))
-        rightn = np.linalg.norm(
-            np.tensordot(self._B, np.conj(self._B), ([1, 2], [1, 2])) -
-            np.eye(self.mps.D[-1], dtype=self.dtype))
-
-        self._lb = mf.initializeLayer(self._A,
-                                      np.eye(self.mps.D[0], dtype=self.dtype),
-                                      self._A, self._mpo[0], 1)
-
-        ihl = mf.addLayer(self._lb, self._A, self._mpo[2], self._A, 1)[:, :, 0]
-        Elocleft = np.tensordot(ihl, self._r, ([0, 1], [0, 1]))
-        self._rb = mf.initializeLayer(self._B,
-                                      np.eye(self.mps.D[-1], dtype=self.dtype),
-                                      self._B, self._mpo[2], -1)
-
-        ihr = mf.addLayer(self._rb, self._B, self._mpo[0], self._B,
-                          -1)[:, :, -1]
-        Elocright = np.tensordot(ihr, self._l, ([0, 1], [0, 1]))
-
-        ihlprojected = (ihl - np.tensordot(ihl, l, ([0, 1], [0, 1])) * np.eye(
-            self.mps.D[0], dtype=self.dtype))
-        ihrprojected = (ihr - np.tensordot(r, ihr, ([0, 1], [0, 1])) * np.eye(
-            self.mps.D[-1], dtype=self.dtype))
-
-        self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
-                                           maxiteration=Nmaxlgmres,direction=1)
-        self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self.mps.D[-1]).astype(self.dtype),self._r,ihrprojected,x0=np.reshape(self._kright,self.mps.D[-1]*self.mps.D[-1]),tolerance=lgmrestol,\
-                                            maxiteration=Nmaxlgmres,direction=-1)
-
-        self._lb[:, :, 0] += np.copy(self._kleft)
-        self._rb[:, :, -1] += np.copy(self._kright)
-        return Elocleft, Elocright, leftn, rightn
-
-    def _doOptimStep(self,
-                     svd=False,
-                     artol=1E-5,
-                     arnumvecs=1,
-                     arncv=20,
-                     Ndiag=10,
-                     nmaxlan=500,
-                     landelta=1E-8,
-                     solver='AR'):
-        AC_ = mf.HAproductSingleSiteMPS(self._lb, self._mpo[1], self._rb,
-                                        self.mps.tensor(0, clear=False))
-        if self.mps._position == 1:
-            C_ = mf.HAproductZeroSiteMat(
-                self._lb,
-                self._mpo[1],
-                self._A,
-                self._rb,
-                position='right',
-                mat=self.mps._mat)
-            self._gradnorm = np.linalg.norm(
-                AC_ - ncon.ncon([self._A, C_], [[-1, 1, -3], [1, -2]]))
-        if self.mps._position == 0:
-            C_ = mf.HAproductZeroSiteMat(
-                self._lb,
-                self._mpo[1],
-                self._B,
-                self._rb,
-                position='left',
-                mat=self.mps._mat)
-            self._gradnorm = np.linalg.norm(
-                AC_ - ncon.ncon([C_, self._B], [[-1, 1], [1, -2, -3]]))
-
-        if solver.upper() == 'AR':
-            e1, mps = mf.eigsh(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                artol,
-                numvecs=arnumvecs,
-                numcv=arncv,
-                numvecs_returned=arnumvecs)
-            e2, mat = mf.eigshbond(
-                self._lb,
-                self._mpo[1],
-                self._A,
-                self._rb,
-                self.mps._mat,
-                position='right',
-                tolerance=artol,
-                numvecs=arnumvecs,
-                numcv=arncv)
-            if arnumvecs > 1:
-                self._gap = e1[1] - e1[0]
-                mps = mps[0]
-            mat /= np.linalg.norm(mat)
-
-        elif solver.upper() == 'LAN':
-            e1, mps = mf.lanczos(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                artol,
-                Ndiag,
-                nmaxlan,
-                arnumvecs,
-                landelta,
-                deltaEta=artol)
-            e2, mat = mf.lanczosbond(
-                self._lb,
-                self._mpo[1],
-                self._A,
-                self._rb,
-                self.mps._mat,
-                'right',
-                Ndiag,
-                nmaxlan,
-                arnumvecs,
-                delta=landelta,
-                deltaEta=artol)
-            if arnumvecs > 1:
-                if len(e1) > 1:
-                    self._gap = e1[1] - e1[0]
-                mat = mat[0]
-                mps = mps[0]
-            mat /= np.linalg.norm(mat)
-        else:
-            raise ValueError(
-                "in VUMPSengine: unknown solver type; use 'AR' or 'LAN'")
-        D1, D2, d = mps.shape
-        if svd:
-            ACC_l = np.reshape(
-                ncon.ncon([mps, herm(mat)], [[-1, 1, -2], [1, -3]]),
-                (D1 * d, D2))
-            CAC_r = np.reshape(
-                ncon.ncon([herm(mat), mps], [[-1, 1], [1, -2, -3]]),
-                (D1, d * D2))
-            Ul, Sl, Vl = mf.svd(ACC_l)
-            Ur, Sr, Vr = mf.svd(CAC_r)
-            self._A = np.transpose(
-                np.reshape(Ul.dot(Vl), (D1, d, D2)), (0, 2, 1))
-            self._B = np.reshape(Ur.dot(Vr), (D1, D2, d))
-
-        else:
-            AC_l = np.reshape(np.transpose(mps, (0, 2, 1)), (D1 * d, D2))
-            AC_r = np.reshape(mps, (D1, d * D2))
-
-            UAC_l, PAC_l = sp.linalg.polar(AC_l, side='right')
-            UAC_r, PAC_r = sp.linalg.polar(AC_r, side='left')
-
-            UC_l, PC_l = sp.linalg.polar(mat, side='right')
-            UC_r, PC_r = sp.linalg.polar(mat, side='left')
-
-            self._A = np.transpose(
-                np.reshape(UAC_l.dot(herm(UC_l)), (D1, d, D2)), (0, 2, 1))
-            self._B = np.reshape(herm(UC_r).dot(UAC_r), (D1, D2, d))
-
-        self.mps[0] = np.copy(self._A)
-        self.mps._mat = np.copy(mat)
-        self.mps._connector = np.linalg.pinv(mat)
-        self.mps._position = 1
-
-    def simulate(self, *args, **kwargs):
+    def compute_right_envs(self):
         """
-        see __simulate__
-
+        compute all right environment blocks
+        up to self.mps.position; all blocks for site < self.mps.position are set to None
         """
+        self.right_envs = {len(self.mps) - 1: self.rb}
+        for n in reversed(range(self.mps.pos, len(self.mps))):
+            self.right_envs[n - 1] = self.add_layer(
+                B=self.right_envs[n],
+                mps=self.mps[n],
+                mpo=self.mpo[n],
+                conjmps=self.mps[n],
+                direction=-1,
+                walltime_log=self.walltime_log)
 
-        warnings.warn('VUMPS.simulate is deprecated; use optimize')
-        self.optimize(*args, **kwargs)
-
-    def optimize(self,Nmax=1000,epsilon=1E-10,regaugetol=1E-10,ncv=30,numeig=1,
-                 lgmrestol=1E-10,Nmaxlgmres=40,\
-                 artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,
-                 landelta=1E-8,solver='AR',cp=None,keep_cp=False):
+    def _evolveTensor(self,n,dt,krylov_dim,rtol,atol):
         """
-        do a VUMPS ground-state optimization
-        currently only nearest neighbor Hamiltonians are supported
-        Parameters
-        ---------------------------------------------
-        Nmax:            int
-                         number of iterations
-        epsilon:         float
-                         desired convergence
-        regaugetol:      float
-                         precision of the left and right dominant eigenvectors of the transfer operator
-        ncv:             int
-                         number of krylov vectors used for diagonalizeing transfer operator
-        numeig:          int 
-                         number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
-                         operator (hyperparameter)
-        lgmrestol:       float
-                         precision of the left and right renormalized environments
-        Nmaxlgmres:      int
-                         maximum iteration steps of lgmres when calculating the left and right renormalized environments
-        artol:           float
-                         precision of arnoldi eigsh eigensolver
-        arnumvecs:       int
-                         number of eigenvectors to be calculated by arnoldi; if > 1, the gap to the second eigenvalue is printed out during simulation
-        arncv:           int
-                         number of krylov vectors used in sparse eigsh of the effective Hamiltonian
-        svd:             bool
-                         if True, do an svd instead of polar decomposition for gauge matching
-        cp:              int>0, or None
-                         if > 0, simulation is checkpointed every "cp" steps
-
-        Returns:
-        -------------------------
-        None
-        """
-        converged = False
-
-        current = 'None'
-        while converged == False:
-            if self._it < 10:
-                artol_ = 1E-6
-            else:
-                artol_ = artol
-            Edens, Elocright, leftn, rightn = self._prepareStep(
-                tol=regaugetol,
-                ncv=ncv,
-                numeig=numeig,
-                lgmrestol=lgmrestol,
-                Nmaxlgmres=Nmaxlgmres)
-
-            self._doOptimStep(
-                svd=svd,
-                artol=artol_,
-                arnumvecs=arnumvecs,
-                arncv=arncv,
-                Ndiag=Ndiag,
-                nmaxlan=nmaxlan,
-                landelta=landelta,
-                solver=solver)
-            if self._it >= Nmax:
-                break
-            if (cp != None) and (cp > 0) and (self._it % cp == 0):
-                if not keep_cp:
-                    if os.path.exists(current + '.pickle'):
-                        os.remove(current + '.pickle')
-                    current = self._filename + '_vumps_cp' + str(self._it)
-                    self.save(current)
-                else:
-                    current = self._filename + '_vumps_cp' + str(self._it)
-                    self.save(current)
-            self._it += 1
-            if arnumvecs == 1:
-                stdout.write(
-                    "\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f"
-                    % (solver, self._it, np.real(Edens), np.max(self.mps.D),
-                       self._gradnorm))
-                stdout.flush()
-            if arnumvecs > 1:
-                stdout.write(
-                    "\rusing %s solver: it %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f"
-                    % (solver, self._it, np.real(Edens), np.real(self._gap),
-                       np.max(self.mps.D), self._gradnorm))
-                stdout.flush()
-            if self._gradnorm < epsilon:
-                converged = True
-        print
-        print()
-
-        if self._it >= Nmax and (converged == False):
-            print(
-                'simulation reached maximum number of steps ({1}) and stopped at precision of {0}'
-                .format(self._gradnorm, Nmax))
-        if converged == True:
-            print('simulation converged to {0} in {1} steps'.format(
-                epsilon, self._it))
-        print
-
-    def _evolveTensor(self, solver, dt, krylov_dim, rtol, atol):
-        """
-        time-evolves the tensor at site n; 
-        The caller has to ensure that self.L[n],self._R[len(self._mps)-1-n] are consistent with the mps
+        time-evolves the tensor at site n;
+        The caller has to ensure that self.left_envs[n] and self.right_envs[n] are consistent with the mps
         n and self._mps._position have to match
 
         Parameters:
         -----------------------------------
-        N:   int
-             the lattice site
-        solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
-                the solver to do the time evolution
-        dt:  float or complex:
-             time step
+        n:           int
+                     the lattice site
+        dt:          float or complex:
+                     time step
         krylov_dim:  int
                      the number of krylov vectors to be used with solver='LAN'
-        rtol,atol:  float
-                    relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
-        
-        """
+        rtol,atol:   float
+                     relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
 
-        if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
-            evTen = mf.evolveTensorsolve_ivp(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                dt,
-                method=solver,
-                rtol=rtol,
-                atol=atol)  #clear=True resets self._mat to identity
-        elif solver == 'LAN':
-            evTen = mf.evolveTensorLan(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                dt,
-                krylov_dimension=krylov_dim
-            )  #clear=True resets self._mat to identity
-        elif solver == 'SEXPMV':
-            evTen = mf.evolveTensorSexpmv(self._lb, self._mpo[1], self._rb,
-                                          self.mps.tensor(0, clear=False), dt)
+        """
+        
+        evTen=mf.evolveTensorLan(self._L[n],self._mpo[n],self._R[len(self._mps)-1-n],self._mps.tensor(n,clear=True),dt,krylov_dimension=krylov_dim) #clear=True resets self._mat to identity
         return evTen
 
-    def _evolveMatrix(self, solver, dt, krylov_dim, rtol, atol):
+    def _evolveMatrix(self,n,dt,krylov_dim,rtol,atol):
         """
-        time-evolves the center-matrix at bond n; 
+        time-evolves the center-matrix at bond n;
         The caller has to ensure that self.L[n+1],self._R[len(self._mps)-1-n] are consistent with the mps
         n and self._mps._position have to match
 
         Parameters:
         -----------------------------------
-        N:   int
-             the lattice site
-        solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
-                the solver to do the time evolution
-        dt:  float or complex:
-             time step
+        n:           int
+                     the lattice site
+        dt:          float or complex:
+                     time step
         krylov_dim:  int
                      the number of krylov vectors to be used with solver='LAN'
-        rtol,atol:  float
-                    relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
-        
+        rtol,atol:   float
+                     relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
         """
 
-        L = mf.addLayer(self._lb, self._A, self._mpo[1], self._A, direction=1)
-        if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
-            evMat = mf.evolveMatrixsolve_ivp(
-                L,
-                self._rb,
-                self.mps._mat,
-                dt,
-                method=solver,
-                rtol=rtol,
-                atol=atol)  #clear=True resets self._mat to identity
-        elif solver == 'LAN':
-            evMat = mf.evolveMatrixLan(
-                L, self._rb, self.mps._mat, dt, krylov_dimension=krylov_dim)
-        elif solver == 'SEXPMV':
-            evMat = mf.evolveMatrixSexpmv(L, self._rb, self.mps._mat, dt)
-        evMat /= np.linalg.norm(evMat)
+        evMat=mf. evolveMatrixLan(self.left_envs[n],
+                                  self.right_envs[n - 1],self._mps._mat,dt,krylov_dimension=krylov_dim)
+        evMat/=np.linalg.norm(evMat)
         return evMat
 
-    def _doEvoStep(self, solver, dt, krylov_dim, rtol, atol):
+    def doTDVP(self,dt,numsteps,krylov_dim=10,cp=None,keep_cp=False,verbose=1,solver='LAN',rtol=1E-6,atol=1e-12):
         """
-        does a single time evolution step 
+        do real or imaginary time evolution for finite systems using single-site TDVP
         Parameters:
-        -----------------------------------
-        solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
-                the solver to do the time evolution
-        dt:  float or complex:
-             time step
-        krylov_dim:  int
-                     the number of krylov vectors to be used with solver='LAN'
-        rtol,atol:  float
-                    relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
-        
+        ----------------------------------------
+        dt:         complex or float:
+                    step size
+        numsteps:   int
+                    number of steps to be performed
+        krylov_dim: int
+                    dimension of the krylov space used to perform evolution with solver='LAN' (see below)
+        cp:         int or None
+                    if int>0, do checkpointing every cp steps
+        keep_cp:    bool
+                    if True, keep all checkpointed files, if False, only keep the last one
+        verbose:    int
+                    verbosity flag
+        solver:     str, can be any of {'LAN','RK45,'Radau','SEXPMV','LSODA','BDF'}
+                    different intergration schemes; note that only RK45, RK23, LAN and SEXPMV work for complex arguments
+        rtol/atol:  float
+                    relative and absolute precision of the RK45 and RK23 solver
+        Returns:
+        the simulated time
+
         """
 
-        if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
-            evTen = mf.evolveTensorsolve_ivp(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                dt,
-                method=solver,
-                rtol=rtol,
-                atol=atol)  #clear=True resets self._mat to identity
-        elif solver == 'LAN':
-            evTen = mf.evolveTensorLan(
-                self._lb,
-                self._mpo[1],
-                self._rb,
-                self.mps.tensor(0, clear=False),
-                dt,
-                krylov_dimension=krylov_dim
-            )  #clear=True resets self._mat to identity
-        elif solver == 'SEXPMV':
-            evTen = mf.evolveTensorSexpmv(self._lb, self._mpo[1], self._rb,
-                                          self.mps.tensor(0, clear=False), dt)
+        if solver not in ['LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23']:
+            raise ValueError("TDVPengine.doTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}".format(solver))
 
-        #evTen=self._evolveTensor(solver,dt,krylov_dim,rtol,atol)
-        L = mf.addLayer(self._lb, self._A, self._mpo[1], self._A, direction=1)
-        if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
-            evMat = mf.evolveMatrixsolve_ivp(
-                L,
-                self._rb,
-                self.mps._mat,
-                dt,
-                method=solver,
-                rtol=rtol,
-                atol=atol)  #clear=True resets self._mat to identity
-        elif solver == 'LAN':
-            evMat = mf.evolveMatrixLan(
-                L, self._rb, self.mps._mat, dt, krylov_dimension=krylov_dim)
-        elif solver == 'SEXPMV':
-            evMat = mf.evolveMatrixSexpmv(L, self._rb, self.mps._mat, dt)
-        evMat /= np.linalg.norm(evMat)
+        if solver in ['Radau','RK45','BDF','LSODA','RK23']:
+            if StrictVersion(sp.__version__)<StrictVersion('1.1.0'):
+                warnings.warn('{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'.format(solver),stacklevel=2)
+                solver='LAN'
 
-        D1, D2, d = evTen.shape
-        #evMat=self._evolveMatrix(solver,dt,krylov_dim,rtol,atol)
-        ACC_l = np.reshape(
-            ncon.ncon([evTen, herm(evMat)], [[-1, 1, -2], [1, -3]]),
-            (D1 * d, D2))
-        CAC_r = np.reshape(
-            ncon.ncon([herm(evMat), evTen], [[-1, 1], [1, -2, -3]]),
-            (D1, d * D2))
-        Ul, Sl, Vl = mf.svd(ACC_l)
-        Ur, Sr, Vr = mf.svd(CAC_r)
-        self._A = np.transpose(np.reshape(Ul.dot(Vl), (D1, d, D2)), (0, 2, 1))
-        self._B = np.reshape(Ur.dot(Vr), (D1, D2, d))
-        self.mps[0] = np.copy(self._B)
-        self.mps._mat = np.copy(evMat)
-        self.mps._connector = np.linalg.pinv(evMat)
-        self.mps._position = 0
+        self._solver=solver
+        converged=False
+        current='None'
+        self._mps.position(0)
+        for step in range(numsteps):
+            for n in range(len(self._mps)):
+                if n==len(self._mps)-1:
+                    dt_=dt
+                else:
+                    dt_=dt/2.0
+                self._mps.position(n+1)
+                #evolve tensor forward
+                evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
+                tensor,mat,Z=mf.prepare_tensor_QR(evTen,1)
+                self._mps[n]=tensor
+                self._L[n+1]=mf.addLayer(self._L[n],self._mps[n],self._mpo[n],self._mps[n],1)
+                self._mps._mat=mat
+                #evolve matrix backward
+                if n<(len(self._mps)-1):
+                    evMat=self._evolveMatrix(n,solver=solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
+                    self._mps._mat=evMat
+                else:
+                    self._mps._mat=mat
 
-    def doTDVP(self,
-               dt,
-               numsteps,
-               solver='LAN',
-               krylov_dim=10,
-               rtol=1E-6,
-               atol=1e-12,
-               regaugetol=1E-10,
-               ncv=40,
-               numeig=1,
-               lgmrestol=1E-10,
-               Nmaxlgmres=40,
-               cp=None,
-               keep_cp=False,
-               verbose=1):
-        """
-        !!!!!!!!!!!!!!!!!!!!!!         This has not yet been tested    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        to real or imaginary time evolution for an infinite homogeneous systems using the TDVP
-        currently only nearest neighbor Hamiltonians are supported
-        Parameters:
-        -------------------------------
-        dt:             float or complex:
-                        time step for real or imaginary time evolution; dt has to either real of imaginary
-        numsteps:       int
-                        number of time steps
-        solver:         str
-                        type of solver to be used, can be either of {LAN, RK45, RK32, SEXPMV}
-        krylov_dim:     int
-                        number of krylov vectors to be used with solver=LAN
-        atol,rtol:      float
-                        absolute and relative tolerance of the RK45 and RK23 solvers
-        regaugetol:     float
-                        precision of the left and right dominant eigenvectors of the transfer operator
-        ncv:            int
-                        number of krylov vectors used for diagonalizeing transfer operator
-        numeig:         int 
-                        number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
-                        operator (hyperparameter)
-        lgmrestol:      float
-                        precision of lgmres used in determining left and right Hamiltonian environments 
-        Nmaxlgmres:     int
-                        maximum number of lgmres steps for determining for determining left and right Hamiltonian environments 
-        cp:             int or None
-                        if int>0, checkpoints are written every cp steps
-        keep_cp:        bool
-                        if True, intermediate checkpoints are kept on disk
-        verbose:        int
-                        verbosity flag; larger value produces more output, use 0 for no output
-        """
+            for n in range(len(self._mps)-2,-1,-1):
+                dt_=dt/2.0
+                #evolve matrix backward; note that in the previous loop the last matrix has not been evolved yet; we'll rectify this now
+                self._mps.position(n+1)
+                self._R[len(self._mps)-n-1]=mf.addLayer(self._R[len(self._mps)-n-2],self._mps[n+1],self._mpo[n+1],self._mps[n+1],-1)
+                evMat=self._evolveMatrix(n,solver=solver,dt=-dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
+                self._mps._mat=evMat        #set evolved matrix as new center-matrix
 
-        if solver not in [
-                'LAN', 'Radau', 'SEXPMV', 'RK45', 'BDF', 'LSODA', 'RK23'
-        ]:
-            raise ValueError(
-                "VUMPSengine.doTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}"
-                .format(solver))
+                #evolve tensor at bond n forward: the back-evolved center matrix is absorbed into the left-side tensor, and the product is evolved forward in time
+                evTen=self._evolveTensor(n,solver=solver,dt=dt_,krylov_dim=krylov_dim,rtol=rtol,atol=atol)
 
-        if solver in ['Radau', 'RK45', 'BDF', 'LSODA', 'RK23']:
-            if StrictVersion(sp.__version__) < StrictVersion('1.1.0'):
-                warnings.warn(
-                    '{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'
-                    .format(solver),
-                    stacklevel=2)
-                solver = 'LAN'
+                #split off a center matrix
+                tensor,mat,Z=mf.prepare_tensor_QR(evTen,-1) #mat is already normalized (happens in prepare_tensor_QR)
+                self._mps[n]=tensor
 
-        current = 'None'
-        while self._it <= numsteps:
-            Edens, Elocright, leftn, rightn = self._prepareStep(
-                tol=regaugetol,
-                ncv=ncv,
-                numeig=numeig,
-                lgmrestol=lgmrestol,
-                Nmaxlgmres=Nmaxlgmres)
-            self._doEvoStep(solver, dt, krylov_dim, rtol, atol)
-            if verbose >= 1:
-                self._t0 += np.abs(dt)
-                stdout.write(
-                    "\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f"
-                    % (solver, self._it, numsteps, self._t0,
-                       np.abs(dt) * numsteps, np.real(Edens), max(self.mps.D),
-                       np.abs(dt)))
-
+                self._mps._mat=mat
+                self._mps._position=n
+            if verbose>=1:
+                self._t0+=np.abs(dt)
+                stdout.write("\rTDVP engine using %s solver: t=%4.4f, D=%i, |dt|=%1.5f"%(solver,self._t0,np.max(self._mps.D),np.abs(dt)))
                 stdout.flush()
-            if verbose >= 2:
+            if verbose>=2:
                 print('')
-            if (cp != None) and (self._it > 0) and (self._it % cp == 0):
+            if (cp!=None) and (self._it>0) and (self._it%cp==0):
                 if not keep_cp:
-                    if os.path.exists(current + '.pickle'):
-                        os.remove(current + '.pickle')
-                    current = self._filename + '_tdvp_cp' + str(self._it)
+                    if os.path.exists(current+'.pickle'):
+                        os.remove(current+'.pickle')
+                    current=self._filename+'_tdvp_cp'+str(self._it)
                     self.save(current)
                 else:
-                    current = self._filename + '_tdvp_cp' + str(self._it)
+                    current=self._filename+'_tdvp_cp'+str(self._it)
                     self.save(current)
 
-            self._it += 1
-        self.mps.position(0)
-        self.mps.resetZ()
+            self._it=self._it+1
+        self._mps.position(0)
+        self._mps.resetZ()
         return self._t0
+        #returns the center bond matrix and the gs energy
+
+
+            
+    def _evolve_2s_local(self,
+                         thresh=1E-10,
+                         D=None,
+                         ncv=40,
+                         Ndiag=10,
+                         landelta=1E-5,
+                         landeltaEta=1E-5,
+                         verbose=0,
+                         solver='LAN'):
+
+        def HAproduct(L, mpo, R, mps):
+            return ncon.ncon([L, mps, mpo, R],
+                             [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
+
+        mpo, mpo_merge_data = ncon.ncon(
+            [self.mpo[self.mps.pos - 1], self.mpo[self.mps.pos]],
+            [[-1, 1, -3, -5], [1, -2, -4, -6]]).merge([[0], [1], [2, 3], [4,
+                                                                          5]])
+
+        initial, mps_merge_data = ncon.ncon(
+            [self.mps[self.mps.pos - 1], self.mps.mat, self.mps[self.mps.pos]],
+            [[-1, 1, -3], [1, 2], [2, -2, -4]]).merge([[0], [1], [2, 3]])
+
+        if solver.lower() == 'lan':
+            mv = fct.partial(
+                HAproduct, *[
+                    self.left_envs[self.mps.pos - 1], mpo,
+                    self.right_envs[self.mps.pos]
+                ])
+
+            def scalar_product(a, b):
+                return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
+
+            lan = LZ.LanczosEngine(
+                matvec=mv,
+                scalar_product=scalar_product,
+                Ndiag=Ndiag,
+                ncv=ncv,
+                numeig=1,
+                delta=landelta,
+                deltaEta=landeltaEta)
+            energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
+            
+        elif solver.lower() == 'ar':
+            energies, opt_result = mf.eigsh(
+                self.left_envs[self.mps.pos - 1],
+                mpo,
+                self.right_envs[self.mps.pos],
+                initial,
+                precision=landeltaEta,
+                numvecs=1,
+                ncv=ncv,
+                numvecs_calculated=1)
+        elif solver.lower() == 'lobpcg':
+            energies, opt_result = mf.lobpcg(
+                self.left_envs[self.mps.pos - 1],
+                mpo,
+                self.right_envs[self.mps.pos],
+                initial,
+                precision=landeltaEta)
+        opt=opt_result[0]
+        e=energies[0]
+
+        temp, merge_data = opt.split(mps_merge_data).transpose(
+            0, 2, 3, 1).merge([[0, 1], [2, 3]])
+
+        U, S, V, _ = temp.svd(truncation_threshold=thresh, D=D)
+        Dnew = S.shape[0]
+        if verbose > 0:
+            stdout.write(
+                "\rTS-DMRG (%s) it = %i/%i, sites = (%i,%i)/%i:"
+                " optimized E = %.16f+%.16f at D = %i" %
+                (solver, self._it, self.Nsweeps, self.mps.pos - 1, self.mps.pos,
+                 len(self.mps), np.real(e), np.imag(e), Dnew))
+            stdout.flush()
+        if verbose > 1:
+            print("")
+        Z = np.sqrt(ncon.ncon([S, S], [[1], [1]]))
+        self.mps.mat = S.diag() / Z
+
+        self.mps[self.mps.pos - 1] = U.split([merge_data[0],
+                                              [U.shape[1]]]).transpose(0, 2, 1)
+        self.mps[self.mps.pos] = V.split([[V.shape[0]],
+                                          merge_data[1]]).transpose(0, 2, 1)
+        self.left_envs[self.mps.pos] = mf.add_layer(
+            B=self.left_envs[self.mps.pos - 1],
+            mps=self.mps[self.mps.pos - 1],
+            mpo=self.mpo[self.mps.pos - 1],
+            conjmps=self.mps[self.mps.pos - 1],
+            direction=1,
+            walltime_log=self.walltime_log)
+        self.right_envs[self.mps.pos - 1] = mf.add_layer(
+            B=self.right_envs[self.mps.pos],
+            mps=self.mps[self.mps.pos],
+            mpo=self.mpo[self.mps.pos],
+            conjmps=self.mps[self.mps.pos],
+            direction=-1,
+            walltime_log=self.walltime_log)
+        return e
+
+
+    def _optimize_1s_local(self,
+                           site,
+                           sweep_dir,
+                           ncv=40,
+                           Ndiag=10,
+                           landelta=1E-5,
+                           landeltaEta=1E-5,
+                           verbose=0,
+                           solver='AR'):
+        """
+        local single-site optimization routine 
+        """
+
+        if sweep_dir in (-1,'r','right'):
+            if self.mps.pos != site:
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0} != mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+        if sweep_dir in (1,'l','left'):
+            if self.mps.pos!=(site+1):
+                raise ValueError('_optimize_1s_local for sweep_dir={2}: site={0}, mps.pos={1}'.format(site,self.mps.pos,sweep_dir))
+            
+        if sweep_dir in (-1,'r','right'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps.mat,self.mps[site]],[[-1,1],[1,-2,-3]])
+        elif sweep_dir in (1,'l','left'):
+            #NOTE (martin) don't use get_tensor here
+            initial = ncon.ncon([self.mps[site],self.mps.mat],[[-1,1,-3],[1,-2]])
+
+        if solver.lower() == 'lan':
+            mv = fct.partial(
+                mf.HA_product, *[
+                    self.left_envs[site], self.mpo[site],
+                    self.right_envs[site]
+                ])
+
+            def scalar_product(a, b):
+                return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
+
+            lan = LZ.LanczosEngine(
+                matvec=mv,
+                scalar_product=scalar_product,
+                Ndiag=Ndiag,
+                ncv=ncv,
+                numeig=1,
+                delta=landelta,
+                deltaEta=landeltaEta)
+            energies, opt_result, nit = lan.simulate(initial, walltime_log=self.walltime_log)
+        elif solver.lower() == 'ar':
+            energies, opt_result = mf.eigsh(
+                self.left_envs[site],
+                self.mpo[site],
+                self.right_envs[site],
+                initial,
+                precision=landeltaEta,
+                numvecs=1,
+                ncv=ncv,
+                numvecs_calculated=1)
+
+        elif solver.lower() == 'lobpcg':
+            energies, opt_result = mf.lobpcg(
+                self.left_envs[site],
+                self.mpo[site],
+                self.right_envs[site],
+                initial,
+                precision=landeltaEta)
+            
+        opt=opt_result[0]
+        e=energies[0]
+        Dnew = opt.shape[1]
+        if verbose > 0:
+            stdout.write(
+                "\rSS-DMRG (%s) it = %i/%i, site = %i/%i: optimized E = %.16f+%.16f at D = %i"
+                % (solver, self._it, self.Nsweeps, self.mps.pos, len(self.mps),
+                   np.real(e), np.imag(e), Dnew))
+            stdout.flush()
+        if verbose > 1:
+            print("")
+
+
+        if sweep_dir in (-1,'r','right'):
+            A, mat,Z = mf.prepare_tensor_QR(opt, direction='l',
+                                              walltime_log=self.walltime_log)
+            A /= Z            
+        elif sweep_dir in (1,'l','left'):
+            mat, B, Z = mf.prepare_tensor_QR(opt, direction='r',
+                                               walltime_log=self.walltime_log)
+            B /= Z            
+        
+        self.mps.mat = mat
+        if sweep_dir in (-1,'r','right'):
+            self.mps._tensors[site] = A
+            self.mps._position+=1
+            self.left_envs[site+1]=self.add_layer(
+                B=self.left_envs[site],
+                mps=self.mps[site],
+                mpo=self.mpo[site],
+                conjmps=self.mps[site],
+                direction=1,
+                walltime_log=self.walltime_log
+            )
+        elif sweep_dir in (1,'l','left'):            
+            self.mps._tensors[site] = B
+            self.mps._position=site
+            self.right_envs[site-1]=self.add_layer(
+                B=self.right_envs[site],
+                mps=self.mps[site],
+                mpo=self.mpo[site],
+                conjmps=self.mps[site],
+                direction=-1,
+                walltime_log=self.walltime_log
+            )
+        return e
+
+        
+    def run_one_site(self,
+                     Nsweeps=4,
+                     precision=1E-6,
+                     ncv=40,
+                     cp=None,
+                     verbose=0,
+                     Ndiag=10,
+                     landelta=1E-8,
+                     landeltaEta=1E-5,
+                     solver='AR',
+                     walltime_log=None):
+        """
+        do a one-site finite DMRG optimzation for an open system
+        Paramerters:
+        Nsweeps:         int
+                         number of left-right  sweeps
+        precision:       float    
+                         desired precision of the ground state energy
+        ncv:             int
+                         number of krylov vectors
+        cp:              int
+                         checkpoint every ```cp```steps
+        verbose:         int
+                         verbosity flag
+        Ndiag:           int
+                         step number at which to diagonlize the local tridiag hamiltonian
+        landelta:        float
+                         orthogonality threshold; once the next vector of the iteration is orthogonal to the previous ones 
+                         within ```delta``` precision, iteration is terminated
+        landeltaEta:     float
+                         desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
+                         iteration is terminated
+        solver:          str
+                         'AR' or 'LAN'
+        """
+        self.walltime_log=walltime_log
+        self.Nsweeps = Nsweeps
+        converged = False
+        energy = 100000.0
+        self._it = 1
+
+        while not converged:
+            self.position(0, walltime_log=self.walltime_log)  #the part outside the loop covers the len(self) = =1 case
+            e = self._optimize_1s_local(site=0,
+                                        sweep_dir='right',
+                                        ncv=ncv,
+                                        Ndiag=Ndiag,
+                                        landelta=landelta,
+                                        landeltaEta=landeltaEta,
+                                        verbose=verbose,
+                                        solver=solver)
+
+            for n in range(1, len(self.mps) - 1):
+                #_optimize_1site_local shifts the center site internally                
+                e = self._optimize_1s_local(site=n,
+                                            sweep_dir='right',
+                                            ncv=ncv,
+                                            Ndiag=Ndiag,
+                                            landelta=landelta,
+                                            landeltaEta=landeltaEta,
+                                            verbose=verbose,
+                                            solver=solver)
+                
+            self.position(len(self.mps), walltime_log=self.walltime_log)
+            for n in range(len(self.mps) - 1, 0, -1):
+                #_optimize_1site_local shifts the center site internally                
+                e = self._optimize_1s_local(site=n,
+                                            sweep_dir='left',
+                                            ncv=ncv,
+                                            Ndiag=Ndiag,
+                                            landelta=landelta,
+                                            landeltaEta=landeltaEta,
+                                            verbose=verbose,
+                                            solver=solver)
+            if np.abs(e - energy) < precision:
+                converged = True
+            energy = e
+
+            if (cp != None) and (cp != 0) and (self._it >
+                                               0) and (self._it % cp == 0):
+                self.save(self.name + '_dmrg_cp')
+            self._it = self._it + 1
+            if self._it > Nsweeps:
+                if verbose > 0:
+                    print()
+                    print('reached maximum iteration number ', Nsweeps)
+                break
+        self.position(0, walltime_log=self.walltime_log)
+        return e
+
+    def run_two_site(self,
+                     Nsweeps=4,
+                     thresh=1E-10,
+                     D=None,
+                     precision=1E-6,
+                     ncv=40,
+                     cp=None,
+                     verbose=0,
+                     Ndiag=10,
+                     landelta=1E-8,
+                     landeltaEta=1E-5,
+                     solver='AR'):
+        """
+        do a two-site finite DMRG optimzation for an open system
+        Parameters:
+        ----------------------
+        Nsweeps:         int
+                         number of left-right  sweeps
+        thresh:          float
+                         truncation  threshold for SVD truncation of the MPS
+        D:               int
+                         maximally allowed bond dimension; if D = None, no bound on D is assumed (can become expensive)
+        precision:       float    
+                         desired precision of the ground state energy
+        ncv:             int
+                         number of krylov vectors
+        cp:              int
+                         checkpoint every ```cp```steps
+        verbose:         int
+                         verbosity flag
+        Ndiag:           int
+                         step number at which to diagonlize the local tridiag hamiltonian
+        landelta:        float
+                         orthogonality threshold; once the next vector of the iteration is orthogonal to the previous ones 
+                         within ```delta``` precision, iteration is terminated
+        landeltaEta:     float
+                         desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
+                         iteration is terminated
+        solver:          str
+                         'AR' or 'LAN'
+        Returns:
+        ------------------------------
+        float:        the energy upon leaving the simulation
+        """
+        self.position(0, walltime_log=self.walltime_log)
+        self.Nsweeps = Nsweeps
+        converged = False
+        energy = 100000.0
+        self._it = 1
+        while not converged:
+            self.position(1, walltime_log=self.walltime_log)
+            e = self._optimize_2s_local(
+                thresh=thresh,
+                D=D,
+                ncv=ncv,
+                Ndiag=Ndiag,
+                landelta=landelta,
+                landeltaEta=landeltaEta,
+                verbose=verbose,
+                solver=solver)
+
+            for n in range(2, len(self.mps)):
+                self.position(n, walltime_log=self.walltime_log)
+                e = self._optimize_2s_local(
+                    thresh=thresh,
+                    D=D,
+                    ncv=ncv,
+                    Ndiag=Ndiag,
+                    landelta=landelta,
+                    landeltaEta=landeltaEta,
+                    verbose=verbose,
+                    solver=solver)
+            for n in range(len(self.mps) - 2, 1, -1):
+                self.position(n, walltime_log=self.walltime_log)
+                e = self._optimize_2s_local(
+                    thresh=thresh,
+                    D=D,
+                    ncv=ncv,
+                    Ndiag=Ndiag,
+                    landelta=landelta,
+                    landeltaEta=landeltaEta,
+                    verbose=verbose,
+                    solver=solver)
+
+            if np.abs(e - energy) < precision:
+                converged = True
+            energy = e
+
+            if (cp != None) and (cp != 0) and (self._it >
+                                               0) and (self._it % cp == 0):
+                self.save(self.name + '_dmrg_cp')
+            self._it = self._it + 1
+            if self._it > Nsweeps:
+                if verbose > 0:
+                    print()
+                    print('reached maximum iteration number ', Nsweeps)
+                break
+        self.position(0, walltime_log=self.walltime_log)
+        return e
+
+
+                       
+# class VUMPSengine(InfiniteDMRGEngine):
+#     """
+#     VUMPSengine
+#     container object for mps ground-state optimization  using the VUMPS algorithm and time evolution using the TDVP 
+#     """
+
+#     def __init__(self, mps, mpo, name='VUMPS'):
+#         raise NotImplementedError()
+#         """
+#         initialize a VUMPS simulation object
+
+#         Parameters:
+#         ---------------------------------------
+#         mps:            list of a single np.ndarray of shape(D,D,d), or an MPS object of length 1
+#                         the initial state
+#         mpo:            MPO object
+#                         Hamiltonian in MPO format
+#         name:           str
+#                         the name of the simulation
+#         """
+#         if len(mps) > 1:
+#             raise ValueError(
+#                 "VUMPSengine: got an mps of len(mps)>1; VUMPSengine can only handle len(mps)=1"
+#             )
+#         if len(mpo) > 1:
+#             raise ValueError(
+#                 "VUMPSengine: got an mpo of len(mps)>1; VUMPSengine can only handle len(mpo)=1"
+#             )
+#         super().__init__(
+#             mps,
+#             mpo,
+#             name='VUMPS',
+#             precision=1E-12,
+#             precision_canonize=1E-12,
+#             nmax=1000,
+#             nmax_canonize=1000,
+#             ncv=40,
+#             numeig=1,
+#             pinv=1E-20)
+
+#         self._it = 1
+#         #initialize the mpo again
+#         mpol = np.zeros((1, B2, d1, d2), dtype=self.dtype)
+#         mpor = np.zeros((B1, 1, d1, d2), dtype=self.dtype)
+#         mpol[0, :, :, :] = mpo[0][-1, :, :, :]
+#         mpol[0, 0, :, :] /= 2.0
+#         mpor[:, 0, :, :] = mpo[0][:, 0, :, :]
+#         mpor[-1, 0, :, :] /= 2.0
+#         self._mpo = H.MPO.fromlist([mpol, mpo[0], mpor])
+#         self._t0 = self.dtype(0.0)
+#         self.mps.regauge(
+#             'symmetric', tol=regaugetol, ncv=ncv, pinv=pinv, numeig=numeig)
+
+#         self._A = np.copy(self.mps[0])
+#         self._B = ncon.ncon(
+#             [np.diag(1.0 / np.diag(self.mps._mat)), self._A, self.mps._mat],
+#             [[-1, 1], [1, 2, -3], [2, -2]])
+#         self._r = np.eye(self._B.shape[0], dtype=self.dtype)
+#         self._l = np.eye(self._A.shape[0], dtype=self.dtype)
+#         #print([self._l.dtype,self._r.dtype,self._A.dtype,self._B.dtype]+[a.dtype for a in self.mps])
+
+#     def reset(self):
+#         """
+#         resets internal counters and density matrices of the VUMPS engine to self._it=1, self._t0=0.0
+#         and self._l=11, self._r=11
+#         """
+#         self._it = 1
+#         self._t0 = 0.0
+#         self._r = np.eye(self._B.shape[0], dtype=self.dtype)
+#         self._l = np.eye(self._A.shape[0], dtype=self.dtype)
+
+#     def _prepareStep(self,
+#                      tol=1E-12,
+#                      ncv=30,
+#                      numeig=1,
+#                      lgmrestol=1E-10,
+#                      Nmaxlgmres=40):
+#         [etar, vr, numeig] = mf.TMeigs(
+#             self._A,
+#             direction=-1,
+#             numeig=numeig,
+#             init=self._r,
+#             nmax=10000,
+#             tolerance=tol,
+#             ncv=ncv,
+#             which='LR')
+#         [etal, vl, numeig] = mf.TMeigs(
+#             self._B,
+#             direction=1,
+#             numeig=numeig,
+#             init=self._l,
+#             nmax=10000,
+#             tolerance=tol,
+#             ncv=ncv,
+#             which='LR')
+#         l = np.reshape(vl, (self.mps.D[0], self.mps.D[0]))
+#         r = np.reshape(vr, (self.mps.D[-1], self.mps.D[-1]))
+#         l = l / np.trace(l)
+#         r = r / np.trace(r)
+
+#         self._l = (l + herm(l)) / 2.0
+#         self._r = (r + herm(r)) / 2.0
+
+#         leftn = np.linalg.norm(
+#             np.tensordot(self._A, np.conj(self._A), ([0, 2], [0, 2])) -
+#             np.eye(self.mps.D[0], dtype=self.dtype))
+#         rightn = np.linalg.norm(
+#             np.tensordot(self._B, np.conj(self._B), ([1, 2], [1, 2])) -
+#             np.eye(self.mps.D[-1], dtype=self.dtype))
+
+#         self._lb = mf.initializeLayer(self._A,
+#                                       np.eye(self.mps.D[0], dtype=self.dtype),
+#                                       self._A, self._mpo[0], 1)
+
+#         ihl = mf.addLayer(self._lb, self._A, self._mpo[2], self._A, 1)[:, :, 0]
+#         Elocleft = np.tensordot(ihl, self._r, ([0, 1], [0, 1]))
+#         self._rb = mf.initializeLayer(self._B,
+#                                       np.eye(self.mps.D[-1], dtype=self.dtype),
+#                                       self._B, self._mpo[2], -1)
+
+#         ihr = mf.addLayer(self._rb, self._B, self._mpo[0], self._B,
+#                           -1)[:, :, -1]
+#         Elocright = np.tensordot(ihr, self._l, ([0, 1], [0, 1]))
+
+#         ihlprojected = (ihl - np.tensordot(ihl, l, ([0, 1], [0, 1])) * np.eye(
+#             self.mps.D[0], dtype=self.dtype))
+#         ihrprojected = (ihr - np.tensordot(r, ihr, ([0, 1], [0, 1])) * np.eye(
+#             self.mps.D[-1], dtype=self.dtype))
+
+#         self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self.mps.D[0]).astype(self.dtype),ihlprojected,x0=np.reshape(self._kleft,self.mps.D[0]*self.mps.D[0]),tolerance=lgmrestol,\
+#                                            maxiteration=Nmaxlgmres,direction=1)
+#         self._kright=mf.RENORMBLOCKHAMGMRES(self._B,self._B,np.eye(self.mps.D[-1]).astype(self.dtype),self._r,ihrprojected,x0=np.reshape(self._kright,self.mps.D[-1]*self.mps.D[-1]),tolerance=lgmrestol,\
+#                                             maxiteration=Nmaxlgmres,direction=-1)
+
+#         self._lb[:, :, 0] += np.copy(self._kleft)
+#         self._rb[:, :, -1] += np.copy(self._kright)
+#         return Elocleft, Elocright, leftn, rightn
+
+#     def _doOptimStep(self,
+#                      svd=False,
+#                      artol=1E-5,
+#                      arnumvecs=1,
+#                      arncv=20,
+#                      Ndiag=10,
+#                      nmaxlan=500,
+#                      landelta=1E-8,
+#                      solver='AR'):
+#         AC_ = mf.HAproductSingleSiteMPS(self._lb, self._mpo[1], self._rb,
+#                                         self.mps.tensor(0, clear=False))
+#         if self.mps._position == 1:
+#             C_ = mf.HAproductZeroSiteMat(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._A,
+#                 self._rb,
+#                 position='right',
+#                 mat=self.mps._mat)
+#             self._gradnorm = np.linalg.norm(
+#                 AC_ - ncon.ncon([self._A, C_], [[-1, 1, -3], [1, -2]]))
+#         if self.mps._position == 0:
+#             C_ = mf.HAproductZeroSiteMat(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._B,
+#                 self._rb,
+#                 position='left',
+#                 mat=self.mps._mat)
+#             self._gradnorm = np.linalg.norm(
+#                 AC_ - ncon.ncon([C_, self._B], [[-1, 1], [1, -2, -3]]))
+
+#         if solver.upper() == 'AR':
+#             e1, mps = mf.eigsh(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 artol,
+#                 numvecs=arnumvecs,
+#                 numcv=arncv,
+#                 numvecs_returned=arnumvecs)
+#             e2, mat = mf.eigshbond(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._A,
+#                 self._rb,
+#                 self.mps._mat,
+#                 position='right',
+#                 tolerance=artol,
+#                 numvecs=arnumvecs,
+#                 numcv=arncv)
+#             if arnumvecs > 1:
+#                 self._gap = e1[1] - e1[0]
+#                 mps = mps[0]
+#             mat /= np.linalg.norm(mat)
+
+#         elif solver.upper() == 'LAN':
+#             e1, mps = mf.lanczos(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 artol,
+#                 Ndiag,
+#                 nmaxlan,
+#                 arnumvecs,
+#                 landelta,
+#                 deltaEta=artol)
+#             e2, mat = mf.lanczosbond(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._A,
+#                 self._rb,
+#                 self.mps._mat,
+#                 'right',
+#                 Ndiag,
+#                 nmaxlan,
+#                 arnumvecs,
+#                 delta=landelta,
+#                 deltaEta=artol)
+#             if arnumvecs > 1:
+#                 if len(e1) > 1:
+#                     self._gap = e1[1] - e1[0]
+#                 mat = mat[0]
+#                 mps = mps[0]
+#             mat /= np.linalg.norm(mat)
+#         else:
+#             raise ValueError(
+#                 "in VUMPSengine: unknown solver type; use 'AR' or 'LAN'")
+#         D1, D2, d = mps.shape
+#         if svd:
+#             ACC_l = np.reshape(
+#                 ncon.ncon([mps, herm(mat)], [[-1, 1, -2], [1, -3]]),
+#                 (D1 * d, D2))
+#             CAC_r = np.reshape(
+#                 ncon.ncon([herm(mat), mps], [[-1, 1], [1, -2, -3]]),
+#                 (D1, d * D2))
+#             Ul, Sl, Vl = mf.svd(ACC_l)
+#             Ur, Sr, Vr = mf.svd(CAC_r)
+#             self._A = np.transpose(
+#                 np.reshape(Ul.dot(Vl), (D1, d, D2)), (0, 2, 1))
+#             self._B = np.reshape(Ur.dot(Vr), (D1, D2, d))
+
+#         else:
+#             AC_l = np.reshape(np.transpose(mps, (0, 2, 1)), (D1 * d, D2))
+#             AC_r = np.reshape(mps, (D1, d * D2))
+
+#             UAC_l, PAC_l = sp.linalg.polar(AC_l, side='right')
+#             UAC_r, PAC_r = sp.linalg.polar(AC_r, side='left')
+
+#             UC_l, PC_l = sp.linalg.polar(mat, side='right')
+#             UC_r, PC_r = sp.linalg.polar(mat, side='left')
+
+#             self._A = np.transpose(
+#                 np.reshape(UAC_l.dot(herm(UC_l)), (D1, d, D2)), (0, 2, 1))
+#             self._B = np.reshape(herm(UC_r).dot(UAC_r), (D1, D2, d))
+
+#         self.mps[0] = np.copy(self._A)
+#         self.mps._mat = np.copy(mat)
+#         self.mps._connector = np.linalg.pinv(mat)
+#         self.mps._position = 1
+
+#     def simulate(self, *args, **kwargs):
+#         """
+#         see __simulate__
+
+#         """
+
+#         warnings.warn('VUMPS.simulate is deprecated; use optimize')
+#         self.optimize(*args, **kwargs)
+
+#     def optimize(self,Nmax=1000,epsilon=1E-10,regaugetol=1E-10,ncv=30,numeig=1,
+#                  lgmrestol=1E-10,Nmaxlgmres=40,\
+#                  artol=1E-10,arnumvecs=1,arncv=20,svd=False,Ndiag=10,nmaxlan=500,
+#                  landelta=1E-8,solver='AR',cp=None,keep_cp=False):
+#         """
+#         do a VUMPS ground-state optimization
+#         currently only nearest neighbor Hamiltonians are supported
+#         Parameters
+#         ---------------------------------------------
+#         Nmax:            int
+#                          number of iterations
+#         epsilon:         float
+#                          desired convergence
+#         regaugetol:      float
+#                          precision of the left and right dominant eigenvectors of the transfer operator
+#         ncv:             int
+#                          number of krylov vectors used for diagonalizeing transfer operator
+#         numeig:          int 
+#                          number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
+#                          operator (hyperparameter)
+#         lgmrestol:       float
+#                          precision of the left and right renormalized environments
+#         Nmaxlgmres:      int
+#                          maximum iteration steps of lgmres when calculating the left and right renormalized environments
+#         artol:           float
+#                          precision of arnoldi eigsh eigensolver
+#         arnumvecs:       int
+#                          number of eigenvectors to be calculated by arnoldi; if > 1, the gap to the second eigenvalue is printed out during simulation
+#         arncv:           int
+#                          number of krylov vectors used in sparse eigsh of the effective Hamiltonian
+#         svd:             bool
+#                          if True, do an svd instead of polar decomposition for gauge matching
+#         cp:              int>0, or None
+#                          if > 0, simulation is checkpointed every "cp" steps
+
+#         Returns:
+#         -------------------------
+#         None
+#         """
+#         converged = False
+
+#         current = 'None'
+#         while converged == False:
+#             if self._it < 10:
+#                 artol_ = 1E-6
+#             else:
+#                 artol_ = artol
+#             Edens, Elocright, leftn, rightn = self._prepareStep(
+#                 tol=regaugetol,
+#                 ncv=ncv,
+#                 numeig=numeig,
+#                 lgmrestol=lgmrestol,
+#                 Nmaxlgmres=Nmaxlgmres)
+
+#             self._doOptimStep(
+#                 svd=svd,
+#                 artol=artol_,
+#                 arnumvecs=arnumvecs,
+#                 arncv=arncv,
+#                 Ndiag=Ndiag,
+#                 nmaxlan=nmaxlan,
+#                 landelta=landelta,
+#                 solver=solver)
+#             if self._it >= Nmax:
+#                 break
+#             if (cp != None) and (cp > 0) and (self._it % cp == 0):
+#                 if not keep_cp:
+#                     if os.path.exists(current + '.pickle'):
+#                         os.remove(current + '.pickle')
+#                     current = self._filename + '_vumps_cp' + str(self._it)
+#                     self.save(current)
+#                 else:
+#                     current = self._filename + '_vumps_cp' + str(self._it)
+#                     self.save(current)
+#             self._it += 1
+#             if arnumvecs == 1:
+#                 stdout.write(
+#                     "\rusing %s solver: it %i: local E=%.16f, D=%i, gradient norm=%.16f"
+#                     % (solver, self._it, np.real(Edens), np.max(self.mps.D),
+#                        self._gradnorm))
+#                 stdout.flush()
+#             if arnumvecs > 1:
+#                 stdout.write(
+#                     "\rusing %s solver: it %i: local E=%.16f, gap=%.16f, D=%i, gradient norm=%.16f"
+#                     % (solver, self._it, np.real(Edens), np.real(self._gap),
+#                        np.max(self.mps.D), self._gradnorm))
+#                 stdout.flush()
+#             if self._gradnorm < epsilon:
+#                 converged = True
+#         print
+#         print()
+
+#         if self._it >= Nmax and (converged == False):
+#             print(
+#                 'simulation reached maximum number of steps ({1}) and stopped at precision of {0}'
+#                 .format(self._gradnorm, Nmax))
+#         if converged == True:
+#             print('simulation converged to {0} in {1} steps'.format(
+#                 epsilon, self._it))
+#         print
+
+#     def _evolveTensor(self, solver, dt, krylov_dim, rtol, atol):
+#         """
+#         time-evolves the tensor at site n; 
+#         The caller has to ensure that self.L[n],self._R[len(self._mps)-1-n] are consistent with the mps
+#         n and self._mps._position have to match
+
+#         Parameters:
+#         -----------------------------------
+#         N:   int
+#              the lattice site
+#         solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
+#                 the solver to do the time evolution
+#         dt:  float or complex:
+#              time step
+#         krylov_dim:  int
+#                      the number of krylov vectors to be used with solver='LAN'
+#         rtol,atol:  float
+#                     relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
+        
+#         """
+
+#         if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
+#             evTen = mf.evolveTensorsolve_ivp(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 dt,
+#                 method=solver,
+#                 rtol=rtol,
+#                 atol=atol)  #clear=True resets self._mat to identity
+#         elif solver == 'LAN':
+#             evTen = mf.evolveTensorLan(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 dt,
+#                 krylov_dimension=krylov_dim
+#             )  #clear=True resets self._mat to identity
+#         elif solver == 'SEXPMV':
+#             evTen = mf.evolveTensorSexpmv(self._lb, self._mpo[1], self._rb,
+#                                           self.mps.tensor(0, clear=False), dt)
+#         return evTen
+
+#     def _evolveMatrix(self, solver, dt, krylov_dim, rtol, atol):
+#         """
+#         time-evolves the center-matrix at bond n; 
+#         The caller has to ensure that self.L[n+1],self._R[len(self._mps)-1-n] are consistent with the mps
+#         n and self._mps._position have to match
+
+#         Parameters:
+#         -----------------------------------
+#         N:   int
+#              the lattice site
+#         solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
+#                 the solver to do the time evolution
+#         dt:  float or complex:
+#              time step
+#         krylov_dim:  int
+#                      the number of krylov vectors to be used with solver='LAN'
+#         rtol,atol:  float
+#                     relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
+        
+#         """
+
+#         L = mf.addLayer(self._lb, self._A, self._mpo[1], self._A, direction=1)
+#         if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
+#             evMat = mf.evolveMatrixsolve_ivp(
+#                 L,
+#                 self._rb,
+#                 self.mps._mat,
+#                 dt,
+#                 method=solver,
+#                 rtol=rtol,
+#                 atol=atol)  #clear=True resets self._mat to identity
+#         elif solver == 'LAN':
+#             evMat = mf.evolveMatrixLan(
+#                 L, self._rb, self.mps._mat, dt, krylov_dimension=krylov_dim)
+#         elif solver == 'SEXPMV':
+#             evMat = mf.evolveMatrixSexpmv(L, self._rb, self.mps._mat, dt)
+#         evMat /= np.linalg.norm(evMat)
+#         return evMat
+
+#     def _doEvoStep(self, solver, dt, krylov_dim, rtol, atol):
+#         """
+#         does a single time evolution step 
+#         Parameters:
+#         -----------------------------------
+#         solver: str, any from {'LAN','SEXPMV','Radau','RK45','RK23','BDF','LSODA','RK23'}
+#                 the solver to do the time evolution
+#         dt:  float or complex:
+#              time step
+#         krylov_dim:  int
+#                      the number of krylov vectors to be used with solver='LAN'
+#         rtol,atol:  float
+#                     relative and absolute tolerance to be used with solver={'Radau','RK45','RK23','BDF','LSODA','RK23'}
+        
+#         """
+
+#         if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
+#             evTen = mf.evolveTensorsolve_ivp(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 dt,
+#                 method=solver,
+#                 rtol=rtol,
+#                 atol=atol)  #clear=True resets self._mat to identity
+#         elif solver == 'LAN':
+#             evTen = mf.evolveTensorLan(
+#                 self._lb,
+#                 self._mpo[1],
+#                 self._rb,
+#                 self.mps.tensor(0, clear=False),
+#                 dt,
+#                 krylov_dimension=krylov_dim
+#             )  #clear=True resets self._mat to identity
+#         elif solver == 'SEXPMV':
+#             evTen = mf.evolveTensorSexpmv(self._lb, self._mpo[1], self._rb,
+#                                           self.mps.tensor(0, clear=False), dt)
+
+#         #evTen=self._evolveTensor(solver,dt,krylov_dim,rtol,atol)
+#         L = mf.addLayer(self._lb, self._A, self._mpo[1], self._A, direction=1)
+#         if solver in ['Radau', 'RK45', 'RK23', 'BDF', 'LSODA', 'RK23']:
+#             evMat = mf.evolveMatrixsolve_ivp(
+#                 L,
+#                 self._rb,
+#                 self.mps._mat,
+#                 dt,
+#                 method=solver,
+#                 rtol=rtol,
+#                 atol=atol)  #clear=True resets self._mat to identity
+#         elif solver == 'LAN':
+#             evMat = mf.evolveMatrixLan(
+#                 L, self._rb, self.mps._mat, dt, krylov_dimension=krylov_dim)
+#         elif solver == 'SEXPMV':
+#             evMat = mf.evolveMatrixSexpmv(L, self._rb, self.mps._mat, dt)
+#         evMat /= np.linalg.norm(evMat)
+
+#         D1, D2, d = evTen.shape
+#         #evMat=self._evolveMatrix(solver,dt,krylov_dim,rtol,atol)
+#         ACC_l = np.reshape(
+#             ncon.ncon([evTen, herm(evMat)], [[-1, 1, -2], [1, -3]]),
+#             (D1 * d, D2))
+#         CAC_r = np.reshape(
+#             ncon.ncon([herm(evMat), evTen], [[-1, 1], [1, -2, -3]]),
+#             (D1, d * D2))
+#         Ul, Sl, Vl = mf.svd(ACC_l)
+#         Ur, Sr, Vr = mf.svd(CAC_r)
+#         self._A = np.transpose(np.reshape(Ul.dot(Vl), (D1, d, D2)), (0, 2, 1))
+#         self._B = np.reshape(Ur.dot(Vr), (D1, D2, d))
+#         self.mps[0] = np.copy(self._B)
+#         self.mps._mat = np.copy(evMat)
+#         self.mps._connector = np.linalg.pinv(evMat)
+#         self.mps._position = 0
+
+#     def doTDVP(self,
+#                dt,
+#                numsteps,
+#                solver='LAN',
+#                krylov_dim=10,
+#                rtol=1E-6,
+#                atol=1e-12,
+#                regaugetol=1E-10,
+#                ncv=40,
+#                numeig=1,
+#                lgmrestol=1E-10,
+#                Nmaxlgmres=40,
+#                cp=None,
+#                keep_cp=False,
+#                verbose=1):
+#         """
+#         !!!!!!!!!!!!!!!!!!!!!!         This has not yet been tested    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#         to real or imaginary time evolution for an infinite homogeneous systems using the TDVP
+#         currently only nearest neighbor Hamiltonians are supported
+#         Parameters:
+#         -------------------------------
+#         dt:             float or complex:
+#                         time step for real or imaginary time evolution; dt has to either real of imaginary
+#         numsteps:       int
+#                         number of time steps
+#         solver:         str
+#                         type of solver to be used, can be either of {LAN, RK45, RK32, SEXPMV}
+#         krylov_dim:     int
+#                         number of krylov vectors to be used with solver=LAN
+#         atol,rtol:      float
+#                         absolute and relative tolerance of the RK45 and RK23 solvers
+#         regaugetol:     float
+#                         precision of the left and right dominant eigenvectors of the transfer operator
+#         ncv:            int
+#                         number of krylov vectors used for diagonalizeing transfer operator
+#         numeig:         int 
+#                         number of eigenvector-eigenvalues pairs calculated when diagonlizing transfer 
+#                         operator (hyperparameter)
+#         lgmrestol:      float
+#                         precision of lgmres used in determining left and right Hamiltonian environments 
+#         Nmaxlgmres:     int
+#                         maximum number of lgmres steps for determining for determining left and right Hamiltonian environments 
+#         cp:             int or None
+#                         if int>0, checkpoints are written every cp steps
+#         keep_cp:        bool
+#                         if True, intermediate checkpoints are kept on disk
+#         verbose:        int
+#                         verbosity flag; larger value produces more output, use 0 for no output
+#         """
+
+#         if solver not in [
+#                 'LAN', 'Radau', 'SEXPMV', 'RK45', 'BDF', 'LSODA', 'RK23'
+#         ]:
+#             raise ValueError(
+#                 "VUMPSengine.doTDVP(): unknown solver type {0}; use {'LAN','Radau','SEXPMV','RK45','BDF','LSODA','RK23'}"
+#                 .format(solver))
+
+#         if solver in ['Radau', 'RK45', 'BDF', 'LSODA', 'RK23']:
+#             if StrictVersion(sp.__version__) < StrictVersion('1.1.0'):
+#                 warnings.warn(
+#                     '{0} solver is only available for scipy versions >= 1.1.0. Switching to LAN time evolution'
+#                     .format(solver),
+#                     stacklevel=2)
+#                 solver = 'LAN'
+
+#         current = 'None'
+#         while self._it <= numsteps:
+#             Edens, Elocright, leftn, rightn = self._prepareStep(
+#                 tol=regaugetol,
+#                 ncv=ncv,
+#                 numeig=numeig,
+#                 lgmrestol=lgmrestol,
+#                 Nmaxlgmres=Nmaxlgmres)
+#             self._doEvoStep(solver, dt, krylov_dim, rtol, atol)
+#             if verbose >= 1:
+#                 self._t0 += np.abs(dt)
+#                 stdout.write(
+#                     "\rTDVP using %s solver: it/Nmax=%i/%i: t/T= %1.6f/%1.6flocal E=%.16f, D=%i, |dt|=%1.5f"
+#                     % (solver, self._it, numsteps, self._t0,
+#                        np.abs(dt) * numsteps, np.real(Edens), max(self.mps.D),
+#                        np.abs(dt)))
+
+#                 stdout.flush()
+#             if verbose >= 2:
+#                 print('')
+#             if (cp != None) and (self._it > 0) and (self._it % cp == 0):
+#                 if not keep_cp:
+#                     if os.path.exists(current + '.pickle'):
+#                         os.remove(current + '.pickle')
+#                     current = self._filename + '_tdvp_cp' + str(self._it)
+#                     self.save(current)
+#                 else:
+#                     current = self._filename + '_tdvp_cp' + str(self._it)
+#                     self.save(current)
+
+#             self._it += 1
+#         self.mps.position(0)
+#         self.mps.resetZ()
+#         return self._t0
 
 
 # class HomogeneousIMPSengine(Container):
