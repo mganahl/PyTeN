@@ -73,18 +73,17 @@ class Tensor(np.ndarray, TensorBase):
 
     def merge(self, indices):
         """
-
         merge has to return the data neccessary to unmerge indices again. In the generic case, merging is irreversible
         if no additional information is given.
 
-        merges indices in the tuple ```indices```, respecting the order of the elements of ```indices```.
-        for each list in ```indices```, the indices in this list are merged into a single index.
-        The order of these merged indices is given by the order in which the lists are passed.
-        All indices of self which are not in any of the lists in ```indices``` are transposed and placed in the following way:
-        let ```comp``` be an ordered list (small to large) of the complementary indices to ```indices```, i.e. ```comb``` contains all indices not contained in ```indices```,i.e.
-        ```comb=[c1,c2,c3,...]```. self is then first transposed into an index-order
-
-        [sorted(all elements of comb which are smaller than min(indices[0]))],indices[0],[sorted(all elements of comb wich are smaller than min(indices[1]) and larger than min(indices[0])],indices[1],...,indices[-1],sorted([all elements of comb which have not yet been placed])]
+        merges indices in `indices`, respecting the order of the elements of `indices`.
+        For each list in `indices`, the indices in this list are merged into a single new index.
+        The order of these new merged indices is given by the order in which the lists are passed.
+        All indices of self which are not in any of the lists in `indices` are transposed and placed in the following way:
+        let `comp` be an ordered list (small to large) of the complementary indices to `indices`, i.e. `comp` contains all 
+        indices not contained in `indices`,i.e. `comb=[c1,c2,c3,...]`. self is then first transposed into an index-order
+        [sorted(all elements of `comp` which are smaller than min(indices[0]))],indices[0],[sorted(all elements of `comp` 
+        wich are smaller than min(indices[1]) and larger than min(indices[0])],indices[1],...,indices[-1],sorted([all elements of `comp` which have not yet been placed])]
 
         Parameters:
         ----------------------
@@ -92,9 +91,9 @@ class Tensor(np.ndarray, TensorBase):
                    the indices which should be merged
         Returns:
         ----------------------
-        (Tensor,data):    
+        (Tensor, data):    
         Tensor:            the tensor with merged indices
-        data:              information neccessary to undo the merge
+        data:              information neccessary to undo the merge (the old shape)
         
         """
         t = list(indices)
@@ -170,7 +169,7 @@ class Tensor(np.ndarray, TensorBase):
 
     def eye(self, rank_index, *args, **kwargs):
         """
-        returns an identity matrix of shape matching with ```self.shape[index]```
+        returns an identity matrix of shape matching with `self.shape[index]`
         """
         if rank_index >= len(self.shape):
             raise IndexError("rank_index out of range")
@@ -273,7 +272,7 @@ class Tensor(np.ndarray, TensorBase):
         -----------------------
         newshape: tuple or list
                   the new shape of the array
-                  if newshape[n]=None, the dimension ```n``` is not truncated
+                  if newshape[n]=None, the dimension `n` is not truncated
         """
         if not len(newshape) == len(self.shape):
             raise ValueError(
