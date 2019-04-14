@@ -755,6 +755,7 @@ def TMeigs(tensors,
 
     Parameters:
     ------------------------------
+    tensors:       list of Tensor
     direction:     int or str
 
                    if direction in (1,'l','left')   return the left dominant EV
@@ -847,3 +848,39 @@ def TMeigs(tensors,
     elif np.issubdtype(dtype, np.complexfloating):
         return eta[m], type(tensors[0]).from_dense(
             vec[:, m], [tensors[0].shape[0], tensors[0].shape[0]])
+
+
+def evolve_tensor_lan(left_env, mpo, right_env, mps, tau,
+                    krylov_dimension=20, delta=1E-8):
+    
+    def HAproduct(L, mpo, R, mps):
+        return ncon.ncon([L, mps, mpo, R],
+                         [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
+    
+    def scalar_product(a, b):
+        return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
+    
+    mv=fct.partial(HAproduct,*[left_env, mpo, right_env])
+    lan=lanEn.LanczosTimeEvolution(mv, scalar_product,
+                                   ncv=krylov_dimension,
+                                   delta=delta)
+    return lan.do_step(mps,tau)
+
+
+def evolve_matrix_lan(left_env, right_env, mat,
+                    tau, krylov_dimension=20,
+                    delta=1E-8):
+    def HAproduct(L, R, mat):
+        return ncon.ncon([L, mat, R],
+                         [[1, -1, 2], [1, 3], [3, -2, 2]])
+    
+    def scalar_product(a, b):
+        return ncon.ncon([a.conj(), b], [[1, 2], [1, 2]])
+    
+    mv=fct.partial(HAproduct,*[left_env,right_env])
+    lan=lanEn.LanczosTimeEvolution(mv, scalar_product,
+                                   ncv=krylov_dimension,
+                                   delta=delta)
+    return lan.do_step(mat,tau)
+ 
+    
