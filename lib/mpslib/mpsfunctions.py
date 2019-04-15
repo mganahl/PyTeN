@@ -741,7 +741,6 @@ def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
 
 
 
-
 def TMeigs_naive(tensors,
                  direction,
                  init=None,

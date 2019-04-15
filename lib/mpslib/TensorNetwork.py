@@ -6,6 +6,7 @@ import pickle
 import warnings
 import os
 import operator as opr
+from lib.mpslib.Tensor import Tensor
 import copy
 import numbers
 import numpy as np
@@ -1452,9 +1453,22 @@ class MPS(MPSBase):
                *args,
                **kwargs):
         """
-        generate a random TensorNetwork
+        generate a random MPS
         Parameters:
-        ----------------------------------------------
+        ---------------------------
+        D:   list of int of length (N+1)
+             the bond dimensions of the MPS
+        d:   list of int of length (N)
+             the local hilbert space dimensions of the MPS
+        name:  str
+               the name of the MPS
+        initializer:   callable
+                       a function which returns a list of MPS tensors
+        numpy_func:    callable
+                       function used to initialize each single tensor
+        Returns:
+        ---------------------------
+        MPS object
         """
         if len(D) != len(d) + 1:
             raise ValueError('len(D)!=len(d)+1')
@@ -1466,6 +1480,29 @@ class MPS(MPSBase):
                 *args,
                 **kwargs),
             name=name)
+
+
+    # @classmethod
+    # def random_uniform(cls,
+    #                    D=10,
+    #                    d=2,
+    #                    N=4,
+    #                    name=None,
+    #                    initializer=ndarray_initializer,
+    #                    numpy_func=np.random.random_sample,
+    #                    *args,
+    #                    **kwargs):
+    #     """
+    #     generate a random uniform MPS
+    #     Parameters:
+    #     ----------------------------------------------
+    #     """
+    #     minval = kwargs.get('minval', -0.5)
+    #     maxval = kwargs.get('maxval', 0.5)
+    #     tensor = (maxval - minval) * numpy_func((D,D,d)).view(Tensor) + minval
+    #     mps = cls(tensors=[np.copy(tensor).view(Tensor) for n in range(N)],name=name)
+    #     return mps
+
 
     @classmethod
     def zeros(cls,
@@ -1758,7 +1795,15 @@ class MPS(MPSBase):
         """
         applies a one-site gate to an mps at site "site"
         the center bond is shifted to bond site+1 
-        the _Z norm of the mps is changed
+        Parameters: 
+        ------------
+        gate:   a Tensor of rank 2
+        site:   int 
+                site where `gate` should be applied
+        Returns:
+        -----------------
+        self: an MPS object
+
         """
         self.position(site)
         tensor = ncon.ncon([self.mat,self._tensors[site], gate],

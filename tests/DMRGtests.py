@@ -21,60 +21,6 @@ anticomm=lambda x,y:np.dot(x,y)+np.dot(y,x)
 herm=lambda x:np.conj(np.transpose(x))
 
 
-class TestSIAM(unittest.TestCase):
-    def setUp(self):
-        N=11
-        dtype=float
-        U=np.zeros(N)
-        U[0]=0.0
-        hop_u=(-1.0)*np.ones(N-1)
-        hop_d=(-1.0)*np.ones(N-1)
-        mu_u=(-0.1)*np.ones(N)
-        mu_d=(-0.8)*np.ones(N)
-    
-        """ 
-        ===============================================================
-        diagonalization of free Hamiltonian
-        """
-        Ham_up=np.diag(mu_u)+np.diag(-hop_u,1)+np.diag(-hop_u,-1)
-        eta_up,UNIT_up=np.linalg.eig(Ham_up)
-        eta_up[np.abs(eta_up)<1E-12]=0.0
-        mF_up=np.nonzero(eta_up<=0.0)[0][-1]
-        UNIT_up_=np.copy(UNIT_up[:,0:mF_up+1])
-        M_up=UNIT_up_.dot(herm(UNIT_up_))
-        
-        Ham_down=np.diag(mu_d)+np.diag(-hop_d,1)+np.diag(-hop_d,-1)
-        eta_down,UNIT_down=np.linalg.eig(Ham_down)
-        eta_down[np.abs(eta_down)<1E-12]=0.0
-        mF_down=np.nonzero(eta_down<=0.0)[0][-1]
-        UNIT_down_=np.copy(UNIT_down[:,0:mF_down+1])
-        M_down=UNIT_down_.dot(herm(UNIT_down_))
-        
-        self.eexact=np.sum(eta_up[eta_up<0])+np.sum(eta_down[eta_down<0])
-        """ 
-        ===============================================================
-        """
-        mpoobc=H.HubbardChain(U,hop_u,hop_d,mu_u,mu_d,obc=True,dtype=dtype)
-        chi=10
-        d=4
-        mps=mpslib.MPS.random(N,chi,d,obc=True,dtype=dtype)
-        mps.position(N)
-        mps.position(0)
-        mps._D=60
-        lb=np.ones((1,1,1))
-        rb=np.ones((1,1,1))
-
-        self.dmrg=en.DMRGengine(mps,mpoobc,'testSIAM',lb,rb)
-        self.eps=1E-5
-    def testSIAMAR(self):
-        edmrg=self.dmrg.simulateTwoSite(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1)
-        edmrg=self.dmrg.simulate(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1)
-        self.assertTrue(abs(self.eexact-edmrg)/np.abs(edmrg)<self.eps)
-    def testSIAMLAN(self):
-        edmrg=self.dmrg.simulateTwoSite(Nmax=2,Econv=1e-10,tol=1e-6,ncv=40,cp=None,verbose=1,numvecs=1,solver='LAN')
-        edmrg=self.dmrg.simulate(4,1e-10,1e-6,40,cp=10,verbose=1,numvecs=1,solver='LAN')
-        self.assertTrue(abs(self.eexact-edmrg)/np.abs(edmrg)<self.eps)
-
 class TestXXZFloat(unittest.TestCase):        
     def setUp(self):
         D=60

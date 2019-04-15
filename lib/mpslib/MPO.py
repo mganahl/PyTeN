@@ -516,7 +516,36 @@ class InfiniteXXZ(InfiniteMPO):
             mpo.append(np.copy(temp))
         super().__init__(mpo)
 
+class FiniteRescalingMPO(FiniteMPO):
+    """
+    discretized version of the non-relativistic rescaling operator `L`.
+    """
+    def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
+        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
+        mpo = []
+        mpo.append(np.copy(temp))
+        for n in range(1, N - 1):
+            temp = Tensor.zeros((5, 5, 2, 2), dtype)
+            mpo.append(np.copy(temp))
 
+        temp = Tensor.zeros((5, 1, 2, 2), dtype)
+        mpo.append(np.copy(temp))
+        super().__init__(mpo)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 # class XXZIsing(MPO):
 #     """
 #     the famous Heisenberg Hamiltonian, which we all know and love so much!
