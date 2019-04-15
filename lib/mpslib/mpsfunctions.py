@@ -104,6 +104,8 @@ def mps_tensor_adder(A, B, boundary_type, ZA=1.0, ZB=1.0):
     A,B:    Tensor objects
     boundary_type:  str
                     can be ('l','left',-1) or ('r','right',1) or ('b','bulk',0)
+    ZA, ZB:   float 
+              the coefficients in from of A and B, i.e. ZA * A + ZB * B
     """
     dtype = np.result_type(A, B)
     if A.shape[2] != B.shape[2]:
@@ -151,6 +153,23 @@ def mps_tensor_adder(A, B, boundary_type, ZA=1.0, ZB=1.0):
 
 def transfer_operator(tensors_a, tensors_b, direction, x):
     """
+    MPS transfer operator.
+    Parameters:
+    -----------------------
+    tensors_a:  list of Tensor or np.ndarray
+                mps tensors on the unconjugated side
+    tensors_b:  list of Tensor or np.ndarray
+                mps tensors on the conjugated side 
+                user should pass them UNCONJUGATED, conjugation happens inside
+    direction: int or str in ('l','left,1) or ('r','right',-1)
+               direction 
+    x:         np.ndarray or Tensor
+               the input
+    Returns: 
+    ------------------------
+
+    np.ndarray or Tensor:   result of the transfer operator acting on `x`
+    
     """
     if len(tensors_a) != len(tensors_b):
         raise ValueError(
@@ -288,6 +307,15 @@ def prepare_tensor_QR(tensor, direction,walltime_log=None):
 def ortho_deviation(tensor, which):
     """
     returns the deviation from left or right orthonormalization of the MPS tensors
+    Parameters:
+    -------------------
+    tensor:   Tensor 
+    which:    int or str 
+              which should be either in ('l', 'left', 1) or ('r', 'right', -1)
+    Returns:  
+    ----------------
+    float:    the deviation from orthogonality
+    
     """
     if which in ('l', 'left', 1):
         return np.linalg.norm(
@@ -660,7 +688,7 @@ def eigsh(L,
         tol=precision,
         v0=initial.to_dense(),
         ncv=ncv)
-
+    
     # if numvecs == 1:
     #     ind = np.nonzero(e == min(e))
     #     return e[ind[0][0]], initial.from_dense(v[:, ind[0][0]],
@@ -712,11 +740,43 @@ def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
     return e, [initial.from_dense(v, [chilp, chirp, dp])]
 
 
+
+
 def TMeigs_naive(tensors,
                  direction,
                  init=None,
                  precision=1E-12,
                  nmax=100000):
+    """
+    calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator, 
+    using the power method
+
+    Parameters:
+    ------------------------------
+    tensors:       list of Tensor
+    direction:     int or str
+
+                   if direction in (1,'l','left')   return the left dominant EV
+                   if direction in (-1,'r','right') return the right dominant EV
+    init:          tf.tensor
+                   initial guess for the eigenvector
+    precision:     float
+                   desired precision of the dominant eigenvalue
+    nmax:          int
+                   max number of iterations
+
+    Returns:
+    ------------------------------
+    (eta,x, it, diff):
+    eta:   float
+           the eigenvalue
+    x:     tf.tensor
+           the dominant eigenvector (in matrix form)
+    it:    int 
+           the number of iterations taken
+    diff:  float 
+           the precision of the result
+    """
 
     if not np.all(tensors[0].dtype == t.dtype for t in tensors):
         raise TypeError('TMeigs_naive: all tensors have to have the same dtype')
@@ -740,6 +800,8 @@ def TMeigs_naive(tensors,
         if it >= nmax:
             break
     return eta, x, it, diff
+
+
 
 
 def TMeigs(tensors,
@@ -850,9 +912,26 @@ def TMeigs(tensors,
             vec[:, m], [tensors[0].shape[0], tensors[0].shape[0]])
 
 
+
+    
 def evolve_tensor_lan(left_env, mpo, right_env, mps, tau,
                     krylov_dimension=20, delta=1E-8):
-    
+    """
+    evolve `mps` locally using a lanczos algorithm
+    Parameters:
+    ----------------
+    left_env:           Tensor of shape (Dl,Dl,Ml)
+    mpo:                Tensor of shape (Ml, Mr, d_out, d_in)
+    right_env:          Tensor of shape (Dr,Dr,Mr)
+    mps:                Tensor of shape (Dl, Dr, d_in)
+    tau:                float or complex 
+    krylov_dimension:   int 
+    delta:              float
+
+    Returns:
+    ------------------
+    Tensor: the evolved `mps`
+    """
     def HAproduct(L, mpo, R, mps):
         return ncon.ncon([L, mps, mpo, R],
                          [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
@@ -867,9 +946,26 @@ def evolve_tensor_lan(left_env, mpo, right_env, mps, tau,
     return lan.do_step(mps,tau)
 
 
+
 def evolve_matrix_lan(left_env, right_env, mat,
                     tau, krylov_dimension=20,
                     delta=1E-8):
+    """
+    evolve `mat` locally using a lanczos algorithm
+    Parameters:
+    ----------------
+    left_env:           Tensor of shape (D,D,M)
+    right_env:          Tensor of shape (D,D,M)
+    mat:                Tensor of shape (D, D)
+    tau:                float or complex 
+    krylov_dimension:   int 
+    delta:              float
+    Returns:
+    ------------------
+    Tensor: the evolved `mat`
+
+    """
+    
     def HAproduct(L, R, mat):
         return ncon.ncon([L, mat, R],
                          [[1, -1, 2], [1, 3], [3, -2, 2]])
@@ -883,4 +979,3 @@ def evolve_matrix_lan(left_env, right_env, mat,
                                    delta=delta)
     return lan.do_step(mat,tau)
  
-    
