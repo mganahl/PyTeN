@@ -3,25 +3,15 @@
 """
 
 from __future__ import absolute_import, division, print_function
-from distutils.version import StrictVersion
 from sys import stdout
 import sys, time, copy, warnings
 import numpy as np
-import lib.mpslib.sexpmv as sexpmv
-try:
-    MPSL = sys.modules['lib.mpslib.mps']
-except KeyError:
-    import lib.mpslib.mps as MPSL
-
 import lib.ncon as ncon
 import scipy as sp
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
-#from scipy.integrate import solve_ivp
-
 import functools as fct
 from scipy.sparse.linalg import ArpackNoConvergence
-from scipy.interpolate import griddata
 from scipy.sparse.linalg import ArpackNoConvergence
 from scipy.sparse.linalg import ArpackError
 from scipy.sparse.linalg import eigs
@@ -29,6 +19,7 @@ from scipy.sparse.linalg import lgmres
 from numpy.linalg.linalg import LinAlgError
 import lib.Lanczos.LanczosEngine as lanEn
 import lib.mpslib.Tensor as tnsr
+
 comm = lambda x, y: np.dot(x, y) - np.dot(y, x)
 anticomm = lambda x, y: np.dot(x, y) + np.dot(y, x)
 herm = lambda x: np.conj(np.transpose(x))
@@ -246,20 +237,22 @@ def prepare_tensor_QR(tensor, direction,walltime_log=None):
 
     Parameters:
     ----------------------------------
-    tensor: np.ndarray of shape(D1,D2,d)
-            an mps tensor
+    tensor:    Tensor of shape(D1,D2,d)
+               an mps tensor
 
     direction: int
                direction in {1,'l','left'}: returns left orthogonal decomposition, 
                direction in {-1,'r','right'}: returns right orthogonal decomposition, 
     fixphase:  str
-              fixphase can be in {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+               fixphase can be in {'q','r'} fixes the phase of the diagonal of q or r to be real and positive
+
     Returns: 
     -------------------------------------
-    (out,r,Z)
-    out: np.ndarray
+    for direction in (1,'l','left'): (out, r, Z)
+    for direction in (-1,'r','right'): (r, out, Z)
+    out: Tensor
          a left or right isometric mps tensor
-    r:   np.ndarray
+    r:   Tensor
          an upper or lower triangular matrix
     Z:   float
          the norm of the input tensor, i.e. tensor"="out x r x Z (direction in {1.'l','left'} or tensor"=r x out x Z (direction in {-1,'r','right'}
