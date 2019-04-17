@@ -808,6 +808,7 @@ class MPS(MPSBase):
         #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
         self._position = self.num_sites
 
+        
     def __len__(self):
         return self.num_sites
 
@@ -821,10 +822,13 @@ class MPS(MPSBase):
         return self._connector
 
     def normalize(self, **kwargs):
-        self.mat/=np.sqrt(self.mat.norm())        
+        Z = np.sqrt(self.mat.norm())        
+        self.mat /= Z
         #self.canonize(numeig=1, **kwargs)
+        Z *= self._norm
         self._norm = self.dtype.type(1)
-
+        return Z
+    
     def roll(self, num_sites):
         """
         roll the mps unitcell by num_sites (shift it by num_sites)
@@ -1248,90 +1252,97 @@ class MPS(MPSBase):
         None
         """
         self.position(0)
-        if not power_method:
-            eta, l = self.TMeigs(
-                direction='left',
-                init=init,
-                nmax=nmax,
-                precision=precision,
-                ncv=ncv,
-                numeig=numeig)
-        elif power_method:
-            eta, l, _, _ = self.TMeigs_naive(
-                direction='left', init=init, nmax=nmax, precision=precision)
-        sqrteta = np.real(eta)
-        self.mat /= sqrteta
 
-        if np.abs(np.imag(eta)) / np.abs(np.real(eta)) > warn_thresh:
-            print(
-                'in mpsfunctions.py.regaugeIMPS: warning: found eigenvalue eta with large imaginary part: ',
-                eta)
-
-        l = l / l.tr()
-        l = (l + l.conj().transpose()) / 2.0
-
-        eigvals_left, u_left = l.eigh()
-        eigvals_left /= np.sqrt(
-            ncon.ncon([eigvals_left, eigvals_left.conj()], [[1], [1]]))
-        inveigvals_left=eigvals_left.zeros(eigvals_left.shape[0])
-        eigvals_left[eigvals_left <= pinv] = 0.0
-        inveigvals_left[eigvals_left > pinv] = 1.0/eigvals_left[eigvals_left > pinv]
-
-        y = ncon.ncon([u_left, np.sqrt(eigvals_left).diag()],
-                      [[-2, 1], [1, -1]])
-        invy = ncon.ncon([np.sqrt(inveigvals_left).diag(),
-                          u_left.conj()], [[-2, 1], [-1, 1]])
-        if not power_method:
-            eta, r = self.TMeigs(
-                direction='right',
-                init=init,
-                nmax=nmax,
-                precision=precision,
-                ncv=ncv,
-                numeig=numeig)
-        elif power_method:
-            eta, r, _, _ = self.TMeigs_naive(
-                direction='right', init=init, nmax=nmax, precision=precision)
-
-        r = r / r.tr()
-        r = (r + r.conj().transpose()) / 2.0
-        eigvals_right, u_right = r.eigh()
-        eigvals_right[eigvals_right <= pinv] = 0.0
-        
-        eigvals_right /= np.sqrt(
-            ncon.ncon([eigvals_right, eigvals_right.conj()], [[1], [1]]))
-        inveigvals_right=eigvals_right.zeros(eigvals_right.shape[0])
-        inveigvals_right[eigvals_right > pinv] = 1.0/eigvals_right[eigvals_right> pinv]
-
-
-        x = ncon.ncon([u_right, np.sqrt(eigvals_right).diag()],
-                      [[-1, 1], [1, -2]])
-        invx = ncon.ncon([np.sqrt(inveigvals_right).diag(),
-                          u_right.conj()], [[-1, 1], [-2, 1]])
-        U, lam, V, _ = ncon.ncon([y, x], [[-1, 1], [1, -2]]).svd(truncation_threshold=truncation_threshold,D=D)
-        
-        self._tensors[0] = ncon.ncon(
-            [lam.diag(), V, invx, self.mat, self._tensors[0]],
-            [[-1, 1], [1, 2], [2, 3], [3, 4], [4, -2, -3]])
-        self._tensors[-1] = ncon.ncon(
-            [self._tensors[-1], self.connector, invy, U],
-            [[-1, 1, -3], [1, 2], [2, 3], [3, -2]])
-        self.mat = self._tensors[0].eye(0)
-        self._connector = self._tensors[-1].eye(1)
-
-        self.position(len(self) - 1)
-        self._tensors[-1] = self.get_tensor(len(self) - 1)
-        Z = ncon.ncon([self._tensors[-1], self._tensors[-1].conj()],
-                          [[1, 2, 3], [1, 2, 3]]) / np.sum(self.D[-1])
-        
-        self._tensors[-1] /= np.sqrt(Z)
-        lam_norm = np.sqrt(ncon.ncon([lam, lam], [[1], [1]]))
-        lam = lam / lam_norm
-        self.mat = lam.diag()
-        self._position = len(self)
-        self._connector = (1.0 / lam).diag()
-        self._right_mat = lam.diag()
-        self._norm = self.dtype.type(1)
+        if np.sum(self.D[0]) == 1:
+            if np.sum(self.D[0]) != np.sum(self.D[-1]):
+                raise ValueError('MPS.canonize():  left and right boundary bond dimensions of the  MPS are different!')
+            self.position(N)
+            self.normalize()
+        else:
+            if not power_method:
+                eta, l = self.TMeigs(
+                    direction='left',
+                    init=init,
+                    nmax=nmax,
+                    precision=precision,
+                    ncv=ncv,
+                    numeig=numeig)
+            elif power_method:
+                eta, l, _, _ = self.TMeigs_naive(
+                    direction='left', init=init, nmax=nmax, precision=precision)
+            sqrteta = np.real(eta)
+            self.mat /= sqrteta
+            
+            if np.abs(np.imag(eta)) / np.abs(np.real(eta)) > warn_thresh:
+                print(
+                    'in mpsfunctions.py.regaugeIMPS: warning: found eigenvalue eta with large imaginary part: ',
+                    eta)
+            
+            l = l / l.tr()
+            l = (l + l.conj().transpose()) / 2.0
+            
+            eigvals_left, u_left = l.eigh()
+            eigvals_left /= np.sqrt(
+                ncon.ncon([eigvals_left, eigvals_left.conj()], [[1], [1]]))
+            inveigvals_left=eigvals_left.zeros(eigvals_left.shape[0])
+            eigvals_left[eigvals_left <= pinv] = 0.0
+            inveigvals_left[eigvals_left > pinv] = 1.0/eigvals_left[eigvals_left > pinv]
+            
+            y = ncon.ncon([u_left, np.sqrt(eigvals_left).diag()],
+                          [[-2, 1], [1, -1]])
+            invy = ncon.ncon([np.sqrt(inveigvals_left).diag(),
+                              u_left.conj()], [[-2, 1], [-1, 1]])
+            if not power_method:
+                eta, r = self.TMeigs(
+                    direction='right',
+                    init=init,
+                    nmax=nmax,
+                    precision=precision,
+                    ncv=ncv,
+                    numeig=numeig)
+            elif power_method:
+                eta, r, _, _ = self.TMeigs_naive(
+                    direction='right', init=init, nmax=nmax, precision=precision)
+            
+            r = r / r.tr()
+            r = (r + r.conj().transpose()) / 2.0
+            eigvals_right, u_right = r.eigh()
+            eigvals_right[eigvals_right <= pinv] = 0.0
+            
+            eigvals_right /= np.sqrt(
+                ncon.ncon([eigvals_right, eigvals_right.conj()], [[1], [1]]))
+            inveigvals_right=eigvals_right.zeros(eigvals_right.shape[0])
+            inveigvals_right[eigvals_right > pinv] = 1.0/eigvals_right[eigvals_right> pinv]
+            
+            
+            x = ncon.ncon([u_right, np.sqrt(eigvals_right).diag()],
+                          [[-1, 1], [1, -2]])
+            invx = ncon.ncon([np.sqrt(inveigvals_right).diag(),
+                              u_right.conj()], [[-1, 1], [-2, 1]])
+            U, lam, V, _ = ncon.ncon([y, x], [[-1, 1], [1, -2]]).svd(truncation_threshold=truncation_threshold,D=D)
+            
+            self._tensors[0] = ncon.ncon(
+                [lam.diag(), V, invx, self.mat, self._tensors[0]],
+                [[-1, 1], [1, 2], [2, 3], [3, 4], [4, -2, -3]])
+            self._tensors[-1] = ncon.ncon(
+                [self._tensors[-1], self.connector, invy, U],
+                [[-1, 1, -3], [1, 2], [2, 3], [3, -2]])
+            self.mat = self._tensors[0].eye(0)
+            self._connector = self._tensors[-1].eye(1)
+            
+            self.position(len(self) - 1)
+            self._tensors[-1] = self.get_tensor(len(self) - 1)
+            Z = ncon.ncon([self._tensors[-1], self._tensors[-1].conj()],
+                              [[1, 2, 3], [1, 2, 3]]) / np.sum(self.D[-1])
+            
+            self._tensors[-1] /= np.sqrt(Z)
+            lam_norm = np.sqrt(ncon.ncon([lam, lam], [[1], [1]]))
+            lam = lam / lam_norm
+            self.mat = lam.diag()
+            self._position = len(self)
+            self._connector = (1.0 / lam).diag()
+            self._right_mat = lam.diag()
+            self._norm = self.dtype.type(1)
 
     def __in_place_unary_operations__(self, operation, *args, **kwargs):
         """
@@ -1439,6 +1450,8 @@ class MPS(MPSBase):
         """
         return self._position
 
+
+        
     @classmethod
     def random(cls,
                D=[2, 2],
@@ -1910,7 +1923,12 @@ class FiniteMPS(MPS):
         return FiniteMPS(tensors=tensors)  #out is an unnormalized MPS
 
     def normalize(self):
-        self.mat/=np.sqrt(self.mat.norm())
+        Z = np.sqrt(self.mat.norm())        
+        self.mat /= Z
+        #self.canonize(numeig=1, **kwargs)
+        Z *= self._norm        
+        self._norm = self.dtype.type(1)
+        return Z
         # if self.pos == len(self):
         #     self.position(0)
         # elif self.pos == 0:
@@ -1919,8 +1937,7 @@ class FiniteMPS(MPS):
         #     self.position(0)
         #     self.position(len(self))
         # self.position(self.pos)
-        self._norm = self.dtype.type(1)
-        
+    
     def norm(self):
         return self._norm*self.mat.norm()
 
