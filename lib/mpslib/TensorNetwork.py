@@ -1256,7 +1256,7 @@ class MPS(MPSBase):
         if np.sum(self.D[0]) == 1:
             if np.sum(self.D[0]) != np.sum(self.D[-1]):
                 raise ValueError('MPS.canonize():  left and right boundary bond dimensions of the  MPS are different!')
-            self.position(N)
+            self.position(len(self))
             self.normalize()
         else:
             if not power_method:
