@@ -797,10 +797,6 @@ class MPSBase(TensorNetwork):
 
 class MPS(MPSBase):
 
-    @classmethod
-    def from_tensors(cls, tensors, name=None):
-        return cls(tensors, name=name, fromview=True)
-
     def __init__(self, tensors, name=None, fromview=True):
         """
         no checks are performed to see wheter the provided tensors can be contracted
@@ -1813,7 +1809,29 @@ class MPS(MPSBase):
         self._tensors[site] = B
         self.mat = mat
         return self
-
+    
+    def apply_MPO(self, mpo):
+        """
+        applies an mpo to an mps; no truncation is done
+        """
+        if not len(self) == len(mpo):
+            raise ValueError('length of mpo is different from length of mps! cannot apply mpo')
+        if hasattr(mpo,'get_tensor'):
+            tensors = [
+                ncon.ncon(
+                    [self.get_tensor(n), mpo.get_tensor(n)],
+                    [[-1, -3, 1], [-2, -4, -5, 1]]).merge([[0, 1], [2, 3], [4]])[0]
+                for n in range(len(self))
+            ]
+            return self.__init__(tensors)
+        elif hasattr(mpo,'__getitem__'):
+            tensors = [
+                ncon.ncon(
+                    [self.get_tensor(n), mpo[n]],
+                    [[-1, -3, 1], [-2, -4, -5, 1]]).merge([[0, 1], [2, 3], [4]])[0]
+                for n in range(len(self))
+            ]
+            return self.__init__(tensors)
 
 class FiniteMPS(MPS):
 
@@ -1984,19 +2002,7 @@ class FiniteMPS(MPS):
                 self.position(self.pos)
             return self
 
-    def apply_MPO(self, mpo):
-        """
-        applies an mpo to an mps; no truncation is done
-        """
-        assert (len(mpo) == len(self))
-        tensors = [
-            ncon.ncon(
-                [self.get_tensor(n), mpo.get_tensor(n)],
-                [[-1, -3, 1], [-2, -4, -5, 1]]).merge([[0, 1], [2, 3], [4]])[0]
-            for n in range(len(self))
-        ]
-        return self.from_tensors(tensors)
-
+            
     def dot(self, mps):
         """
         calculate the overlap of self with mps 
