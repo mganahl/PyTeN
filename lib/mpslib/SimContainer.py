@@ -1004,6 +1004,7 @@ class TEBDBase(Container):
     def __init__(self, mps, mpo, name=None):
         """
         initialize a TEBDbase  simulation 
+        calls mps.position(0), but does not normalize the mps
         Parameters:
         --------------------------------------------------------
         mps:           MPS object
@@ -1101,6 +1102,7 @@ class TEBDBase(Container):
 class FiniteTEBDEngine(TEBDBase):
     """
     TEBD simulation class for finite systems
+    calls mps.position(0), but does not normalize the mps
 
     Parameters:
     --------------------------------------------------------
@@ -1203,6 +1205,7 @@ class FiniteTEBDEngine(TEBDBase):
 class InfiniteTEBDEngine(TEBDBase):
     """
     TEBD simulation class for infinite systems
+    calls mps.position(0), but does not normalize the mps
 
     Parameters:
     --------------------------------------------------------
