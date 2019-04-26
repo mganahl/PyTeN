@@ -440,7 +440,10 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
                 )
 
         else:
-            return TensorNetwork(tensors=result, shape=self.shape, name=None)
+
+            out = self.__new__(type(self))
+            out.__init__(tensors=result, shape=self.shape, name=None)
+            return out
 
     def __mul__(self, num):
         """
@@ -634,8 +637,8 @@ class MPSBase(TensorNetwork):
         """
         get_tensor returns an mps tensors, possibly contracted with the center matrix.
         By convention the center matrix is contracted if n == self.pos.
-        The centermatrix is always absorbed from the left into the mps tensor, unless site == N-1, 
-        in which case it is absorbed from the right
+        The centermatrix is always absorbed from the left into the mps tensor, unless site == N-1
+        and pos = N, in which case it is absorbed from the right
         The connector matrix is always absorbed into the right-most mps tensors
         Parameters: 
         -------------------
@@ -795,6 +798,44 @@ class MPSBase(TensorNetwork):
         raise NotImplementedError()
 
 
+    def prepend(self, tensors):
+        """
+        prepends `tensors` to MPDO
+        Parameters:
+        --------------------
+        tensors:    list of Tensor objects
+                    shapes should be (Dl,Dr, d_out, d_in)
+
+        Returns:
+        -------------------
+        FiniteMPDO with `tensors` prepended 
+        """
+        new_tensors = tensors + [self.get_tensor(n).split([[self.D[n]],[self.D[n+1]],self.shapes[n]])
+                                 for n in range(len(self))]
+        out = self.__new__(type(self))
+        out.__init__(new_tensors)
+        return out
+    
+    def append(self, tensors):
+        """
+        appends `tensors` to MPDO
+        Parameters:
+        --------------------
+        tensors:    list of Tensor objects
+                    shapes should be (Dl,Dr, d_out, d_in)
+        Returns:
+        -------------------
+        FiniteMPDO with `tensors` appended
+
+        """
+        new_tensors = [self.get_tensor(n).split([[self.D[n]],[self.D[n+1]],self.shapes[n]])
+                      for n in range(len(self))] + tensors
+        out = self.__new__(type(self))
+        out.__init__(new_tensors)
+        return out
+
+
+    
 class MPS(MPSBase):
 
     def __init__(self, tensors, name=None, fromview=True):
@@ -963,7 +1004,7 @@ class MPS(MPSBase):
                 r = self.transfer_op(n, direction='r', x=r)
             return r
 
-    def TMeigs_naive(self, direction, init=None, precision=1E-12, nmax=100000):
+    def TMeigs_power_method(self, direction, init=None, precision=1E-12, nmax=100000):
         """
         calculate the left and right dominant eigenvector of the MPS-unit-cell transfer operator
         usint power method
@@ -1002,7 +1043,7 @@ class MPS(MPSBase):
         if np.all(init != None):
             initial = init
         tensors = [self.get_tensor(n) for n in range(len(self))]
-        return mf.TMeigs_naive(
+        return mf.TMeigs_power_method(
             tensors=tensors,
             direction=direction,
             init=init,
@@ -1268,7 +1309,7 @@ class MPS(MPSBase):
                     ncv=ncv,
                     numeig=numeig)
             elif power_method:
-                eta, l, _, _ = self.TMeigs_naive(
+                eta, l, _, _ = self.TMeigs_power_method(
                     direction='left', init=init, nmax=nmax, precision=precision)
             sqrteta = np.real(eta)
             self.mat /= sqrteta
@@ -1301,7 +1342,7 @@ class MPS(MPSBase):
                     ncv=ncv,
                     numeig=numeig)
             elif power_method:
-                eta, r, _, _ = self.TMeigs_naive(
+                eta, r, _, _ = self.TMeigs_power_method(
                     direction='right', init=init, nmax=nmax, precision=precision)
             
             r = r / r.tr()
@@ -1489,28 +1530,6 @@ class MPS(MPSBase):
                 *args,
                 **kwargs),
             name=name)
-
-
-    # @classmethod
-    # def random_uniform(cls,
-    #                    D=10,
-    #                    d=2,
-    #                    N=4,
-    #                    name=None,
-    #                    initializer=ndarray_initializer,
-    #                    numpy_func=np.random.random_sample,
-    #                    *args,
-    #                    **kwargs):
-    #     """
-    #     generate a random uniform MPS
-    #     Parameters:
-    #     ----------------------------------------------
-    #     """
-    #     minval = kwargs.get('minval', -0.5)
-    #     maxval = kwargs.get('maxval', 0.5)
-    #     tensor = (maxval - minval) * numpy_func((D,D,d)).view(Tensor) + minval
-    #     mps = cls(tensors=[np.copy(tensor).view(Tensor) for n in range(N)],name=name)
-    #     return mps
 
 
     @classmethod
@@ -1718,8 +1737,7 @@ class MPS(MPSBase):
                                  numeig=1,
                                  pinv=1E-30,
                                  warn_thresh=1E-8,
-                                 canonize=True,
-                                 name=None):
+                                 canonize=True):
         if canonize:
             self.canonize(
                 init=init,
@@ -1729,9 +1747,9 @@ class MPS(MPSBase):
                 numeig=numeig,
                 pinv=pinv,
                 warn_thresh=warn_thresh)
-
-        return MPS(
-            tensors=[self.get_tensor(n) for n in range(len(self))], name=name)
+        out = self.__new__(type(self))
+        out.__init__(tensors=[self.get_tensor(n) for n in range(len(self))])
+        return out
 
     def get_right_orthogonal_imps(self,
                                   init=None,
@@ -1755,7 +1773,9 @@ class MPS(MPSBase):
         A = ncon.ncon([self.connector, self.mat, self._tensors[0]],
                       [[-1, 1], [1, 2], [2, -2, -3]])
         tensors = [A] + [self._tensors[n] for n in range(1, len(self))]
-        imps = MPS(tensors=tensors)
+
+        imps = self.__new__(type(self))
+        imps.__init__(tensors=tensors,name=name)
         imps._position = 0
         return imps
 
@@ -1836,7 +1856,10 @@ class MPS(MPSBase):
                     [[-1, -3, 1], [-2, -4, -5, 1]]).merge([[0, 1], [2, 3], [4]])[0]
                 for n in range(len(self))
             ]
-            return self.__init__(tensors)
+            cls = self.__new__(type(self))
+            cls.__init__(tensors)
+            return cls
+        
         elif hasattr(mpo,'__getitem__'):
             tensors = [
                 ncon.ncon(
@@ -1844,8 +1867,13 @@ class MPS(MPSBase):
                     [[-1, -3, 1], [-2, -4, -5, 1]]).merge([[0, 1], [2, 3], [4]])[0]
                 for n in range(len(self))
             ]
-            return self.__init__(tensors)
+            cls = self.__new__(type(self))
+            cls.__init__(tensors)
+            return cls
 
+        else:
+            raise AttributeError()
+        
 class FiniteMPS(MPS):
 
     @classmethod
@@ -2381,3 +2409,221 @@ class CanonizedFiniteMPS(CanonizedMPS):
             print('{1} is not left canonized at site(s) {0} within {2}'.format(
                 np.nonzero(left)[0][:], type(self), thresh))
         return False
+
+
+
+
+    
+class FiniteMPDO(FiniteMPS):
+    
+    """
+    convention:  double layer mpo is folded into an mps
+                 the upper mpo layer is conjugated
+                   -6
+                   |
+                   _*
+              -1 -| |- -3
+                   -
+                   |
+                   1
+                   |
+                   _
+              -2 -| |- -4
+                   -
+                   |
+                   -5
+                   
+    The MPDO is internally stored as an mps
+    """
+    def __init__(self,tensors, name=None, fromview=True):
+        """
+        Parameters:
+        --------
+        tensors:   list Tensor objects of shape (Dl,Dr,d_out,d_in)
+                   
+        """
+        self.shapes = []
+        self.eyes = []
+        tens = []
+        for n in range(len(tensors)):
+            eye = tensors[n].eye(2).merge([[1,0]])[0] #the merge indices need to be reversed here!
+            merged, shape = tensors[n].merge([[0],[1],[2,3]])
+            self.eyes.append(eye)
+            self.shapes.append(shape[2])
+            tens.append(merged)
+        super().__init__(tensors=tens, name=name, fromview=fromview)
+        
+    def get_mpo_tensor(self, n):
+        return self.get_tensor(n).split([[self.D[n]], [self.D[n + 1]], self.shapes[n]])
+    
+    def partial_trace(self, sites):
+        """
+        trace out `sites`:
+        Parameters: 
+        -------------------
+        sites:  list of int 
+         
+        Returns:
+        FiniteMPDO with `sites` traced out
+        """
+        if set(sites) == set(range(len(self))):
+            raise ValueError('FiniteMPDO.partial_trace: use get_env_left or get_env_right'
+                             'to trace out all sites')
+        tensors = [self.get_tensor(n).copy() for n in range(len(self))]
+        new_tensors = []
+        for site in range(len(self)):
+            if site in sites:
+                mat = ncon.ncon([tensors[site], self.eyes[site]], [[-1, -2, 1], [1]])
+                if site < (len(self) -1):
+                    tensors[site + 1] = ncon.ncon([mat, tensors[site + 1]], [[-1,1], [1, -2, -3]])
+                else:
+                    new_tensors[-1] = ncon.ncon([new_tensors[-1], mat], [[-1,1,-3,-4], [1, -2]])
+            else:
+                D1, D2, _ = tensors[site].shape
+                new_tensors.append(tensors[site].split([[D1], [D2], self.shapes[site]]))
+                
+        out = self.__new__(type(self))
+        out.__init__(new_tensors)
+        return out
+                
+    def get_env_left(self,site):
+        env = np.ones((1)).view(Tensor)
+        for n in range(site):
+            A = self.get_tensor(n)
+            env = ncon.ncon([env,A, self.eyes[n]],[[1],[1,-1,2],[2]])
+        return env
+    
+    def get_env_right(self,site):
+        env = np.ones((1)).view(Tensor)
+        for n in reversed(range(site+1,len(self))):
+            A = self.get_tensor(n)
+            env = ncon.ncon([env,A,self.eyes[n]],[[1],[-1,1,2],[2]])
+        return env 
+    
+    def get_envs_left(self, sites):
+        n2 = max(sites)
+        n1 = min(sites)
+        ls = {}
+        l = self.get_env_left(n1)
+        for n in range(n1, n2 + 1):
+            if n in sites:
+                ls[n] = l
+            l = ncon.ncon([l,self.get_tensor(n),self.eyes[n]],[[1],[1,-1,2],[2]])
+        return ls
+    
+    def get_envs_right(self, sites):
+        n2 = max(sites)
+        n1 = min(sites)
+        rs = {}
+        r = self.get_env_right(n2)
+        for n in range(n2, n1 - 1, -1):
+            if n in sites:
+                rs[n] = r
+            r = ncon.ncon([r,self.get_tensor(n),self.eyes[n]],[[1],[-1,1,2],[2]])
+        return rs
+       
+    def measure_1site_ops(self,ops, sites):
+        right_envs = self.get_envs_right(sites)
+        left_envs = self.get_envs_left(sites)
+        res = []
+        Z = self.get_env_left(len(self))
+        for n in range(len(sites)):
+            op = ops[n]
+            r = right_envs[sites[n]]
+            l = left_envs[sites[n]]
+            A = self.get_tensor(sites[n])
+            res.append(ncon.ncon([l, A, op.merge([[1,0]])[0], r],
+                                 [[1], [1, 2, 3], [3], [2]]) / Z)
+
+        return np.array(res) 
+        
+    def measure_1site_op(self, op,site):
+        l, r = self.get_env_left(site), self.get_env_right(site)
+        Z = self.get_env_left(len(self))
+        A = self.get_tensor(site)
+        res = ncon.ncon([l, A, op.merge([[1, 0]])[0], r], [[1], [1, 2, 3], [3], [2]])
+        return res/Z
+    
+
+    def transfer_op(self, site, direction, x):
+        if direction in (1,'l','left'):
+            return ncon.ncon([x,self.get_tensor(site),self.eyes[n]],[[1],[1,-1,2],[2]])
+        elif direction in (-1,'r','right'):
+            return ncon.ncon([x,self.get_tensor(site),self.eyes[n]],[[1],[-1,1,2],[2]])
+        
+    def measure_1site_correlator(self, op1, op2, site1, sites2):
+        N = self.num_sites
+        if site1 < 0:
+            raise ValueError(
+                "Site site1 out of range: {} not between 0 and {}.".format(site1, N))
+        sites2 = np.array(sites2)
+        norm = self.get_env_left(len(self))
+        c = []
+        
+        left_sites = sorted(sites2[sites2 < site1])
+        rs = self.get_envs_right([site1])        
+        if len(left_sites) > 0:
+            left_sites_mod = list(set([n % N for n in left_sites]))
+            ls = self.get_envs_left(left_sites_mod)
+
+            r = ncon.ncon([rs[site1],self.get_tensor(site1),op1.merge([[1,0]])[0]],
+                                                 [[1],[-1,1,2],[2]])        
+            n1 = np.min(left_sites)
+            for n in range(site1 - 1, n1 - 1, -1):
+                if n in left_sites:
+                    l = ls[n % N]
+                    A = self.get_tensor(n % N)
+                    op = op1.merge([[1,0]])[0]
+                    res = ncon.ncon([l, A, r, op],
+                                    [[1],[1,2,3],[2],[3]])
+                    c.append(res/norm)
+                if n > n1:
+                    r = self.transfer_op(n % N, 'right', r)
+            c = list(reversed(c))
+            
+            
+
+        ls = self.get_envs_left([site1])
+
+        if site1 in sites2:
+            l = ls[site1]
+            r = rs[site1]
+            A = self.get_tensor(site1)
+            op = ncon.ncon([op1,op2],[[-1,1],[1,-2]])
+            res = ncon.ncon([l, A, r, op.merge([[1,0]])[0]],
+                                    [[1],[1,2,3],[2],[3]])
+            c.append(res/norm)
+            
+        right_sites = sites2[sites2 > site1]
+        if len(right_sites) > 0:        
+            right_sites_mod = list(set([n % N for n in right_sites]))
+                
+            rs = self.get_envs_right(right_sites_mod)
+    
+            l = ncon.ncon([ls[site1],self.get_tensor(site1),op1.merge([[1,0]])[0]],
+                                                [[1],[1,-1,2],[2]])    
+    
+            n2 = np.max(right_sites)
+            for n in range(site1 + 1, n2 + 1):
+                if n in right_sites:
+                    r = rs[n % N]
+                    A = self.get_tensor(n % N)
+                    res = ncon.ncon([l, A, r, op2.merge([[1,0]])[0]],
+                                    [[1],[1,2,3],[2],[3]]) 
+                    c.append(res/norm)
+    
+                if n < n2:
+                    l = self.transfer_op(n % N, 'left', l)
+
+        return np.array(c)
+
+  
+
+
+
+
+
+
+
+
+    
