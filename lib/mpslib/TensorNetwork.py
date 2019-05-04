@@ -1747,9 +1747,9 @@ class MPS(MPSBase):
                 numeig=numeig,
                 pinv=pinv,
                 warn_thresh=warn_thresh)
-        out = self.__new__(type(self))
-        out.__init__(tensors=[self.get_tensor(n) for n in range(len(self))])
-        return out
+        imps = self.__new__(type(self))
+        imps.__init__(tensors=[self.get_tensor(n) for n in range(len(self))])
+        return imps
 
     def get_right_orthogonal_imps(self,
                                   init=None,
@@ -1775,7 +1775,7 @@ class MPS(MPSBase):
         tensors = [A] + [self._tensors[n] for n in range(1, len(self))]
 
         imps = self.__new__(type(self))
-        imps.__init__(tensors=tensors,name=name)
+        imps.__init__(tensors=tensors)
         imps._position = 0
         return imps
 
