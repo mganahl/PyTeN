@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import warnings
 import lib.ncon as ncon
 from numpy.linalg.linalg import LinAlgError
@@ -156,7 +157,7 @@ class Tensor(np.ndarray, TensorBase):
                 'length of merge_data is not compatible with the shape of tensor'
             )
 
-        newshape = merge_data[0]
+        newshape = copy.copy(merge_data[0])
         [newshape.extend(m) for m in merge_data[1:]]
         return np.reshape(self, newshape)
 
