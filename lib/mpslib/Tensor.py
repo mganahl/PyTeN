@@ -314,7 +314,10 @@ class Tensor(np.ndarray, TensorBase):
 
     def to_dense(self):
         return self.reshape(np.prod(self.shape))
-
+    
+    def expand_dims(self,*args, direction=None, **kwargs):
+        return np.expand_dims(self,*args,**kwargs).view(Tensor)
+    
     @staticmethod
     def from_dense(dense, shape):
         return dense.reshape(shape).view(Tensor)
