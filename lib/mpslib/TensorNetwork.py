@@ -550,6 +550,22 @@ class MPSBase(TensorNetwork):
     """
 
     def __init__(self, tensors=[], name=None, fromview=True):
+        """
+        initialize an MPSBase object from `tensors`
+        `position` of the initialized object is put to `len(tensors)` (the right boundary)
+        the returned object is not normalized
+        Parameters:
+        -------------------
+        tensors:       list of np.ndarray 
+                       the mps tensors 
+        name:          str 
+                       optional name of the object 
+        fromview:      bool 
+                       if True, view to `tensors` is stored
+                       if False: `tensors` is copied
+        
+        """
+        
         super().__init__(
             tensors=tensors, shape=(), name=name, fromview=fromview)
 
@@ -1902,6 +1918,21 @@ class FiniteMPS(MPS):
             name=name)
 
     def __init__(self, tensors=[], name=None, fromview=True):
+        """
+        initialize a FiniteMPS object from `tensors`
+        `position` of the initialized object is put to len(tensors) (the right boundary)
+        the returned object is not normalized
+        Parameters:
+        -------------------
+        tensors:       list of np.ndarray 
+                       the mps tensors 
+        name:          str 
+                       optional name of the object 
+        fromview:      bool 
+                       if True, view to `tensors` is stored
+                       if False: `tensors` is copied
+        
+        """
         if not np.sum(tensors[0].shape[0]) == 1:
             raise ValueError(
                 'FiniteMPS got a wrong shape {0} for tensor[0]'.format(
@@ -2453,8 +2484,18 @@ class FiniteMPDO(FiniteMPS):
             tens.append(merged)
         super().__init__(tensors=tens, name=name, fromview=fromview)
         
-    def get_mpo_tensor(self, n):
-        return self.get_tensor(n).split([[self.D[n]], [self.D[n + 1]], self.shapes[n]])
+    def get_mpo_tensor(self, site):
+        """
+        returns an mpo tensor at site `site` by splitting up the mps tensor of site `site`.
+        Parameters:
+        ------------------------
+        site:     int  
+                  the site 
+        Returns:
+        ------------------------
+        np.ndarray:    
+        """
+        return self.get_tensor(site).split([[self.D[site]], [self.D[site + 1]], self.shapes[site]])
     
     def partial_trace(self, sites):
         """
@@ -2547,9 +2588,9 @@ class FiniteMPDO(FiniteMPS):
 
     def transfer_op(self, site, direction, x):
         if direction in (1,'l','left'):
-            return ncon.ncon([x,self.get_tensor(site),self.eyes[n]],[[1],[1,-1,2],[2]])
+            return ncon.ncon([x,self.get_tensor(site),self.eyes[site]],[[1],[1,-1,2],[2]])
         elif direction in (-1,'r','right'):
-            return ncon.ncon([x,self.get_tensor(site),self.eyes[n]],[[1],[-1,1,2],[2]])
+            return ncon.ncon([x,self.get_tensor(site),self.eyes[site]],[[1],[-1,1,2],[2]])
         
     def measure_1site_correlator(self, op1, op2, site1, sites2):
         N = self.num_sites
@@ -2564,16 +2605,20 @@ class FiniteMPDO(FiniteMPS):
         rs = self.get_envs_right([site1])        
         if len(left_sites) > 0:
             left_sites_mod = list(set([n % N for n in left_sites]))
+            
             ls = self.get_envs_left(left_sites_mod)
 
+            
             r = ncon.ncon([rs[site1],self.get_tensor(site1),op1.merge([[1,0]])[0]],
-                                                 [[1],[-1,1,2],[2]])        
+                                                 [[1],[-1,1,2],[2]])
+
+            
             n1 = np.min(left_sites)
             for n in range(site1 - 1, n1 - 1, -1):
                 if n in left_sites:
                     l = ls[n % N]
                     A = self.get_tensor(n % N)
-                    op = op1.merge([[1,0]])[0]
+                    op = op2.merge([[1,0]])[0]
                     res = ncon.ncon([l, A, r, op],
                                     [[1],[1,2,3],[2],[3]])
                     c.append(res/norm)
