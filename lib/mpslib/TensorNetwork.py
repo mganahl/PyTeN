@@ -155,7 +155,6 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
             self._tensors = np.empty(_shape, dtype=self.tensortype)
             for n in range(len(tensors)):
                 self._tensors.flat[n] = tensors[n]
-                print(type(tensors[n]))
 
             self._norm = np.result_type(*self._tensors).type(1.0)
 
@@ -860,23 +859,23 @@ class MPS(MPSBase):
         no checks are performed to see wheter the provided tensors can be contracted
         """
         super().__init__(tensors=tensors, name=name, fromview=fromview)
-        if not centermatrix:
+        if centermatrix is None:
             self.mat = tensors[-1].eye(1)
         else:
             self.mat = centermatrix
             
-        if not right_mat:
+        if right_mat is None:
             self._right_mat = tensors[-1].eye(1)
         else:
             self._right_mat = right_mat
             
-        if not connector:
+        if connector is None:
             self._connector = self.mat.inv()
         else:
             self._connector=connector
             
         #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
-        if not position:
+        if position is None:
             self._position = self.num_sites
         else:
             self._position = position
@@ -888,7 +887,10 @@ class MPS(MPSBase):
     @property
     def centermatrix(self):
         return self.mat
-
+    
+    @property
+    def right_mat(self):
+        return self._right_mat
 
     @property
     def connector(self):
@@ -2206,9 +2208,9 @@ class CanonizedMPS(MPSBase):
         Parameters:
         ------------
         tensors:   list of Tensors
-                   is a list of Tensor objects which alternates between ```Lambda`` and ```Gamma``` tensors,
-                   starting and stopping with a boundary ```Lambda```
-                   ```Lambda``` are in vector-format (i.e. it is the diagonal), ```Gamma``` is a full matrix.
+                   is a list of Tensor objects which alternates between `Lambda` and `Gamma` tensors,
+                   starting and stopping with a boundary `Lambda`
+                   `Lambda` are in vector-format (i.e. it is the diagonal), `Gamma` is a full matrix.
         name:      str or None
                    name of the CanonizedMPS
         Returns:
