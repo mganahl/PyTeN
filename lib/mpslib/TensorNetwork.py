@@ -154,7 +154,8 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
 
             self._tensors = np.empty(_shape, dtype=self.tensortype)
             for n in range(len(tensors)):
-                self._tensors.flat[n] = tensors[n].view(Tensor)
+                self._tensors.flat[n] = tensors[n]
+                print(type(tensors[n]))
 
             self._norm = np.result_type(*self._tensors).type(1.0)
 
@@ -556,7 +557,7 @@ class MPSBase(TensorNetwork):
         the returned object is not normalized
         Parameters:
         -------------------
-        tensors:       list of np.ndarray 
+        tensors:       list of Tensor objects
                        the mps tensors 
         name:          str 
                        optional name of the object 
@@ -1939,13 +1940,14 @@ class FiniteMPS(MPS):
         the returned object is not normalized
         Parameters:
         -------------------
-        tensors:       list of np.ndarray 
+        tensors:       list of Tensor objects
                        the mps tensors 
         name:          str 
                        optional name of the object 
         fromview:      bool 
                        if True, view to `tensors` is stored
                        if False: `tensors` is copied
+        centermatrix:  np.ndarray or Tensor
         
         """
         if not np.sum(tensors[0].shape[0]) == 1:
@@ -2544,14 +2546,15 @@ class FiniteMPDO(FiniteMPS):
         return out
                 
     def get_env_left(self,site):
-        env = np.ones((1)).view(Tensor)
+        env = self._tensors[0].eye(0)#np.ones((1)).view(Tensor)
         for n in range(site):
             A = self.get_tensor(n)
             env = ncon.ncon([env,A, self.eyes[n]],[[1],[1,-1,2],[2]])
         return env
     
     def get_env_right(self,site):
-        env = np.ones((1)).view(Tensor)
+        
+        env = self._tensors[-1].eye(1)#np.ones((1)).view(Tensor)
         for n in reversed(range(site+1,len(self))):
             A = self.get_tensor(n)
             env = ncon.ncon([env,A,self.eyes[n]],[[1],[-1,1,2],[2]])
