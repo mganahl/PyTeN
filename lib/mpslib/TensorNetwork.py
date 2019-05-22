@@ -854,16 +854,31 @@ class MPSBase(TensorNetwork):
     
 class MPS(MPSBase):
 
-    def __init__(self, tensors, name=None, fromview=True):
+    def __init__(self, tensors, name=None, fromview=True, centermatrix=None, connector=None, right_mat=None, position=None):
         """
         no checks are performed to see wheter the provided tensors can be contracted
         """
         super().__init__(tensors=tensors, name=name, fromview=fromview)
-        self.mat = tensors[-1].eye(1)
-        self._right_mat = tensors[-1].eye(1)
-        self._connector = self.mat.inv()
+        if not centermatrix:
+            self.mat = tensors[-1].eye(1)
+        else:
+            self.mat = centermatrix
+            
+        if not right_mat:
+            self._right_mat = tensors[-1].eye(1)
+        else:
+            self._right_mat = right_mat
+            
+        if not connector:
+            self._connector = self.mat.inv()
+        else:
+            self._connector=connector
+            
         #do not shift mps position here! some routines assume that the mps tensors are not changed at initialization
-        self._position = self.num_sites
+        if not position:
+            self._position = self.num_sites
+        else:
+            self._position = position
 
         
     def __len__(self):
@@ -1917,7 +1932,7 @@ class FiniteMPS(MPS):
                 **kwargs),
             name=name)
 
-    def __init__(self, tensors=[], name=None, fromview=True):
+    def __init__(self, tensors=[], name=None, fromview=True, centermatrix=None, connector=None, right_mat=None, position=None):        
         """
         initialize a FiniteMPS object from `tensors`
         `position` of the initialized object is put to len(tensors) (the right boundary)
@@ -1942,7 +1957,8 @@ class FiniteMPS(MPS):
                 'FiniteMPS got a wrong shape {0} for tensor[-1]'.format(
                     tensors[-1].shape))
 
-        super().__init__(tensors=tensors, name=name, fromview=fromview)
+        super().__init__(tensors=tensors, name=name, fromview=fromview, centermatrix=centermatrix,
+                         connector=connector, right_mat=right_mat, position=position)
         #self.position(0)
         #self.position(len(self))
 
