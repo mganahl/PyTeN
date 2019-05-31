@@ -302,7 +302,6 @@ class InfiniteMPO(MPOBase):
         h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
         for s in range(1,mpo1.shape[0]):
             h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-
         return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
 
     def roll(self,num_sites):
@@ -333,7 +332,7 @@ class FiniteTFI(FiniteMPO):
         #11
         temp[0, 2, 0, 0] = 1.0
         temp[0, 2, 1, 1] = 1.0
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
         for n in range(1, N - 1):
             temp = Tensor.zeros((3, 3, 2, 2), dtype)
             #11
@@ -348,7 +347,7 @@ class FiniteTFI(FiniteMPO):
             #11
             temp[2, 2, 0, 0] = 1.0
             temp[2, 2, 1, 1] = 1.0
-            mpo.append(np.copy(temp))
+            mpo.append(temp.copy())
 
         temp = Tensor.zeros((3, 1, 2, 2), dtype)
         #11
@@ -359,7 +358,7 @@ class FiniteTFI(FiniteMPO):
         #Bsigma_z
         temp[2, 0, :, :] = self.Bz[-1] * sigma_z
 
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
 
         super().__init__(tensors=mpo, name='FiniteTFI_MPO')
 
@@ -393,7 +392,7 @@ class InfiniteTFI(InfiniteMPO):
             #11
             temp[2, 2, 0, 0] = 1.0
             temp[2, 2, 1, 1] = 1.0
-            mpo.append(np.copy(temp))
+            mpo.append(temp.copy())
 
         super().__init__(tensors=mpo, name='InfiniteTFI_MPO')
 
@@ -426,7 +425,7 @@ class FiniteXXZ(FiniteMPO):
         #11
         temp[0, 4, 0, 0] = 1.0
         temp[0, 4, 1, 1] = 1.0
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
         for n in range(1, N - 1):
             temp = Tensor.zeros((5, 5, 2, 2), dtype)
             #11
@@ -454,7 +453,7 @@ class FiniteXXZ(FiniteMPO):
             temp[4, 4, 0, 0] = 1.0
             temp[4, 4, 1, 1] = 1.0
 
-            mpo.append(np.copy(temp))
+            mpo.append(temp.copy())
 
         temp = Tensor.zeros((5, 1, 2, 2), dtype)
         #11
@@ -471,7 +470,7 @@ class FiniteXXZ(FiniteMPO):
         temp[4, 0, 0, 0] = -0.5 * Bz[-1]
         temp[4, 0, 1, 1] = 0.5 * Bz[-1]
 
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
         super().__init__(mpo)
 
 
@@ -511,7 +510,7 @@ class InfiniteXXZ(InfiniteMPO):
             temp[4, 4, 0, 0] = 1.0
             temp[4, 4, 1, 1] = 1.0
 
-            mpo.append(np.copy(temp))
+            mpo.append(temp.copy())
         super().__init__(mpo)
 
 class FiniteJ1J2(FiniteMPO):
@@ -543,7 +542,7 @@ class FiniteJ1J2(FiniteMPO):
         temp[0, 7, :, :] = eye
 
 
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
         for n in range(1, N - 1):
             temp = Tensor.zeros((8, 8, 2, 2), dtype)
             temp[0, 0, :, :] = eye
@@ -563,7 +562,7 @@ class FiniteJ1J2(FiniteMPO):
             temp[7, 6, :, :] = J2[n] * Sz
             temp[7, 7, :, :] = eye
 
-            mpo.append(np.copy(temp))
+            mpo.append(temp.copy())
 
         temp = Tensor.zeros((8, 1, 2, 2), dtype)
         temp[0, 0, :, :] = eye
@@ -573,7 +572,7 @@ class FiniteJ1J2(FiniteMPO):
         temp[7, 0, :, :] = -Bz[-1] * Sz
 
 
-        mpo.append(np.copy(temp))
+        mpo.append(temp.copy())
         super().__init__(mpo)
 
 
