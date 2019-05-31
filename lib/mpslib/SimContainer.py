@@ -1354,7 +1354,6 @@ class InfiniteTEBDEngine(TEBDBase):
 
 
 
-
 class BruteForceOptimizer(MPSSimulationBase):
     """
     A brute force optimization of an mps
