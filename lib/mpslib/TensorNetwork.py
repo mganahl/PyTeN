@@ -779,14 +779,13 @@ class MPSBase(TensorNetwork):
     def measure_1site_ops(self, ops, sites):
         """
         Expectation value of list of  single-site operators on sites
-        this is still not optimal but much faster than running expval_1site on many sitesg
         Parameters
         --------------------------
         ops:    list of Tensor objects
                 local operators to be measure
         sites:  list of int 
                 sites where the operators live
-                ```sites``` can be in any order and have any number of sites appear arbitralily often
+                `sites` can be in any order and have any number of sites appear arbitrarily often
         Returns:
         --------------------------             
         an np.ndarray of measurements, in the same order as sites were passed
