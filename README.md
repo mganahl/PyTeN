@@ -36,15 +36,14 @@ Clone the repository and cd to the examples folder:
 cd PyTeN/examples
 ```
 and run the example scripts. 
-HeisMPS.py runs DMRG for a Heisenberg model:
+`HeisDMRG.py` runs DMRG for a finite Heisenberg model:
+```python
+python HeisDMRG.py
 ```
-python HeisMPS.py
-```
-TEBD.py and TDVP.py calculate the ground state of a N site Heisenberg model, then applies an S+ at the center
-and evolves the state using TEBD (https://arxiv.org/abs/quant-ph/0301063) or TDVP (https://arxiv.org/abs/1408.5056) algorithm. Run 
-```
-python TEBD.py
-python TDVP.py
+`TEBDproductstate.py` evolves a product state of an N site Heisenberg model using TEBD
+(https://arxiv.org/abs/quant-ph/0301063) or TDVP (https://arxiv.org/abs/1408.5056) algorithm. Run 
+```python
+python TEBDproduct.py
 ```
 to do the evolution.
 
@@ -58,24 +57,17 @@ You need an numpy and scipy installation. I have tested the code with numpy 1.14
 To run the test cases, you additionally need the cython compiler installed on your OS (see below)
 
 ### Installing
-To generate the binary files needed for testing, cd to 
+Add the repo directory to `PYTHONPATH`
 ```
-cd PyTeN/tests/HeisED
+export PYTHONPATH=$PYTHONPATH:'path_to_repo'
 ```
-and run 
-```
-python setup.py build_ext --inplace
-```
-This should create a file XXZED.so (or a similar name, depending on the installed c compiler. gcc might
-throw some warnings at you).
-
 
 ## Running the tests
 Once the .so file from above is generated, run
-```
+```python
 python testCasesMPS.py
-python DMRGtest.py
-python timeevtests.py
+python simulation_tests.py
+
 ```
 which should all finish without error (some warnings may show up).
 
