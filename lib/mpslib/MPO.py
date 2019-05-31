@@ -34,21 +34,19 @@ class MPOBase(TensorNetwork):
            |
            2
 
-    2,3 are the physical incoming and outgoing indices, respectively. The conjugated 
+    2,3 are the physical outgoing and incoming indices, respectively. The conjugated 
     side of the MPS is on the bottom (at index 2)
-    I recently changed this convention, however, note that the change hasn't affected 
-    most of the existing code. To contract the mpo with an mps, one still has to connect index 2 of the mpo
-    with index 2 of the mps. Using the old convention, the implemented MPOs were actually 
-    the transposed version of what was intended. The difference between the old and new convention only matters 
-    for Hamiltonians which are complex, or more concretely, for MPOs where the local operators in the MPO
-    matrices were complex instead of real (like e.g. sigma_y). Using the old convention, 
-    implementing a siggma_y in an MPO matrix should actually be done this way:
 
-    mpo[m,n,:,:]=np.transpose(sigma_y)
-
-    The new convention fixes this to 
-
-    mpo[m,n,:,:]=sigma_y
+    An MPS by this convention is contracted from above:
+                ___
+             --|   |--
+                ---
+                 |
+                ___
+               |   |
+           ----|   |----
+               |___|
+                 |
     
     """
 
@@ -516,26 +514,67 @@ class InfiniteXXZ(InfiniteMPO):
             mpo.append(np.copy(temp))
         super().__init__(mpo)
 
-class FiniteRescalingMPO(FiniteMPO):
+class FiniteJ1J2(FiniteMPO):
     """
-    discretized version of the non-relativistic rescaling operator `L`.
+    the famous Heisenberg Hamiltonian, which we all know and love so much!
     """
-    def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
-        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
+
+    def __init__(self, J1, J2, Bz, dtype=np.float64):
+        dtype=np.result_type(J1.dtype,J2.dtype,Bz.dtype,dtype)
+        self.J1 = J1.astype(dtype)
+        self.J2 = J2.astype(dtype)        
+        self.Bz = Bz.astype(dtype)
+        Sm = np.array([[0, 1], [0, 0]]).astype(dtype)
+        Sp = np.array([[0, 0], [1, 0]]).astype(dtype)
+        Sz = np.diag([-0.5, 0.5]).astype(dtype)
+        eye = np.eye(2).astype(dtype)
+                               
+        N = len(Bz)
         mpo = []
+        temp = Tensor.zeros((1, 8, 2, 2), dtype)
+
+        temp[0, 0, :, :] = - Bz[0] * Sz
+        temp[0, 1, :, :] = J1[0] / 2 * Sm
+        temp[0, 2, :, :] = J1[0] / 2 * Sp
+        temp[0, 3, :, :] = J1[0] * Sz
+        temp[0, 4, :, :] = J2[0] / 2 * Sm
+        temp[0, 5, :, :] = J2[0] / 2 * Sp
+        temp[0, 6, :, :] = J2[0] * Sz
+        temp[0, 7, :, :] = eye
+
+
         mpo.append(np.copy(temp))
         for n in range(1, N - 1):
-            temp = Tensor.zeros((5, 5, 2, 2), dtype)
+            temp = Tensor.zeros((8, 8, 2, 2), dtype)
+            temp[0, 0, :, :] = eye
+            temp[1, 0, :, :] = Sp
+            temp[2, 0, :, :] = Sm
+            temp[3, 0, :, :] = Sz
+            temp[4, 1, :, :] = eye
+            temp[5, 2, :, :] = eye
+            temp[6, 3, :, :] = eye
+            
+            temp[7, 0, :, :] = - Bz[n] * Sz
+            temp[7, 1, :, :] = J1[n] / 2 * Sm
+            temp[7, 2, :, :] = J1[n] / 2 * Sp
+            temp[7, 3, :, :] = J1[n] * Sz
+            temp[7, 4, :, :] = J2[n] / 2 * Sm
+            temp[7, 5, :, :] = J2[n] / 2 * Sp
+            temp[7, 6, :, :] = J2[n] * Sz
+            temp[7, 7, :, :] = eye
+
             mpo.append(np.copy(temp))
 
-        temp = Tensor.zeros((5, 1, 2, 2), dtype)
+        temp = Tensor.zeros((8, 1, 2, 2), dtype)
+        temp[0, 0, :, :] = eye
+        temp[1, 0, :, :] = Sp
+        temp[2, 0, :, :] = Sm
+        temp[3, 0, :, :] = Sz        
+        temp[7, 0, :, :] = -Bz[-1] * Sz
+
+
         mpo.append(np.copy(temp))
         super().__init__(mpo)
-
-
-
-
-
 
 
 
