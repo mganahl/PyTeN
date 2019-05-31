@@ -208,10 +208,12 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
         returns a reshaped view of self
         compatible with np.reshape
         """
-        view = self.view()
+        view = copy.copy(self)
         view._tensors = np.reshape(view._tensors, newshape, order=order)
         return view
 
+    def view(self):
+        return copy.copy(self)
     @property
     def num_sites(self):
         """
@@ -1969,6 +1971,55 @@ class FiniteMPS(MPS):
     def zeros(self, *args, **kwargs):
         raise NotImplementedError(
             'FiniteMPS.zeros(*args,**kwargs) not implemented')
+
+    @classmethod
+    def ones(cls,
+             D=[2],
+             d=[2,2],
+             name=None,
+             initializer=ndarray_initializer,
+             *args,
+             **kwargs):
+        """
+        generate a Finite MPS filled with ones
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D) != len(d) - 1:
+            raise ValueError('len(D) != len(d) - 1')
+        D = [1] + D + [1]        
+        return cls(
+            tensors=initializer(
+                numpy_func=np.ones,
+                shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+                *args,
+                **kwargs),
+            name=name)
+
+    @classmethod
+    def empty(cls,
+              D=[2],
+              d=[2, 2],
+              name=None,
+              initializer=ndarray_initializer,
+              *args,
+              **kwargs):
+        """
+        generate an emnpty FiniteMPS
+        Parameters:
+        ----------------------------------------------
+        """
+        if len(D) != len(d) - 1:
+            raise ValueError('len(D) != len(d) - 1')
+        D = [1] + D + [1]        
+        return cls(
+            tensors=initializer(
+                numpy_func=np.empty,
+                shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+                *args,
+                **kwargs),
+            name=name)
+
 
     def __add__(self, other):
         """
