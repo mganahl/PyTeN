@@ -734,7 +734,7 @@ def lobpcg(L, mpo, R, initial, precision=1e-6, *args, **kwargs):
 
 
 
-def TMeigs_naive(tensors,
+def TMeigs_power_method(tensors,
                  direction,
                  init=None,
                  precision=1E-12,
@@ -771,14 +771,14 @@ def TMeigs_naive(tensors,
     """
 
     if not np.all(tensors[0].dtype == t.dtype for t in tensors):
-        raise TypeError('TMeigs_naive: all tensors have to have the same dtype')
+        raise TypeError('TMeigs_power_method: all tensors have to have the same dtype')
 
     if init:
         x = init
     else:
         x = tensors[0].eye(0)
     if not tensors[0].dtype == x.dtype:
-        raise TypeError('TMeigs_naive: `init` has other dtype than `tensors`')
+        raise TypeError('TMeigs_power_method: `init` has other dtype than `tensors`')
 
     x /= x.norm()
     diff = 1101001010001.0
