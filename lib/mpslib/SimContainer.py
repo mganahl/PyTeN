@@ -845,7 +845,7 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      landeltaEta=1E-10,
                      solver='AR'):
         """
-        do a one-site infinite DMRG optimzation for an open system
+        do a one-site infinite DMRG optimzation
         Parameters:
         ---------------------------
         Nsweeps:         int
@@ -921,7 +921,7 @@ class InfiniteDMRGEngine(DMRGEngineBase):
                      landeltaEta=1E-10,
                      solver='AR'):
         """
-        do a two-site infinite DMRG optimzation for an open system
+        do a two-site infinite DMRG optimzation 
         Parameters:
         -------------------------------
         Nsweeps:         int
