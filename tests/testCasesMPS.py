@@ -101,13 +101,13 @@ class TestMPS(TestTensorNetwork):
 class TestFiniteMPS(TestMPS):
     def setUp(self):
         N=random.randint(10,20)
-        self.D=[1]+list(np.random.randint(1,10,N-1))+[1]
+        self.D=list(np.random.randint(1,10,N-1))
         self.d=[random.randint(2,4)]*N
         self.TN=TN.FiniteMPS.random(D=self.D,d=self.d)
 
     def testTypePreservation(self):
         super(TestFiniteMPS,self).testTypePreservation()
-        S=self.TN.SchmidtSpectrum(random.sample(range(len(self.TN)),1)[0])
+        S=self.TN.schmidt_spectrum(random.sample(range(len(self.TN)),1)[0])
 
         
     def testInit(self):
@@ -119,7 +119,7 @@ class TestFiniteMPS(TestMPS):
 class TestCanonizedFiniteMPS(TestTensorNetwork):
     def setUp(self):
         N=random.randint(10,20)
-        self.D=[1]+list(np.random.randint(1,10,N-1))+[1]
+        self.D=list(np.random.randint(1,10,N-1))
         self.d=[random.randint(2,4)]*N
         self.TN=TN.FiniteMPS.random(D=self.D,d=self.d).canonize()
     def testInit(self):
