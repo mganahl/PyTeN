@@ -43,7 +43,7 @@ python HeisDMRG.py
 `TEBDproductstate.py` evolves a product state of an N site Heisenberg model using TEBD
 (https://arxiv.org/abs/quant-ph/0301063) or TDVP (https://arxiv.org/abs/1408.5056) algorithm. Run 
 ```python
-python TEBDproduct.py
+python TEBDproductState.py
 ```
 to do the evolution.
 
