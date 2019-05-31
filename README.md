@@ -10,9 +10,6 @@ ground-states and do real time evolution of 1d quantum systems.
 * Real time evolution using TEBD or TDVP
 * supports MPO encoding of Hamiltonians
 
-  **TDVP does currently not support dynamical expansion of the bond dimension**
-
-
 ## infinite systems
 
 * ground states for systems with finite unit-cells using IDMRG
