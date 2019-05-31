@@ -47,7 +47,7 @@ python TEBDproductState.py
 ```
 to do the evolution.
 
-The above examples-scripts are commented to explain the individual steps and help you to get started with new models.
+Some of the above examples-scripts are commented to explain the individual steps and help you to get started with new models.
 ### Getting help
 There is currently no documentation, but most methods have docstring explaining what they do.
 
@@ -72,7 +72,7 @@ python simulation_tests.py
 which should all finish without error (some warnings may show up).
 
 ## Extending
-New models can be implemented using the MPO formalism. In lib/mpslib/Hamiltonians.py you can find a few examples of how
+New models can be implemented using the MPO formalism. In lib/mpslib/MPO.py you can find a few examples of how
 this is done. Any new Hamiltonian should be implemented by declaring a new class. The class should be derived from the
 base class MPO (see top of Hamiltonians.py). I use the following convention for building nearest neighbor MPOs:
 ```
@@ -83,7 +83,7 @@ O_11
 .
 O_N1, O_N2, ..., O_NN, 11
 ```
-11 and O_ij are local physical operators appearing in the Hamiltonian. Some functions assume that the MPO has such a form (for example the member MPO.twoSiteGate(m,n,tau) for obtaining unitary gates for TEBD), so I strongly advise to conform to this convention.
+11 and O_ij are local physical operators appearing in the Hamiltonian. Some functions assume that the MPO has such a form, so I strongly advise to conform to this convention.
 
 ## Authors
 
