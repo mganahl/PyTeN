@@ -62,8 +62,9 @@ class TensorBase:
 
     def abs(self):
         raise NotImplementedError()
-
-
+    def copy(self):
+        raise NotImplementedError()
+    
 class Tensor(np.ndarray, TensorBase):
 
     def __new__(cls, *args, **kwargs):
@@ -327,3 +328,5 @@ class Tensor(np.ndarray, TensorBase):
 
     def abs(self):
         return np.abs(self)
+    def copy(self):
+        return np.copy(self).view(type(self))
