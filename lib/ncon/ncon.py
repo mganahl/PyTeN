@@ -7,6 +7,7 @@ A module for the function ncon, which does contractions of several tensors.
 """
 
 def ncon(AA, v, order=None, forder=None, check_indices=True):
+
     """ AA = [A1, A2, ..., Ap] list of tensors.
 
     v = (v1, v2, ..., vp) tuple of lists of indices e.g. v1 = [3 4 -1] labels
@@ -52,7 +53,6 @@ def ncon(AA, v, order=None, forder=None, check_indices=True):
     # If the graph is dinconnected, connect it with trivial indices that
     # will be contracted at the very end.
     connect_graph(AA, v, order)
-
     while len(order) > 0:
         tcon = get_tcon(v, order[0]) # tcon = tensors to be contracted
         # Find the indices icon that are to be contracted.
@@ -155,6 +155,8 @@ def connect_graph(AA, v, order):
             AA[d] = A_d.expand_dims(d_axis, direction=-1)
         except AttributeError:
             AA[d] = np.expand_dims(A_d, d_axis)
+
+            
         try:
             dim_num = max(order)+1
         except ValueError:
