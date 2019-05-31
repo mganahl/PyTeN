@@ -1838,7 +1838,6 @@ class MPS(MPSBase):
         """
 
         self.position(site + 1)
-        
         newState = ncon.ncon(
             [self._tensors[site],self.mat,
              self._tensors[site + 1], gate],
