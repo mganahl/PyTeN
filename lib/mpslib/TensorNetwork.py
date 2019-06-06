@@ -2178,12 +2178,13 @@ class FiniteMPS(MPS):
         #FIXME: this is currently not compatible with U(1) symmetric tensors
         #       move one_hot into the Tensor class
         def one_hot(sigma,d):
-            out = np.zeros(d)
+            out = np.zeros(d).astype(np.int32)
             out[sigma] = 1
-            return out.view
-        
+            return out.view(Tensor)
+        one_hots = [{n: one_hot(n, self.d[site]) for n in range(self.d[site])} for site in range(len(self))]
         self.position(len(self))
         right_envs = self.get_envs_right(range(len(self)))
+        it = 0 
         def get_sample():
             sigma = []
             p_joint_1 = 1.0
@@ -2194,7 +2195,7 @@ class FiniteMPS(MPS):
                 p_cond = np.abs(p_joint_0/p_joint_1)
                 sigma.append(np.random.choice(list(range(self.d[site])),p=p_cond))
                 p_joint_1 = p_joint_0[sigma[-1]]
-                lenv = ncon.ncon([lenv,self.get_tensor(site), one_hot(sigma[-1],self.d[site]), self.get_tensor(site).conj(),one_hot(sigma[-1],self.d[site])],
+                lenv = ncon.ncon([lenv,self.get_tensor(site), one_hots[site][sigma[-1]], self.get_tensor(site).conj(),one_hots[site][sigma[-1]]],
                                  [[1,2],[1,-1,3],[3],[2,-2,4],[4]])
             return sigma
         return [get_sample() for _ in range(num_samples)]
