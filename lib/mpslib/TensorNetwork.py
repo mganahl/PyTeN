@@ -2199,7 +2199,8 @@ class FiniteMPS(MPS):
                                  [[1,2],[1,-1,3],[3],[2,-2,4],[4]])
             return sigma
         return [get_sample() for _ in range(num_samples)]
-
+    
+        
 class CanonizedMPS(MPSBase):
     """
     """
