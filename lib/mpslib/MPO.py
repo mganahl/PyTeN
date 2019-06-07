@@ -313,7 +313,7 @@ class FiniteTFI(FiniteMPO):
     """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
-    
+    this is X * X + Z    
     """
 
     def __init__(self, Jx, Bz, dtype=np.float64):
@@ -361,6 +361,61 @@ class FiniteTFI(FiniteMPO):
         mpo.append(temp.copy())
 
         super().__init__(tensors=mpo, name='FiniteTFI_MPO')
+        
+class FiniteTFI_2(FiniteMPO):
+    """ 
+    the good old transverse field Ising MPO
+    convention: sigma_z=diag([-1,1])
+    this is Z*Z + X
+    
+    """
+
+    def __init__(self, Jz, Bx, dtype=np.float64):
+        dtype=np.result_type(Jz.dtype,Bx.dtype,dtype)                
+        self.Jz = Jz.astype(dtype)
+        self.Bx = Bx.astype(dtype)
+        N = len(Bx)
+        sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
+        sigma_z = np.diag([-1, 1]).astype(dtype)
+        mpo = []
+        temp = Tensor.zeros((1, 3, 2, 2), dtype)
+        #Bsigma_z
+        temp[0, 0, :, :] = self.Bx[0] * sigma_x
+        #sigma_x
+        temp[0, 1, :, :] = self.Jz[0] * sigma_z
+        #11
+        temp[0, 2, 0, 0] = 1.0
+        temp[0, 2, 1, 1] = 1.0
+        mpo.append(temp.copy())
+        for n in range(1, N - 1):
+            temp = Tensor.zeros((3, 3, 2, 2), dtype)
+            #11
+            temp[0, 0, 0, 0] = 1.0
+            temp[0, 0, 1, 1] = 1.0
+            #sigma_x
+            temp[1, 0, :, :] = sigma_z
+            #Bsigma_z
+            temp[2, 0, :, :] = self.Bx[n] * sigma_x
+            #sigma_x
+            temp[2, 1, :, :] = self.Jz[n] * sigma_z
+            #11
+            temp[2, 2, 0, 0] = 1.0
+            temp[2, 2, 1, 1] = 1.0
+            mpo.append(temp.copy())
+
+        temp = Tensor.zeros((3, 1, 2, 2), dtype)
+        #11
+        temp[0, 0, 0, 0] = 1.0
+        temp[0, 0, 1, 1] = 1.0
+        #sigma_x
+        temp[1, 0, :, :] = sigma_z
+        #Bsigma_z
+        temp[2, 0, :, :] = self.Bx[-1] * sigma_x
+
+        mpo.append(temp.copy())
+
+        super().__init__(tensors=mpo, name='FiniteTFI_MPO')
+
 
 class InfiniteTFI(InfiniteMPO):
     """ 
