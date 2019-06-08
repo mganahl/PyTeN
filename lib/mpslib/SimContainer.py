@@ -443,7 +443,8 @@ class DMRGEngineBase(MPSSimulationBase):
                      walltime_log=None):
         """
         do a one-site finite DMRG optimzation for an open system
-        Paramerters:
+        Parameters:
+        ------------------------------
         Nsweeps:         int
                          number of left-right  sweeps
         precision:       float    
@@ -457,10 +458,10 @@ class DMRGEngineBase(MPSSimulationBase):
         Ndiag:           int
                          step number at which to diagonlize the local tridiag hamiltonian
         landelta:        float
-                         orthogonality threshold; once the next vector of the iteration is orthogonal to the previous ones 
-                         within ```delta``` precision, iteration is terminated
+                         orthogonality threshold used within Lanczos optimization; once the next vector of the iteration is orthogonal to the previous ones 
+                         within `landelta` precision, iteration is terminated
         landeltaEta:     float
-                         desired precision of the energies; once eigenvalues of tridiad Hamiltonian are converged within ```deltaEta```
+                         desired precision of the energies used within Lanczos optimization; once eigenvalues of tridiag Lanzcos-Hamiltonian are converged within `landeltaEta`
                          iteration is terminated
         solver:          str
                          'AR' or 'LAN'
