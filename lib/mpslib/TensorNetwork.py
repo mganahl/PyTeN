@@ -2189,12 +2189,17 @@ class FiniteMPS(MPS):
             sigma = []
             p_joint_1 = 1.0
             lenv = self[0].eye(0)
+            Z1 = 1
             for site in range(len(self)):
+                Z0 = lenv.norm()
+                lenv/=Z0
                 p_joint_0 = ncon.ncon([lenv,self.get_tensor(site),self.get_tensor(site).conj(),right_envs[site]],
                                  [[1,2],[1,3,-1],[2,4,-2],[3,4]]).diag()
-                p_cond = np.abs(p_joint_0/p_joint_1)
+                p_cond = Z0 / Z1 * np.abs(p_joint_0/p_joint_1)
+                p_cond /= np.sum(p_cond)
                 sigma.append(np.random.choice(list(range(self.d[site])),p=p_cond))
                 p_joint_1 = p_joint_0[sigma[-1]]
+                Z1 = Z0
                 lenv = ncon.ncon([lenv,self.get_tensor(site), one_hots[site][sigma[-1]], self.get_tensor(site).conj(),one_hots[site][sigma[-1]]],
                                  [[1,2],[1,-1,3],[3],[2,-2,4],[4]])
             return sigma
