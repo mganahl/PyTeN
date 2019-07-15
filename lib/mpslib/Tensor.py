@@ -192,11 +192,22 @@ class Tensor(np.ndarray, TensorBase):
             r_thresh=1E-14,
             *args,
             **kwargs):
+
+        """
+        svd of self; self has to be in matrix format
+        Args:
+        Returns:
+            u (Tensor):  the left singular vectors
+            s (Tensor):  singular values in a one-dimensional array
+            v (Tensor):  the right singular vectors
+            tw (float):  the total truncated weight
+        
+        """
         tw = 0.0
         try:
             u, s, v = np.linalg.svd(self, *args, **kwargs)
             Z = np.linalg.norm(s)
-            s /= Z
+            s /= Z #normalize before truncation
             if truncation_threshold > 1E-16:
                 mask = s > truncation_threshold
                 tw = np.sum(s[~mask]**2)
@@ -212,7 +223,7 @@ class Tensor(np.ndarray, TensorBase):
                 s=np.array([1.0],dtype=s.dtype)
             u = u[:, 0:len(s)]
             v = v[0:len(s), :]
-            s *= Z
+            s *= Z #put back the norm
             return u, s.view(type(self)), v, tw
         except LinAlgError:
             [q, r] = self.qr()
