@@ -531,6 +531,13 @@ class FiniteXXZ(FiniteMPO):
 
 class InfiniteXXZ(InfiniteMPO):
     def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
+        """
+        XXZ model on an infinite systems
+        Args:
+            Jz  (np.ndarray):  Jz coupling
+            Jxy (np.ndarray):  Jxy coupling
+            Bz  (np.ndarray):  magnetic field
+        """
         dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
         self.Jz = Jz.astype(dtype)
         self.Jxy = Jxy.astype(dtype)        
