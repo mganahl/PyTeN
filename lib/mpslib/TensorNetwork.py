@@ -14,6 +14,7 @@ import lib.mpslib.mpsfunctions as mf
 from scipy.sparse.linalg import LinearOperator, eigs
 import lib.ncon as ncon
 from lib.mpslib.Container import Container
+from sys import stdout
 
 comm = lambda x, y: np.dot(x, y) - np.dot(y, x)
 anticomm = lambda x, y: np.dot(x, y) + np.dot(y, x)
@@ -575,15 +576,15 @@ class MPSBase(TensorNetwork):
     def D(self):
         """Returns a vector of all bond dimensions.
         The vector will have length `N+1`, where `N == num_sites`."""
-        return ([self.get_tensor(0).shape[0]] +
-                [self.get_tensor(n).shape[1] for n in range(self.num_sites)])
+        return ([self._tensors[0].shape[0]] +
+                [self._tensors[n].shape[1] for n in range(self.num_sites)])
 
     @property
     def d(self):
         """
         returns a list containig the bond-dimensions of the MPS
         """
-        return [self.get_tensor(n).shape[2] for n in range(self.num_sites)]
+        return [self._tensors[n].shape[2] for n in range(self.num_sites)]
 
     def transfer_op(self, site, direction, x):
         """
@@ -638,7 +639,6 @@ class MPSBase(TensorNetwork):
         dict:  mapping int to tf.tensor
                the left environment for each site in `sites`
         """
-
         if not np.all(np.array(sites) >= 0):
             raise ValueError('get_envs_left: sites have to be >= 0')
         n2 = max(sites)
@@ -2165,45 +2165,87 @@ class FiniteMPS(MPS):
             O = mf.transfer_operator([self.get_tensor(n)], [mps.get_tensor(n)],
                                      'l', O)
         return O
-    
     def generate_samples(self, num_samples):
-        """
-        calculate samples from the MPS probability amplitude
-        Args:
-            mps (MPS):  the mps
-            num_samples(int): number of samples
-        Returns:
-            list of list:  the samples
-        """
-        #FIXME: this is currently not compatible with U(1) symmetric tensors
-        #       move one_hot into the Tensor class
-        def one_hot(sigma,d):
-            out = np.zeros(d).astype(np.int32)
-            out[sigma] = 1
-            return out.view(Tensor)
-        one_hots = [{n: one_hot(n, self.d[site]) for n in range(self.d[site])} for site in range(len(self))]
-        self.position(len(self))
-        right_envs = self.get_envs_right(range(len(self)))
-        it = 0 
-        def get_sample():
-            sigma = []
-            p_joint_1 = 1.0
-            lenv = self[0].eye(0)
-            Z1 = 1
-            for site in range(len(self)):
-                Z0 = lenv.norm()
-                lenv/=Z0
-                p_joint_0 = ncon.ncon([lenv,self.get_tensor(site),self.get_tensor(site).conj(),right_envs[site]],
-                                 [[1,2],[1,3,-1],[2,4,-2],[3,4]]).diag()
-                p_cond = Z0 / Z1 * np.abs(p_joint_0/p_joint_1)
-                p_cond /= np.sum(p_cond)
-                sigma.append(np.random.choice(list(range(self.d[site])),p=p_cond))
-                p_joint_1 = p_joint_0[sigma[-1]]
-                Z1 = Z0
-                lenv = ncon.ncon([lenv,self.get_tensor(site), one_hots[site][sigma[-1]], self.get_tensor(site).conj(),one_hots[site][sigma[-1]]],
-                                 [[1,2],[1,-1,3],[3],[2,-2,4],[4]])
-            return sigma
-        return [get_sample() for _ in range(num_samples)]
+      """
+      calculate samples from the MPS probability amplitude
+      Args:
+          num_samples(int): number of samples
+      Returns:
+          list of list:  the samples
+      """
+      dtype = self.dtype
+      
+      self.position(len(self))
+      self.position(0)
+      ds = self.d
+      Ds = self.D
+      right_envs = self.get_envs_right(range(len(self)))
+      it = 0
+      sigmas = []
+      p_joint_1 = np.ones(shape=[num_samples, 1], dtype=dtype)
+      lenv = np.stack([np.eye(Ds[0], dtype=dtype) for _ in range(num_samples)], axis=0) #shape (num_samples, 1, 1)
+      Z1 = np.ones(shape=[num_samples,1], dtype=dtype)#shape (num_samples, 1)
+      
+      for site in range(len(self)):
+        stdout.write( "\rgenerating samples at site %i" % (site))
+        Z0 = np.expand_dims(np.linalg.norm(np.reshape(lenv,(num_samples, Ds[site] * Ds[site])), axis=1),1) #shape (num_samples, 1)
+        lenv /= np.expand_dims(Z0,2)
+        p_joint_0 = np.diagonal(ncon.ncon([lenv,self.get_tensor(site), np.conj(self.get_tensor(site)), right_envs[site]],
+                                          [[-1, 1, 2], [1, 3, -2],[2, 4, -3], [3, 4]]),axis1=1, axis2=2) #shape (Nt, d)
+
+        p_cond = Z0 / Z1 * np.abs(p_joint_0/p_joint_1)
+
+        p_cond /= np.expand_dims(np.sum(p_cond,axis=1),1)
+
+        sigmas.append([np.random.choice([0,1],size=1,p=p_cond[t,:])[0] for t in range(num_samples)])
+        one_hots = np.eye(ds[site])[sigmas[-1]]
+        p_joint_1 = np.expand_dims(np.sum(p_cond * one_hots, axis=1),1)        
+        
+        tmp = ncon.ncon([self.get_tensor(site), one_hots],[[-2, -3, 1], [-1, 1]])          #tmp has shape (Nt, Dl, Dr)
+        tmp2 = np.transpose(np.matmul(np.transpose(lenv,(0, 2, 1)), tmp), (0, 2, 1)) #has shape (Nt, Dr, Dl')
+        lenv = np.matmul(tmp2, np.conj(tmp)) #has shape (Nt, Dr, Dr')
+
+        Z1 = Z0
+      return np.stack(sigmas, axis=1)
+    
+    # def generate_samples(self, num_samples):
+    #     """
+    #     calculate samples from the MPS probability amplitude
+    #     Args:
+    #         mps (MPS):  the mps
+    #         num_samples(int): number of samples
+    #     Returns:
+    #         list of list:  the samples
+    #     """
+    #     #FIXME: this is currently not compatible with U(1) symmetric tensors
+    #     #       move one_hot into the Tensor class
+    #     def one_hot(sigma,d):
+    #         out = np.zeros(d).astype(np.int32)
+    #         out[sigma] = 1
+    #         return out.view(Tensor)
+    #     one_hots = [{n: one_hot(n, self.d[site]) for n in range(self.d[site])} for site in range(len(self))]
+    #     self.position(len(self))
+    #     right_envs = self.get_envs_right(range(len(self)))
+    #     it = 0 
+    #     def get_sample():
+    #         sigma = []
+    #         p_joint_1 = 1.0
+    #         lenv = self[0].eye(0)
+    #         Z1 = 1
+    #         for site in range(len(self)):
+    #             Z0 = lenv.norm()
+    #             lenv/=Z0
+    #             p_joint_0 = ncon.ncon([lenv,self.get_tensor(site),self.get_tensor(site).conj(),right_envs[site]],
+    #                              [[1,2],[1,3,-1],[2,4,-2],[3,4]]).diag()
+    #             p_cond = Z0 / Z1 * np.abs(p_joint_0/p_joint_1)
+    #             p_cond /= np.sum(p_cond)
+    #             sigma.append(np.random.choice(list(range(self.d[site])),p=p_cond))
+    #             p_joint_1 = p_joint_0[sigma[-1]]
+    #             Z1 = Z0
+    #             lenv = ncon.ncon([lenv,self.get_tensor(site), one_hots[site][sigma[-1]], self.get_tensor(site).conj(),one_hots[site][sigma[-1]]],
+    #                              [[1,2],[1,-1,3],[3],[2,-2,4],[4]])
+    #         return sigma
+    #     return [get_sample() for _ in range(num_samples)]
     
         
 class CanonizedMPS(MPSBase):
