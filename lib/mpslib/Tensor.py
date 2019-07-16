@@ -341,3 +341,7 @@ class Tensor(np.ndarray, TensorBase):
         return np.abs(self)
     def copy(self):
         return np.copy(self).view(type(self))
+    
+    def one_hot(self,  axis, labels):
+        return np.eye(self.shape[axis])[labels]
+
