@@ -2166,7 +2166,22 @@ class FiniteMPS(MPS):
                                      'l', O)
         return O
     
-    def get_amplitude(self, sigma):
+    # def get_amplitude(self, sigma):
+    #     """
+    #     compute the amplitude of configuration `sigma`
+    #     This is not very efficient
+    #     Args:
+    #         sigma (list of int):  basis configuration
+    #     Returns:
+    #         float or complex:  the amplitude
+    #     """
+    #     left = self._tensors[0].ones(self.D[0])
+    #     for s in range(len(self)):
+    #         tensor = self.get_tensor(s)
+    #         left = ncon.ncon([left, tensor, tensor.one_hot(2,sigma[s])],[[1], [1, -1, 2], [2]])
+    #     return left
+    
+    def get_amplitude(self, sigmas, num_labels):
         """
         compute the amplitude of configuration `sigma`
         This is not very efficient
@@ -2175,11 +2190,12 @@ class FiniteMPS(MPS):
         Returns:
             float or complex:  the amplitude
         """
-        left = self._tensors[0].ones(self.D[0])
-        for s in range(len(self)):
-            tensor = self.get_tensor(s)
-            left = ncon.ncon([left, tensor, tensor.one_hot(2,sigma[s])],[[1], [1, -1, 2], [2]])
-        return left
+        left = np.expand_dims(np.ones((sigmas.shape[0], self.D[0])), 1)  #(Nt, 1, Dl)
+        for site in range(len(self)):
+            tmp = ncon.ncon([self.get_tensor(site), np.eye(num_labels)[sigmas[:,site]].astype(np.int32)],[[-2, -3, 1], [-1, 1]]) #(Nt, Dl, Dr)
+            left = np.matmul(left, tmp) #(Nt, 1, Dr)
+        return np.squeeze(left)
+
     
     def generate_samples(self, num_samples):
       """
