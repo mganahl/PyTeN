@@ -2165,6 +2165,22 @@ class FiniteMPS(MPS):
             O = mf.transfer_operator([self.get_tensor(n)], [mps.get_tensor(n)],
                                      'l', O)
         return O
+    
+    def get_amplitude(self, sigma):
+        """
+        compute the amplitude of configuration `sigma`
+        This is not very efficient
+        Args:
+            sigma (list of int):  basis configuration
+        Returns:
+            float or complex:  the amplitude
+        """
+        left = self._tensors[0].ones(self.D[0])
+        for s in range(len(self)):
+            tensor = self.get_tensor(s)
+            left = ncon.ncon([left, tensor, tensor.one_hot(2,sigma[s])],[[1], [1, -1, 2], [2]])
+        return left
+    
     def generate_samples(self, num_samples):
       """
       calculate samples from the MPS probability amplitude
