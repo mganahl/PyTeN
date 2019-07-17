@@ -2181,18 +2181,18 @@ class FiniteMPS(MPS):
     #         left = ncon.ncon([left, tensor, tensor.one_hot(2,sigma[s])],[[1], [1, -1, 2], [2]])
     #     return left
     
-    def get_amplitude(self, sigmas, num_labels):
+    def get_amplitude(self, sigmas):
         """
         compute the amplitude of configuration `sigma`
         This is not very efficient
         Args:
-            sigma (list of int):  basis configuration
+            sigma (np.ndarray of shape (n_samples, N):  basis configuration
         Returns:
-            float or complex:  the amplitude
+            np.ndarray of shape (n_samples): the amplitudes
         """
         left = np.expand_dims(np.ones((sigmas.shape[0], self.D[0])), 1)  #(Nt, 1, Dl)
         for site in range(len(self)):
-            tmp = ncon.ncon([self.get_tensor(site), np.eye(num_labels)[sigmas[:,site]].astype(np.int32)],[[-2, -3, 1], [-1, 1]]) #(Nt, Dl, Dr)
+            tmp = ncon.ncon([self.get_tensor(site), np.eye(self.d[site])[sigmas[:,site]].astype(np.int32)],[[-2, -3, 1], [-1, 1]]) #(Nt, Dl, Dr)
             left = np.matmul(left, tmp) #(Nt, 1, Dr)
         return np.squeeze(left)
 
@@ -2228,7 +2228,7 @@ class FiniteMPS(MPS):
         p_cond = Z0 / Z1 * np.abs(p_joint_0/p_joint_1)
 
         p_cond /= np.expand_dims(np.sum(p_cond,axis=1),1)
-
+        p_cond=np.abs(p_cond)
         sigmas.append([np.random.choice([0,1],size=1,p=p_cond[t,:])[0] for t in range(num_samples)])
         one_hots = np.eye(ds[site])[sigmas[-1]]
         p_joint_1 = np.expand_dims(np.sum(p_cond * one_hots, axis=1),1)        
