@@ -2021,7 +2021,7 @@ class OverlapMinimizer(Container):
         ut, st, vt = np.linalg.svd(
             np.reshape(wIn, (shape[0] * shape[1], shape[2] * shape[3])),
             full_matrices=False)
-        return -np.reshape(ncon.ncon([ut, vt], [[-1, 1], [1, -2]]), shape).view(Tensor)
+        return np.reshape(ncon.ncon([np.conj(ut), np.copnj(vt)], [[-1, 1], [1, -2]]), shape).view(Tensor)
         
 
     def minimize(self,num_iterations, verbose=0):
@@ -2032,7 +2032,7 @@ class OverlapMinimizer(Container):
                 self.gates[(site, site+1)] = self.u_update_svd_numpy(env)
                 self.add_unitary_left(site,self.left_envs, self.mps, self.conj_mps, self.gates)
                 if verbose > 0 and site > 0:
-                    overlap = self.overlap(site, self.left_envs, self.right_envs, self.mps, self.conj_mps)                    
+                    overlap = self.overlap(site, self.left_envs, self.right_envs, self.mps, self.conj_mps)
                     stdout.write(
                         "\r iteration  %i/%i, overlap = %.16f" %
                         (it, num_iterations, np.abs(np.real(overlap))))
@@ -2053,7 +2053,7 @@ class OverlapMinimizer(Container):
                 if verbose > 1:
                     print()
 
-    def minimize_even(self,num_iterations, verbose=0):
+    def minimize_even(self,num_iterations, thresh=1.0, verbose=0):
         self.left_envs = {}
         self.right_envs = {}        
 
@@ -2064,9 +2064,12 @@ class OverlapMinimizer(Container):
                 self.gates[(site, site+1)] = self.u_update_svd_numpy(env)
                 self.add_unitary_left(site, self.left_envs, self.mps, self.conj_mps, self.gates)
                 if site + 1 < len(self.mps) - 1:
-                    self.add_unitary_left(site + 1,self.left_envs, self.mps, self.conj_mps, self.gates)                
-                if verbose > 0 and site > 0:
+                    self.add_unitary_left(site + 1,self.left_envs, self.mps, self.conj_mps, self.gates)
+                if site > 0:
                     overlap = self.overlap(site, self.left_envs, self.right_envs, self.mps, self.conj_mps)                    
+                    if np.abs(overlap)>thresh:
+                        return 
+                if verbose > 0 and site > 0:
                     stdout.write(
                         "\r iteration  %i/%i at site %i , overlap = %.16f" %
                         (it, num_iterations, site, np.abs(np.real(overlap))))                        
@@ -2075,7 +2078,7 @@ class OverlapMinimizer(Container):
                     print()
 
 
-    def minimize_odd(self,num_iterations, verbose=0):
+    def minimize_odd(self,num_iterations, thresh=1.0, verbose=0):
         self.left_envs = {}
         self.right_envs = {}        
         for it in range(num_iterations):
@@ -2087,9 +2090,13 @@ class OverlapMinimizer(Container):
                 self.gates[(site, site+1)] = self.u_update_svd_numpy(env)
                 self.add_unitary_left(site, self.left_envs, self.mps, self.conj_mps, self.gates)
                 if site + 1 < len(self.mps) - 1:
-                    self.add_unitary_left(site + 1,self.left_envs, self.mps, self.conj_mps, self.gates)                
+                    self.add_unitary_left(site + 1,self.left_envs, self.mps, self.conj_mps, self.gates)
+
+                if site > 0:
+                    overlap = self.overlap(site, self.left_envs, self.right_envs, self.mps, self.conj_mps)                    
+                    if np.abs(overlap)>thresh:
+                        return 
                 if verbose > 0 and site > 0:
-                    overlap = self.overlap(site, self.left_envs, self.right_envs, self.mps, self.conj_mps)
                     stdout.write(
                         "\r iteration  %i/%i at site %i , overlap = %.16f" %
                         (it, num_iterations, site, np.abs(np.real(overlap))))                        
