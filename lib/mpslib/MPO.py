@@ -576,66 +576,73 @@ class InfiniteXXZ(InfiniteMPO):
         super().__init__(mpo)
 
 class FiniteJ1J2(FiniteMPO):
-    """
-    the famous Heisenberg Hamiltonian, which we all know and love so much!
-    """
+      """
+      returns the MPO of the finite J1-J2 model
+      Args:
+        J1 (np.ndarray or tf.Tensor):  the S*S coupling strength between nearest neighbor lattice sites
+        J2 (np.ndarray or tf.Tensor):  the S*S coupling strength between next-nearest neighbor lattice sites
+        Bz (np.ndarray or tf.Tensor):  magnetic field on each lattice site
+        dtype (tf-dtype or numpy dtype): the dtype of the MPO
+      Returns:
+        FiniteJ1J2:   the mpo of the finite J1J2 model
+      """
 
-    def __init__(self, J1, J2, Bz, dtype=np.float64):
-        dtype=np.result_type(J1.dtype,J2.dtype,Bz.dtype,dtype)
-        self.J1 = J1.astype(dtype)
-        self.J2 = J2.astype(dtype)        
-        self.Bz = Bz.astype(dtype)
-        Sm = np.array([[0, 1], [0, 0]]).astype(dtype)
-        Sp = np.array([[0, 0], [1, 0]]).astype(dtype)
-        Sz = np.diag([-0.5, 0.5]).astype(dtype)
-        eye = np.eye(2).astype(dtype)
-                               
-        N = len(Bz)
-        mpo = []
-        temp = Tensor.zeros((1, 8, 2, 2), dtype)
-
-        temp[0, 0, :, :] = - Bz[0] * Sz
-        temp[0, 1, :, :] = J1[0] / 2 * Sm
-        temp[0, 2, :, :] = J1[0] / 2 * Sp
-        temp[0, 3, :, :] = J1[0] * Sz
-        temp[0, 4, :, :] = J2[0] / 2 * Sm
-        temp[0, 5, :, :] = J2[0] / 2 * Sp
-        temp[0, 6, :, :] = J2[0] * Sz
-        temp[0, 7, :, :] = eye
-
-
-        mpo.append(temp.copy())
-        for n in range(1, N - 1):
-            temp = Tensor.zeros((8, 8, 2, 2), dtype)
-            temp[0, 0, :, :] = eye
-            temp[1, 0, :, :] = Sp
-            temp[2, 0, :, :] = Sm
-            temp[3, 0, :, :] = Sz
-            temp[4, 1, :, :] = eye
-            temp[5, 2, :, :] = eye
-            temp[6, 3, :, :] = eye
-            
-            temp[7, 0, :, :] = - Bz[n] * Sz
-            temp[7, 1, :, :] = J1[n] / 2 * Sm
-            temp[7, 2, :, :] = J1[n] / 2 * Sp
-            temp[7, 3, :, :] = J1[n] * Sz
-            temp[7, 4, :, :] = J2[n] / 2 * Sm
-            temp[7, 5, :, :] = J2[n] / 2 * Sp
-            temp[7, 6, :, :] = J2[n] * Sz
-            temp[7, 7, :, :] = eye
-
-            mpo.append(temp.copy())
-
-        temp = Tensor.zeros((8, 1, 2, 2), dtype)
-        temp[0, 0, :, :] = eye
-        temp[1, 0, :, :] = Sp
-        temp[2, 0, :, :] = Sm
-        temp[3, 0, :, :] = Sz        
-        temp[7, 0, :, :] = -Bz[-1] * Sz
-
-
-        mpo.append(temp.copy())
-        super().__init__(mpo)
+      def __init__(self, J1, J2, Bz, dtype=np.float64):
+          dtype=np.result_type(J1.dtype,J2.dtype,Bz.dtype,dtype)
+          self.J1 = J1.astype(dtype)
+          self.J2 = J2.astype(dtype)        
+          self.Bz = Bz.astype(dtype)
+          Sm = np.array([[0, 1], [0, 0]]).astype(dtype)
+          Sp = np.array([[0, 0], [1, 0]]).astype(dtype)
+          Sz = np.diag([-0.5, 0.5]).astype(dtype)
+          eye = np.eye(2).astype(dtype)
+                                 
+          N = len(Bz)
+          mpo = []
+          temp = Tensor.zeros((1, 8, 2, 2), dtype)
+          
+          temp[0, 0, :, :] = - Bz[0] * Sz
+          temp[0, 1, :, :] = J1[0] / 2 * Sm
+          temp[0, 2, :, :] = J1[0] / 2 * Sp
+          temp[0, 3, :, :] = J1[0] * Sz
+          temp[0, 4, :, :] = J2[0] / 2 * Sm
+          temp[0, 5, :, :] = J2[0] / 2 * Sp
+          temp[0, 6, :, :] = J2[0] * Sz
+          temp[0, 7, :, :] = eye
+          
+          
+          mpo.append(temp.copy())
+          for n in range(1, N - 1):
+              temp = Tensor.zeros((8, 8, 2, 2), dtype)
+              temp[0, 0, :, :] = eye
+              temp[1, 0, :, :] = Sp
+              temp[2, 0, :, :] = Sm
+              temp[3, 0, :, :] = Sz
+              temp[4, 1, :, :] = eye
+              temp[5, 2, :, :] = eye
+              temp[6, 3, :, :] = eye
+              
+              temp[7, 0, :, :] = - Bz[n] * Sz
+              temp[7, 1, :, :] = J1[n] / 2 * Sm
+              temp[7, 2, :, :] = J1[n] / 2 * Sp
+              temp[7, 3, :, :] = J1[n] * Sz
+              temp[7, 4, :, :] = J2[n] / 2 * Sm
+              temp[7, 5, :, :] = J2[n] / 2 * Sp
+              temp[7, 6, :, :] = J2[n] * Sz
+              temp[7, 7, :, :] = eye
+          
+              mpo.append(temp.copy())
+          
+          temp = Tensor.zeros((8, 1, 2, 2), dtype)
+          temp[0, 0, :, :] = eye
+          temp[1, 0, :, :] = Sp
+          temp[2, 0, :, :] = Sm
+          temp[3, 0, :, :] = Sz        
+          temp[7, 0, :, :] = -Bz[-1] * Sz
+          
+          
+          mpo.append(temp.copy())
+          super().__init__(mpo)
 
 
 
