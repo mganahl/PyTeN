@@ -1997,6 +1997,16 @@ class OverlapMinimizer(Container):
                                mps.get_tensor(sites[1]),
                                conj_mps.get_tensor(sites[0]).conj(), conj_mps.get_tensor(sites[1]).conj()],
                               [[5,4, -1,3], [5,1,-3], [1,6,-4], [4,2,3], [2,6,-2]])
+
+    def absorb_gates(self):
+        for site in range(0,len(self.mps)-1,2):
+            self.mps.apply_2site_gate(self.gates[(site, site + 1)], site)
+        for site in range(1,len(self.mps)-2,2):
+            self.mps.apply_2site_gate(self.gates[(site, site + 1)], site)
+        self.mps.position(0)
+        self.mps.position(len(self.mps))
+        self.mps.position(0)        
+        
     @staticmethod        
     def overlap(site,left_envs,right_envs, mps, conj_mps):
         if site%2 == 1:
@@ -2021,7 +2031,7 @@ class OverlapMinimizer(Container):
         ut, st, vt = np.linalg.svd(
             np.reshape(wIn, (shape[0] * shape[1], shape[2] * shape[3])),
             full_matrices=False)
-        return np.reshape(ncon.ncon([np.conj(ut), np.copnj(vt)], [[-1, 1], [1, -2]]), shape).view(Tensor)
+        return np.reshape(ncon.ncon([np.conj(ut), np.conj(vt)], [[-1, 1], [1, -2]]), shape).view(Tensor)
         
 
     def minimize(self,num_iterations, verbose=0):

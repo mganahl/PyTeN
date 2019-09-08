@@ -228,7 +228,7 @@ class Tensor(np.ndarray, TensorBase):
         except LinAlgError:
             [q, r] = self.qr()
             r[np.abs(r) < r_thresh] = 0.0
-            u_, s, v = r.svd(*args, **kwargs)
+            u_, s, v, _ = r.svd(*args, **kwargs)
             s /= Z
             u = q.dot(u_).view(Tensor)
             warnings.warn(
