@@ -921,8 +921,8 @@ class VUMPSengine(Container):
         ihr=mf.addLayer(self._rb,self._B,self._mpo[0],self._B,-1)[:,:,-1]
         Elocright=np.tensordot(ihr,self._l,([0,1],[0,1]))
 
-        ihlprojected=(ihl-np.tensordot(ihl,l,([0,1],[0,1]))*np.eye(self._D))
-        ihrprojected=(ihr-np.tensordot(r,ihr,([0,1],[0,1]))*np.eye(self._D))
+        ihlprojected=(ihl-np.tensordot(ihl,r,([0,1],[0,1]))*np.eye(self._D))
+        ihrprojected=(ihr-np.tensordot(l,ihr,([0,1],[0,1]))*np.eye(self._D))
         
         self._kleft=mf.RENORMBLOCKHAMGMRES(self._A,self._A,self._l,np.eye(self._D),ihlprojected,x0=np.reshape(self._kleft,self._D*self._D),tolerance=self._lgmrestol,\
                                            maxiteration=self._Nmaxlgmres,direction=1)
