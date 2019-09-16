@@ -21,7 +21,7 @@ from lib.mpslib.Tensor import TensorBase, Tensor
 
 
 class MPOBase(TensorNetwork):
-    """
+  """
     Base class for defining MPO; if you want to implement a custom MPO, derive from this class (see below for examples)
     Index convention:
 
@@ -50,39 +50,39 @@ class MPOBase(TensorNetwork):
     
     """
 
-    def __init__(self, tensors, name, fromview):
-        super().__init__(
-            tensors=tensors, shape=(), name=name, fromview=fromview)
+  def __init__(self, tensors, name, fromview):
+    super().__init__(tensors=tensors, shape=(), name=name, fromview=fromview)
 
-    @property
-    def D(self):
-        """Returns a vector of all bond dimensions.
+  @property
+  def D(self):
+    """Returns a vector of all bond dimensions.
         The vector will have length `N+1`, where `N == num_sites`."""
-        return ([self._tensors[0].shape[0]] +
-                [self._tensors[n].shape[1] for n in range(len(self._tensors))])
+    return ([self._tensors[0].shape[0]] +
+            [self._tensors[n].shape[1] for n in range(len(self._tensors))])
 
-    @property
-    def d_in(self):
-        """Returns a vector of all bond dimensions.
+  @property
+  def d_in(self):
+    """Returns a vector of all bond dimensions.
         The vector will have length `N+1`, where `N == num_sites`."""
-        return ([self._tensors[n].shape[2] for n in range(len(self._tensors))])
+    return ([self._tensors[n].shape[2] for n in range(len(self._tensors))])
 
-    @property
-    def d_out(self):
-        """Returns a vector of all bond dimensions.
+  @property
+  def d_out(self):
+    """Returns a vector of all bond dimensions.
         The vector will have length `N+1`, where `N == num_sites`."""
-        return ([self._tensors[n].shape[2] for n in range(len(self._tensors))])
+    return ([self._tensors[n].shape[2] for n in range(len(self._tensors))])
 
-    def get_tensor(self, n):
-        return self._tensors[n]
+  def get_tensor(self, n):
+    return self._tensors[n]
 
-    def get_2site_mpo(self, *args, **kwargs):
-        raise NotImplementedError()
-    def get_2site_hamiltonian(self, *args, **kwargs):
-        raise NotImplementedError()
-    
-    def get_2site_gate(self, site1, site2, tau):
-        """
+  def get_2site_mpo(self, *args, **kwargs):
+    raise NotImplementedError()
+
+  def get_2site_hamiltonian(self, *args, **kwargs):
+    raise NotImplementedError()
+
+  def get_2site_gate(self, site1, site2, tau):
+    """
         calculate the unitary two-site gates exp(tau*H(m,n))
         Parameters:
         --------------------------------------
@@ -98,48 +98,47 @@ class MPOBase(TensorNetwork):
         Gate is a rank-4 tensor with shape (dm,dn,dm,dn), with
         dm, dn the local hilbert space dimension at site m and n, respectively
         """
-        if site2 < site1:
-            d1 = self[site2].shape[2]
-            d2 = self[site1].shape[2]
-        elif site2 > site1:
-            d1 = self[site1].shape[2]
-            d2 = self[site2].shape[2]
-        else:
-            raise ValuError(
-                'MPO.get_2site_gate: site1 has to be different from site2!')
-        h = np.reshape(
-            self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
-        return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(
-            type(h))
-    
+    if site2 < site1:
+      d1 = self[site2].shape[2]
+      d2 = self[site1].shape[2]
+    elif site2 > site1:
+      d1 = self[site1].shape[2]
+      d2 = self[site2].shape[2]
+    else:
+      raise ValuError(
+          'MPO.get_2site_gate: site1 has to be different from site2!')
+    h = np.reshape(self.get_2site_hamiltonian(site1, site2), (d1 * d2, d1 * d2))
+    return np.reshape(sp.linalg.expm(tau * h), (d1, d2, d1, d2)).view(type(h))
 
-    
+
 class FiniteMPO(MPOBase):
 
-    def __init__(self, tensors, name=None, fromview=True):
-        super().__init__(tensors=tensors, name=name, fromview=fromview)
-        if not (np.sum(self.D[0]) == 1 and np.sum(self.D[-1]) == 1):
-            raise ValueError('FiniteMPO: left and right MPO ancillary dimension is different from 1')
+  def __init__(self, tensors, name=None, fromview=True):
+    super().__init__(tensors=tensors, name=name, fromview=fromview)
+    if not (np.sum(self.D[0]) == 1 and np.sum(self.D[-1]) == 1):
+      raise ValueError(
+          'FiniteMPO: left and right MPO ancillary dimension is different from 1'
+      )
 
-    def get_2site_mpo(self, site1, site2):
-        if site2 < site1:
-            mpo1 = self[site2][-1, :, :, :]
-            mpo2 = self[site1][:, 0, :, :]
+  def get_2site_mpo(self, site1, site2):
+    if site2 < site1:
+      mpo1 = self[site2][-1, :, :, :]
+      mpo2 = self[site1][:, 0, :, :]
 
-        if site2 > site1:
-            mpo1 = self[site1][-1, :, :, :]
-            mpo2 = self[site2][:, 0, :, :]
+    if site2 > site1:
+      mpo1 = self[site1][-1, :, :, :]
+      mpo2 = self[site2][:, 0, :, :]
 
-        d1 = mpo1.shape[1]
-        d2 = mpo2.shape[1]
+    d1 = mpo1.shape[1]
+    d2 = mpo2.shape[1]
 
-        return [
-            np.expand_dims(mpo1, 0).view(type(mpo1)),
-            np.expand_dims(mpo2, 1).view(type(mpo2))
-        ]
+    return [
+        np.expand_dims(mpo1, 0).view(type(mpo1)),
+        np.expand_dims(mpo2, 1).view(type(mpo2))
+    ]
 
-    def get_2site_hamiltonian(self, site1, site2):
-        """
+  def get_2site_hamiltonian(self, site1, site2):
+    """
         obtain a two-site Hamiltonian H_{mn} from MPO
         Parameters:
         --------------------------------------
@@ -157,51 +156,52 @@ class FiniteMPO(MPOBase):
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
         """
-        mpo1, mpo2 = self.get_2site_mpo(site1, site2)
-        if site2 < site1:
-            nl = site2
-            mr = site1
-        elif site2 > site1:
-            nl = site1
-            nr = site2
+    mpo1, mpo2 = self.get_2site_mpo(site1, site2)
+    if site2 < site1:
+      nl = site2
+      mr = site1
+    elif site2 > site1:
+      nl = site1
+      nr = site2
 
-        mpo1 = mpo1[0, :, :, :]
-        mpo2 = mpo2[:, 0, :, :]
-        d1 = mpo1.shape[1]
-        d2 = mpo2.shape[1]
-        if nl != 0 and nr != (len(self) - 1):
-            h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
-            for s in range(1, mpo1.shape[0] - 1):
-                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-            h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
+    mpo1 = mpo1[0, :, :, :]
+    mpo2 = mpo2[:, 0, :, :]
+    d1 = mpo1.shape[1]
+    d2 = mpo2.shape[1]
+    if nl != 0 and nr != (len(self) - 1):
+      h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
+      for s in range(1, mpo1.shape[0] - 1):
+        h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+      h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
 
-        elif nl != 0 and nr == (len(self) - 1):
-            h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
-            for s in range(1, mpo1.shape[0]):
-                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+    elif nl != 0 and nr == (len(self) - 1):
+      h = np.kron(mpo1[0, :, :] / 2.0, mpo2[0, :, :])
+      for s in range(1, mpo1.shape[0]):
+        h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
 
-        elif nl == 0 and nr != (len(self) - 1):
-            h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
-            for s in range(1, mpo1.shape[0] - 1):
-                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-            h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
+    elif nl == 0 and nr != (len(self) - 1):
+      h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
+      for s in range(1, mpo1.shape[0] - 1):
+        h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+      h += np.kron(mpo1[-1, :, :], mpo2[-1, :, :] / 2.0)
 
-        elif nl == 0 and nr == (len(self) - 1):
-            h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
-            for s in range(1, mpo1.shape[0]):
-                h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
-        return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+    elif nl == 0 and nr == (len(self) - 1):
+      h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
+      for s in range(1, mpo1.shape[0]):
+        h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+    return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
 
 
-        
 class InfiniteMPO(MPOBase):
-    def __init__(self, tensors, name=None, fromview=True):
-        super().__init__(tensors=tensors, name=name, fromview=fromview)
-        if not (np.sum(self.D[0]) == np.sum(self.D[-1])):
-            raise ValueError('InfiniteMPO: left and right MPO ancicllary dimension differ')
-        
-    def get_boundary_vector(self, side):
-        """
+
+  def __init__(self, tensors, name=None, fromview=True):
+    super().__init__(tensors=tensors, name=name, fromview=fromview)
+    if not (np.sum(self.D[0]) == np.sum(self.D[-1])):
+      raise ValueError(
+          'InfiniteMPO: left and right MPO ancicllary dimension differ')
+
+  def get_boundary_vector(self, side):
+    """
         return a one dimensional array which can be contracted with 
         the mpo to yield a boundary mpo
         Parameters:
@@ -210,19 +210,19 @@ class InfiniteMPO(MPOBase):
                the side for which the boundary vector is required
         
         """
-        
-        if side.lower() in ('l', 'left'):
-            v = np.zeros(self.D[0], dtype=self.dtype)
-            v[-1] = 1.0
-            return v.view(type(self._tensors[0]))
 
-        if side.lower() in ('r', 'right'):
-            v = np.zeros(self.D[-1], dtype=self.dtype)
-            v[0] = 1.0
-            return v.view(type(self._tensors[-1]))
+    if side.lower() in ('l', 'left'):
+      v = np.zeros(self.D[0], dtype=self.dtype)
+      v[-1] = 1.0
+      return v.view(type(self._tensors[0]))
 
-    def get_boundary_mpo(self, side):
-        """
+    if side.lower() in ('r', 'right'):
+      v = np.zeros(self.D[-1], dtype=self.dtype)
+      v[0] = 1.0
+      return v.view(type(self._tensors[-1]))
+
+  def get_boundary_mpo(self, side):
+    """
         return a boundary mpo
         Parameters:
         -------------------
@@ -230,45 +230,43 @@ class InfiniteMPO(MPOBase):
                the side for which the boundary vector is required
         
         """
-        
-        
-        if side.lower() in ('l', 'left'):
-            out = copy.deepcopy(self._tensors[-1][-1, :, :, :])
-            out[0, :, :] *= 0.0
-        if side.lower() in ('r', 'right'):
-            out = copy.deepcopy(self._tensors[0][:, 0, :, :])
-            out[-1, :, :] *= 0.0
-        return out.squeeze()
 
-    def get_2site_mpo(self, site1, site2):
-        if site2 < site1:
-            mpo1 = copy.deepcopy(self[site2][-1, :, :, :])
-            mpo2 = copy.deepcopy(self[site1][:, 0, :, :])
-            if site2 == 0:
-                mpo1[0, :, :] /= 2.0
-            if site1 == (len(self) - 1):
-                mpo2[-1, :, :] /= 2.0
+    if side.lower() in ('l', 'left'):
+      out = copy.deepcopy(self._tensors[-1][-1, :, :, :])
+      out[0, :, :] *= 0.0
+    if side.lower() in ('r', 'right'):
+      out = copy.deepcopy(self._tensors[0][:, 0, :, :])
+      out[-1, :, :] *= 0.0
+    return out.squeeze()
 
-        if site2 > site1:
-            mpo1 = copy.deepcopy(self[site1][-1, :, :, :])
-            mpo2 = copy.deepcopy(self[site2][:, 0, :, :])
-            if site1 == 0:
-                mpo1[0, :, :] /= 2.0
-            if site2 == (len(self) - 1):
-                mpo2[-1, :, :] /= 2.0
+  def get_2site_mpo(self, site1, site2):
+    if site2 < site1:
+      mpo1 = copy.deepcopy(self[site2][-1, :, :, :])
+      mpo2 = copy.deepcopy(self[site1][:, 0, :, :])
+      if site2 == 0:
+        mpo1[0, :, :] /= 2.0
+      if site1 == (len(self) - 1):
+        mpo2[-1, :, :] /= 2.0
 
-        assert (mpo1.shape[0] == mpo2.shape[0])
-        d1 = mpo1.shape[1]
-        d2 = mpo2.shape[1]
+    if site2 > site1:
+      mpo1 = copy.deepcopy(self[site1][-1, :, :, :])
+      mpo2 = copy.deepcopy(self[site2][:, 0, :, :])
+      if site1 == 0:
+        mpo1[0, :, :] /= 2.0
+      if site2 == (len(self) - 1):
+        mpo2[-1, :, :] /= 2.0
 
-        return [
-            np.expand_dims(mpo1, 0).view(type(mpo1)),
-            np.expand_dims(mpo2, 1).view(type(mpo2))
-        ]
+    assert (mpo1.shape[0] == mpo2.shape[0])
+    d1 = mpo1.shape[1]
+    d2 = mpo2.shape[1]
 
+    return [
+        np.expand_dims(mpo1, 0).view(type(mpo1)),
+        np.expand_dims(mpo2, 1).view(type(mpo2))
+    ]
 
-    def get_2site_hamiltonian(self, site1, site2):
-        """
+  def get_2site_hamiltonian(self, site1, site2):
+    """
         obtain a two-site Hamiltonian H_{mn} from MPO
         Parameters:
         --------------------------------------
@@ -286,297 +284,364 @@ class InfiniteMPO(MPOBase):
         dsite1, dsite2 the local hilbert space dimension at sites ```site1``` and ```site2```, respectively,
         
         """
-        mpo1, mpo2 = self.get_2site_mpo(site1, site2)
-        if site2 < site1:
-            nl = site2
-            mr = site1
-        elif site2 > site1:
-            nl = site1
-            nr = site2
-        mpo1 = mpo1[0, :, :, :]
-        mpo2 = mpo2[:, 0, :, :]
-            
-        d1 = mpo1.shape[1]
-        d2 = mpo2.shape[1]
+    mpo1, mpo2 = self.get_2site_mpo(site1, site2)
+    if site2 < site1:
+      nl = site2
+      mr = site1
+    elif site2 > site1:
+      nl = site1
+      nr = site2
+    mpo1 = mpo1[0, :, :, :]
+    mpo2 = mpo2[:, 0, :, :]
 
-        h=np.kron(mpo1[0,:,:],mpo2[0,:,:])
-        for s in range(1,mpo1.shape[0]):
-            h+=np.kron(mpo1[s,:,:],mpo2[s,:,:])
-        return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+    d1 = mpo1.shape[1]
+    d2 = mpo2.shape[1]
 
-    def roll(self,num_sites):
-        tensors=[self._tensors[n] for n in range(num_sites,len(self._tensors))]\
-            + [self._tensors[n] for n in range(num_sites)]
-        self.set_tensors(tensors)
-    
+    h = np.kron(mpo1[0, :, :], mpo2[0, :, :])
+    for s in range(1, mpo1.shape[0]):
+      h += np.kron(mpo1[s, :, :], mpo2[s, :, :])
+    return np.reshape(h, (d1, d2, d1, d2)).view(type(mpo1))
+
+  def roll(self, num_sites):
+    tensors=[self._tensors[n] for n in range(num_sites,len(self._tensors))]\
+        + [self._tensors[n] for n in range(num_sites)]
+    self.set_tensors(tensors)
+
+
 class FiniteTFI(FiniteMPO):
-    """ 
+  """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
     this is X * X + Z    
     """
 
-    def __init__(self, Jx, Bz, dtype=np.float64):
-        dtype=np.result_type(Jx.dtype,Bz.dtype,dtype)                
-        self.Jx = Jx.astype(dtype)
-        self.Bz = Bz.astype(dtype)
-        N = len(Bz)
-        sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
-        sigma_z = np.diag([-1, 1]).astype(dtype)
-        mpo = []
-        temp = Tensor.zeros((1, 3, 2, 2), dtype)
-        #Bsigma_z
-        temp[0, 0, :, :] = self.Bz[0] * sigma_z
-        #sigma_x
-        temp[0, 1, :, :] = self.Jx[0] * sigma_x
-        #11
-        temp[0, 2, 0, 0] = 1.0
-        temp[0, 2, 1, 1] = 1.0
-        mpo.append(temp.copy())
-        for n in range(1, N - 1):
-            temp = Tensor.zeros((3, 3, 2, 2), dtype)
-            #11
-            temp[0, 0, 0, 0] = 1.0
-            temp[0, 0, 1, 1] = 1.0
-            #sigma_x
-            temp[1, 0, :, :] = sigma_x
-            #Bsigma_z
-            temp[2, 0, :, :] = self.Bz[n] * sigma_z
-            #sigma_x
-            temp[2, 1, :, :] = self.Jx[n] * sigma_x
-            #11
-            temp[2, 2, 0, 0] = 1.0
-            temp[2, 2, 1, 1] = 1.0
-            mpo.append(temp.copy())
+  def __init__(self, Jx, Bz, dtype=np.float64):
+    dtype = np.result_type(Jx.dtype, Bz.dtype, dtype)
+    self.Jx = Jx.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    N = len(Bz)
+    sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
+    sigma_z = np.diag([-1, 1]).astype(dtype)
+    mpo = []
+    temp = Tensor.zeros((1, 3, 2, 2), dtype)
+    #Bsigma_z
+    temp[0, 0, :, :] = self.Bz[0] * sigma_z
+    #sigma_x
+    temp[0, 1, :, :] = self.Jx[0] * sigma_x
+    #11
+    temp[0, 2, 0, 0] = 1.0
+    temp[0, 2, 1, 1] = 1.0
+    mpo.append(temp.copy())
+    for n in range(1, N - 1):
+      temp = Tensor.zeros((3, 3, 2, 2), dtype)
+      #11
+      temp[0, 0, 0, 0] = 1.0
+      temp[0, 0, 1, 1] = 1.0
+      #sigma_x
+      temp[1, 0, :, :] = sigma_x
+      #Bsigma_z
+      temp[2, 0, :, :] = self.Bz[n] * sigma_z
+      #sigma_x
+      temp[2, 1, :, :] = self.Jx[n] * sigma_x
+      #11
+      temp[2, 2, 0, 0] = 1.0
+      temp[2, 2, 1, 1] = 1.0
+      mpo.append(temp.copy())
 
-        temp = Tensor.zeros((3, 1, 2, 2), dtype)
-        #11
-        temp[0, 0, 0, 0] = 1.0
-        temp[0, 0, 1, 1] = 1.0
-        #sigma_x
-        temp[1, 0, :, :] = sigma_x
-        #Bsigma_z
-        temp[2, 0, :, :] = self.Bz[-1] * sigma_z
+    temp = Tensor.zeros((3, 1, 2, 2), dtype)
+    #11
+    temp[0, 0, 0, 0] = 1.0
+    temp[0, 0, 1, 1] = 1.0
+    #sigma_x
+    temp[1, 0, :, :] = sigma_x
+    #Bsigma_z
+    temp[2, 0, :, :] = self.Bz[-1] * sigma_z
 
-        mpo.append(temp.copy())
+    mpo.append(temp.copy())
 
-        super().__init__(tensors=mpo, name='FiniteTFI_MPO')
-        
+    super().__init__(tensors=mpo, name='FiniteTFI_MPO')
+
+
 class FiniteTFI_2(FiniteMPO):
-    """ 
+  """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
     this is Z*Z + X
     
     """
 
-    def __init__(self, Jz, Bx, dtype=np.float64):
-        dtype=np.result_type(Jz.dtype,Bx.dtype,dtype)                
-        self.Jz = Jz.astype(dtype)
-        self.Bx = Bx.astype(dtype)
-        N = len(Bx)
-        sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
-        sigma_z = np.diag([-1, 1]).astype(dtype)
-        mpo = []
-        temp = Tensor.zeros((1, 3, 2, 2), dtype)
-        #Bsigma_z
-        temp[0, 0, :, :] = self.Bx[0] * sigma_x
-        #sigma_x
-        temp[0, 1, :, :] = self.Jz[0] * sigma_z
-        #11
-        temp[0, 2, 0, 0] = 1.0
-        temp[0, 2, 1, 1] = 1.0
-        mpo.append(temp.copy())
-        for n in range(1, N - 1):
-            temp = Tensor.zeros((3, 3, 2, 2), dtype)
-            #11
-            temp[0, 0, 0, 0] = 1.0
-            temp[0, 0, 1, 1] = 1.0
-            #sigma_x
-            temp[1, 0, :, :] = sigma_z
-            #Bsigma_z
-            temp[2, 0, :, :] = self.Bx[n] * sigma_x
-            #sigma_x
-            temp[2, 1, :, :] = self.Jz[n] * sigma_z
-            #11
-            temp[2, 2, 0, 0] = 1.0
-            temp[2, 2, 1, 1] = 1.0
-            mpo.append(temp.copy())
+  def __init__(self, Jz, Bx, dtype=np.float64):
+    dtype = np.result_type(Jz.dtype, Bx.dtype, dtype)
+    self.Jz = Jz.astype(dtype)
+    self.Bx = Bx.astype(dtype)
+    N = len(Bx)
+    sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
+    sigma_z = np.diag([-1, 1]).astype(dtype)
+    mpo = []
+    temp = Tensor.zeros((1, 3, 2, 2), dtype)
+    #Bsigma_z
+    temp[0, 0, :, :] = self.Bx[0] * sigma_x
+    #sigma_x
+    temp[0, 1, :, :] = self.Jz[0] * sigma_z
+    #11
+    temp[0, 2, 0, 0] = 1.0
+    temp[0, 2, 1, 1] = 1.0
+    mpo.append(temp.copy())
+    for n in range(1, N - 1):
+      temp = Tensor.zeros((3, 3, 2, 2), dtype)
+      #11
+      temp[0, 0, 0, 0] = 1.0
+      temp[0, 0, 1, 1] = 1.0
+      #sigma_x
+      temp[1, 0, :, :] = sigma_z
+      #Bsigma_z
+      temp[2, 0, :, :] = self.Bx[n] * sigma_x
+      #sigma_x
+      temp[2, 1, :, :] = self.Jz[n] * sigma_z
+      #11
+      temp[2, 2, 0, 0] = 1.0
+      temp[2, 2, 1, 1] = 1.0
+      mpo.append(temp.copy())
 
-        temp = Tensor.zeros((3, 1, 2, 2), dtype)
-        #11
-        temp[0, 0, 0, 0] = 1.0
-        temp[0, 0, 1, 1] = 1.0
-        #sigma_x
-        temp[1, 0, :, :] = sigma_z
-        #Bsigma_z
-        temp[2, 0, :, :] = self.Bx[-1] * sigma_x
+    temp = Tensor.zeros((3, 1, 2, 2), dtype)
+    #11
+    temp[0, 0, 0, 0] = 1.0
+    temp[0, 0, 1, 1] = 1.0
+    #sigma_x
+    temp[1, 0, :, :] = sigma_z
+    #Bsigma_z
+    temp[2, 0, :, :] = self.Bx[-1] * sigma_x
 
-        mpo.append(temp.copy())
+    mpo.append(temp.copy())
 
-        super().__init__(tensors=mpo, name='FiniteTFI_MPO')
+    super().__init__(tensors=mpo, name='FiniteTFI_MPO')
+
+
+class FiniteTFI2D(FiniteMPO):
+  """ 
+  the good old transverse field Ising MPO
+  convention: sigma_z=diag([-1,1])
+  this is X * X + Z    
+  """
+
+  def __init__(self, Jx1, Jx2, Bz, N1, N2, dtype=np.float64):
+    self.Jx1 = Jx1
+    self.Jx2 = Jx2
+    self.N1 = N1
+    self.N2 = N2
+    self.Bz = Bz
+    eye = np.eye(2).astype(dtype)
+    sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
+    sigma_z = np.diag([-1, 1]).astype(dtype)
+    mpo_dim = 3 + N1 - 1
+    mpo_matrix = Tensor.zeros((1, mpo_dim, 2, 2), dtype=dtype)
+    mpo_matrix[0, 0, :, :] = Bz * sigma_z
+    mpo_matrix[0, 1, :, :] = Jx1 * sigma_x
+    mpo_matrix[0, mpo_dim - 2, :, :] = Jx2 * sigma_x
+    mpo_matrix[0, mpo_dim - 1, :, :] = eye
+    mpo = []
+    mpo.append(mpo_matrix.copy())
+    n2 = 0
+    #print('(n1, n2) = ({}, {}), Jx1, Jx2 = ({},{})'.format(
+    #    0 % N1, n2, Jx1, Jx2))
+    for n in range(1, N1 * N2 - 1):
+      if (n + 1) % N2 == 0:
+        jx1 = 0
+      else:
+        jx1 = Jx1
+
+      if n < N1 * (N2 - 1):
+        jx2 = Jx2
+      else:
+        jx2 = 0
+      if n % N1 == 0:
+        n2 += 1
+      #print('(n1, n2) = ({}, {}), Jx1, Jx2 = ({},{})'.format(
+      #    n % N1, n2, jx1, jx2))
+      mpo_dim = 3 + N1 - 1
+      mpo_matrix = Tensor.zeros((mpo_dim, mpo_dim, 2, 2), dtype=dtype)
+      mpo_matrix[0, 0, :, :] = eye
+      mpo_matrix[1, 0, :, :] = sigma_x
+      for n1 in range(2, mpo_dim):
+        mpo_matrix[n1, n1 - 1, :, :] = eye
+      mpo_matrix[mpo_dim - 1, 0, :, :] = Bz * sigma_z
+      mpo_matrix[mpo_dim - 1, 1, :, :] = jx1 * sigma_x
+      mpo_matrix[mpo_dim - 1, mpo_dim - 2, :, :] = jx2 * sigma_x
+      mpo_matrix[mpo_dim - 1, mpo_dim - 1, :, :] = eye
+      mpo.append(mpo_matrix.copy())
+
+    mpo_matrix = Tensor.zeros((mpo_dim, 1, 2, 2), dtype=dtype)
+    mpo_matrix[0, 0, :, :] = eye
+    mpo_matrix[1, 0, :, :] = sigma_x
+    mpo_matrix[mpo_dim - 1, 0, :, :] = Bz * sigma_z
+    #print('(n1, n2) = ({}, {}), Jx1, Jx2 = ({},{})'.format(
+    #    N1 - 1 % N1, n2, 0, 0))
+    mpo.append(mpo_matrix.copy())
+    super().__init__(tensors=mpo, name='FiniteTFI_MPO')
 
 
 class InfiniteTFI(InfiniteMPO):
-    """ 
+  """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
     
     """
 
-    def __init__(self, Jx, Bz, dtype=np.float64):
-        dtype=np.result_type(Jx.dtype,Bz.dtype,dtype)        
-        self.Jx = Jx.astype(dtype)
-        self.Bz = Bz.astype(dtype)
-        N = len(Bz)
-        sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
-        sigma_z = np.diag([-1, 1]).astype(dtype)
-        mpo = []
-        for n in range(0, N):
-            temp = Tensor.zeros((3, 3, 2, 2), dtype)
-            #11
-            temp[0, 0, 0, 0] = 1.0
-            temp[0, 0, 1, 1] = 1.0
-            #sigma_x
-            temp[1, 0, 1, 0] = 1
-            temp[1, 0, 0, 1] = 1
-            #Bsigma_z
-            temp[2, 0:, :] = sigma_z * self.Bz[n]
-            #sigma_x
-            temp[2, 1, :, :] = sigma_x * self.Jx[n]
-            #11
-            temp[2, 2, 0, 0] = 1.0
-            temp[2, 2, 1, 1] = 1.0
-            mpo.append(temp.copy())
+  def __init__(self, Jx, Bz, dtype=np.float64):
+    dtype = np.result_type(Jx.dtype, Bz.dtype, dtype)
+    self.Jx = Jx.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    N = len(Bz)
+    sigma_x = np.array([[0, 1], [1, 0]]).astype(dtype)
+    sigma_z = np.diag([-1, 1]).astype(dtype)
+    mpo = []
+    for n in range(0, N):
+      temp = Tensor.zeros((3, 3, 2, 2), dtype)
+      #11
+      temp[0, 0, 0, 0] = 1.0
+      temp[0, 0, 1, 1] = 1.0
+      #sigma_x
+      temp[1, 0, 1, 0] = 1
+      temp[1, 0, 0, 1] = 1
+      #Bsigma_z
+      temp[2, 0:, :] = sigma_z * self.Bz[n]
+      #sigma_x
+      temp[2, 1, :, :] = sigma_x * self.Jx[n]
+      #11
+      temp[2, 2, 0, 0] = 1.0
+      temp[2, 2, 1, 1] = 1.0
+      mpo.append(temp.copy())
 
-        super().__init__(tensors=mpo, name='InfiniteTFI_MPO')
+    super().__init__(tensors=mpo, name='InfiniteTFI_MPO')
 
 
 class FiniteXXZ(FiniteMPO):
-    """
+  """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
     """
 
-    def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
-        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
-        self.Jz = Jz.astype(dtype)
-        self.Jxy = Jxy.astype(dtype)        
-        self.Bz = Bz.astype(dtype)
-        N = len(Bz)
-        mpo = []
-        temp = Tensor.zeros((1, 5, 2, 2), dtype)
-        #BSz
-        temp[0, 0, 0, 0] = -0.5 * Bz[0]
-        temp[0, 0, 1, 1] = 0.5 * Bz[0]
+  def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
+    dtype = np.result_type(Jz.dtype, Jxy.dtype, Bz.dtype, dtype)
+    self.Jz = Jz.astype(dtype)
+    self.Jxy = Jxy.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    N = len(Bz)
+    mpo = []
+    temp = Tensor.zeros((1, 5, 2, 2), dtype)
+    #BSz
+    temp[0, 0, 0, 0] = -0.5 * Bz[0]
+    temp[0, 0, 1, 1] = 0.5 * Bz[0]
 
-        #Sm
-        temp[0, 1, 0, 1] = Jxy[0] / 2.0 * 1.0
-        #Sp
-        temp[0, 2, 1, 0] = Jxy[0] / 2.0 * 1.0
-        #Sz
-        temp[0, 3, 0, 0] = Jz[0] * (-0.5)
-        temp[0, 3, 1, 1] = Jz[0] * 0.5
+    #Sm
+    temp[0, 1, 0, 1] = Jxy[0] / 2.0 * 1.0
+    #Sp
+    temp[0, 2, 1, 0] = Jxy[0] / 2.0 * 1.0
+    #Sz
+    temp[0, 3, 0, 0] = Jz[0] * (-0.5)
+    temp[0, 3, 1, 1] = Jz[0] * 0.5
 
-        #11
-        temp[0, 4, 0, 0] = 1.0
-        temp[0, 4, 1, 1] = 1.0
-        mpo.append(temp.copy())
-        for n in range(1, N - 1):
-            temp = Tensor.zeros((5, 5, 2, 2), dtype)
-            #11
-            temp[0, 0, 0, 0] = 1.0
-            temp[0, 0, 1, 1] = 1.0
-            #Sp
-            temp[1, 0, 1, 0] = 1.0
-            #Sm
-            temp[2, 0, 0, 1] = 1.0
-            #Sz
-            temp[3, 0, 0, 0] = -0.5
-            temp[3, 0, 1, 1] = 0.5
-            #BSz
-            temp[4, 0, 0, 0] = -0.5 * Bz[n]
-            temp[4, 0, 1, 1] = 0.5 * Bz[n]
+    #11
+    temp[0, 4, 0, 0] = 1.0
+    temp[0, 4, 1, 1] = 1.0
+    mpo.append(temp.copy())
+    for n in range(1, N - 1):
+      temp = Tensor.zeros((5, 5, 2, 2), dtype)
+      #11
+      temp[0, 0, 0, 0] = 1.0
+      temp[0, 0, 1, 1] = 1.0
+      #Sp
+      temp[1, 0, 1, 0] = 1.0
+      #Sm
+      temp[2, 0, 0, 1] = 1.0
+      #Sz
+      temp[3, 0, 0, 0] = -0.5
+      temp[3, 0, 1, 1] = 0.5
+      #BSz
+      temp[4, 0, 0, 0] = -0.5 * Bz[n]
+      temp[4, 0, 1, 1] = 0.5 * Bz[n]
 
-            #Sm
-            temp[4, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
-            #Sp
-            temp[4, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
-            #Sz
-            temp[4, 3, 0, 0] = Jz[n] * (-0.5)
-            temp[4, 3, 1, 1] = Jz[n] * 0.5
-            #11
-            temp[4, 4, 0, 0] = 1.0
-            temp[4, 4, 1, 1] = 1.0
+      #Sm
+      temp[4, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
+      #Sp
+      temp[4, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
+      #Sz
+      temp[4, 3, 0, 0] = Jz[n] * (-0.5)
+      temp[4, 3, 1, 1] = Jz[n] * 0.5
+      #11
+      temp[4, 4, 0, 0] = 1.0
+      temp[4, 4, 1, 1] = 1.0
 
-            mpo.append(temp.copy())
+      mpo.append(temp.copy())
 
-        temp = Tensor.zeros((5, 1, 2, 2), dtype)
-        #11
-        temp[0, 0, 0, 0] = 1.0
-        temp[0, 0, 1, 1] = 1.0
-        #Sp
-        temp[1, 0, 1, 0] = 1.0
-        #Sm
-        temp[2, 0, 0, 1] = 1.0
-        #Sz
-        temp[3, 0, 0, 0] = -0.5
-        temp[3, 0, 1, 1] = 0.5
-        #BSz
-        temp[4, 0, 0, 0] = -0.5 * Bz[-1]
-        temp[4, 0, 1, 1] = 0.5 * Bz[-1]
+    temp = Tensor.zeros((5, 1, 2, 2), dtype)
+    #11
+    temp[0, 0, 0, 0] = 1.0
+    temp[0, 0, 1, 1] = 1.0
+    #Sp
+    temp[1, 0, 1, 0] = 1.0
+    #Sm
+    temp[2, 0, 0, 1] = 1.0
+    #Sz
+    temp[3, 0, 0, 0] = -0.5
+    temp[3, 0, 1, 1] = 0.5
+    #BSz
+    temp[4, 0, 0, 0] = -0.5 * Bz[-1]
+    temp[4, 0, 1, 1] = 0.5 * Bz[-1]
 
-        mpo.append(temp.copy())
-        super().__init__(mpo)
+    mpo.append(temp.copy())
+    super().__init__(mpo)
 
 
 class InfiniteXXZ(InfiniteMPO):
-    def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
-        """
+
+  def __init__(self, Jz, Jxy, Bz, dtype=np.float64):
+    """
         XXZ model on an infinite systems
         Args:
             Jz  (np.ndarray):  Jz coupling
             Jxy (np.ndarray):  Jxy coupling
             Bz  (np.ndarray):  magnetic field
         """
-        dtype=np.result_type(Jz.dtype,Jxy.dtype,Bz.dtype,dtype)
-        self.Jz = Jz.astype(dtype)
-        self.Jxy = Jxy.astype(dtype)        
-        self.Bz = Bz.astype(dtype)
-        N = len(Bz)        
-        mpo = []
-        for n in range(0, N):
+    dtype = np.result_type(Jz.dtype, Jxy.dtype, Bz.dtype, dtype)
+    self.Jz = Jz.astype(dtype)
+    self.Jxy = Jxy.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    N = len(Bz)
+    mpo = []
+    for n in range(0, N):
 
-            temp = Tensor.zeros((5, 5, 2, 2), dtype)
-            #11
-            temp[0, 0, 0, 0] = 1.0
-            temp[0, 0, 1, 1] = 1.0
-            #Sp
-            temp[1, 0, 1, 0] = 1.0
-            #Sm
-            temp[2, 0, 0, 1] = 1.0
-            #Sz
-            temp[3, 0, 0, 0] = -0.5
-            temp[3, 0, 1, 1] = 0.5
-            #BSz
-            temp[4, 0, 0, 0] = -0.5 * Bz[n]
-            temp[4, 0, 1, 1] = 0.5 * Bz[n]
+      temp = Tensor.zeros((5, 5, 2, 2), dtype)
+      #11
+      temp[0, 0, 0, 0] = 1.0
+      temp[0, 0, 1, 1] = 1.0
+      #Sp
+      temp[1, 0, 1, 0] = 1.0
+      #Sm
+      temp[2, 0, 0, 1] = 1.0
+      #Sz
+      temp[3, 0, 0, 0] = -0.5
+      temp[3, 0, 1, 1] = 0.5
+      #BSz
+      temp[4, 0, 0, 0] = -0.5 * Bz[n]
+      temp[4, 0, 1, 1] = 0.5 * Bz[n]
 
-            #Sm
-            temp[4, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
-            #Sp
-            temp[4, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
-            #Sz
-            temp[4, 3, 0, 0] = Jz[n] * (-0.5)
-            temp[4, 3, 1, 1] = Jz[n] * 0.5
-            #11
-            temp[4, 4, 0, 0] = 1.0
-            temp[4, 4, 1, 1] = 1.0
+      #Sm
+      temp[4, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
+      #Sp
+      temp[4, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
+      #Sz
+      temp[4, 3, 0, 0] = Jz[n] * (-0.5)
+      temp[4, 3, 1, 1] = Jz[n] * 0.5
+      #11
+      temp[4, 4, 0, 0] = 1.0
+      temp[4, 4, 1, 1] = 1.0
 
-            mpo.append(temp.copy())
-        super().__init__(mpo)
+      mpo.append(temp.copy())
+    super().__init__(mpo)
+
 
 class FiniteJ1J2(FiniteMPO):
-      """
+  """
       returns the MPO of the finite J1-J2 model
       Args:
         J1 (np.ndarray or tf.Tensor):  the S*S coupling strength between nearest neighbor lattice sites
@@ -587,72 +652,62 @@ class FiniteJ1J2(FiniteMPO):
         FiniteJ1J2:   the mpo of the finite J1J2 model
       """
 
-      def __init__(self, J1, J2, Bz, dtype=np.float64):
-          dtype=np.result_type(J1.dtype,J2.dtype,Bz.dtype,dtype)
-          self.J1 = J1.astype(dtype)
-          self.J2 = J2.astype(dtype)        
-          self.Bz = Bz.astype(dtype)
-          Sm = np.array([[0, 1], [0, 0]]).astype(dtype)
-          Sp = np.array([[0, 0], [1, 0]]).astype(dtype)
-          Sz = np.diag([-0.5, 0.5]).astype(dtype)
-          eye = np.eye(2).astype(dtype)
-                                 
-          N = len(Bz)
-          mpo = []
-          temp = Tensor.zeros((1, 8, 2, 2), dtype)
-          
-          temp[0, 0, :, :] = - Bz[0] * Sz
-          temp[0, 1, :, :] = J1[0] / 2 * Sm
-          temp[0, 2, :, :] = J1[0] / 2 * Sp
-          temp[0, 3, :, :] = J1[0] * Sz
-          temp[0, 4, :, :] = J2[0] / 2 * Sm
-          temp[0, 5, :, :] = J2[0] / 2 * Sp
-          temp[0, 6, :, :] = J2[0] * Sz
-          temp[0, 7, :, :] = eye
-          
-          
-          mpo.append(temp.copy())
-          for n in range(1, N - 1):
-              temp = Tensor.zeros((8, 8, 2, 2), dtype)
-              temp[0, 0, :, :] = eye
-              temp[1, 0, :, :] = Sp
-              temp[2, 0, :, :] = Sm
-              temp[3, 0, :, :] = Sz
-              temp[4, 1, :, :] = eye
-              temp[5, 2, :, :] = eye
-              temp[6, 3, :, :] = eye
-              
-              temp[7, 0, :, :] = - Bz[n] * Sz
-              temp[7, 1, :, :] = J1[n] / 2 * Sm
-              temp[7, 2, :, :] = J1[n] / 2 * Sp
-              temp[7, 3, :, :] = J1[n] * Sz
-              temp[7, 4, :, :] = J2[n] / 2 * Sm
-              temp[7, 5, :, :] = J2[n] / 2 * Sp
-              temp[7, 6, :, :] = J2[n] * Sz
-              temp[7, 7, :, :] = eye
-          
-              mpo.append(temp.copy())
-          
-          temp = Tensor.zeros((8, 1, 2, 2), dtype)
-          temp[0, 0, :, :] = eye
-          temp[1, 0, :, :] = Sp
-          temp[2, 0, :, :] = Sm
-          temp[3, 0, :, :] = Sz        
-          temp[7, 0, :, :] = -Bz[-1] * Sz
-          
-          
-          mpo.append(temp.copy())
-          super().__init__(mpo)
+  def __init__(self, J1, J2, Bz, dtype=np.float64):
+    dtype = np.result_type(J1.dtype, J2.dtype, Bz.dtype, dtype)
+    self.J1 = J1.astype(dtype)
+    self.J2 = J2.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    Sm = np.array([[0, 1], [0, 0]]).astype(dtype)
+    Sp = np.array([[0, 0], [1, 0]]).astype(dtype)
+    Sz = np.diag([-0.5, 0.5]).astype(dtype)
+    eye = np.eye(2).astype(dtype)
+
+    N = len(Bz)
+    mpo = []
+    temp = Tensor.zeros((1, 8, 2, 2), dtype)
+
+    temp[0, 0, :, :] = -Bz[0] * Sz
+    temp[0, 1, :, :] = J1[0] / 2 * Sm
+    temp[0, 2, :, :] = J1[0] / 2 * Sp
+    temp[0, 3, :, :] = J1[0] * Sz
+    temp[0, 4, :, :] = J2[0] / 2 * Sm
+    temp[0, 5, :, :] = J2[0] / 2 * Sp
+    temp[0, 6, :, :] = J2[0] * Sz
+    temp[0, 7, :, :] = eye
+
+    mpo.append(temp.copy())
+    for n in range(1, N - 1):
+      temp = Tensor.zeros((8, 8, 2, 2), dtype)
+      temp[0, 0, :, :] = eye
+      temp[1, 0, :, :] = Sp
+      temp[2, 0, :, :] = Sm
+      temp[3, 0, :, :] = Sz
+      temp[4, 1, :, :] = eye
+      temp[5, 2, :, :] = eye
+      temp[6, 3, :, :] = eye
+
+      temp[7, 0, :, :] = -Bz[n] * Sz
+      temp[7, 1, :, :] = J1[n] / 2 * Sm
+      temp[7, 2, :, :] = J1[n] / 2 * Sp
+      temp[7, 3, :, :] = J1[n] * Sz
+      temp[7, 4, :, :] = J2[n] / 2 * Sm
+      temp[7, 5, :, :] = J2[n] / 2 * Sp
+      temp[7, 6, :, :] = J2[n] * Sz
+      temp[7, 7, :, :] = eye
+
+      mpo.append(temp.copy())
+
+    temp = Tensor.zeros((8, 1, 2, 2), dtype)
+    temp[0, 0, :, :] = eye
+    temp[1, 0, :, :] = Sp
+    temp[2, 0, :, :] = Sm
+    temp[3, 0, :, :] = Sz
+    temp[7, 0, :, :] = -Bz[-1] * Sz
+
+    mpo.append(temp.copy())
+    super().__init__(mpo)
 
 
-
-
-
-
-
-
-
-    
 # class XXZIsing(MPO):
 #     """
 #     the famous Heisenberg Hamiltonian, which we all know and love so much!
@@ -701,7 +756,6 @@ class FiniteJ1J2(FiniteMPO):
 #             temp[4, 0, :, :] = self.w[-1] * sig_z
 #             mpo.append(np.copy(temp))
 #             super(XXZIsing, self).__init__(mpo)
-
 
 # class XXZflipped(MPO):
 #     """
@@ -811,7 +865,6 @@ class FiniteJ1J2(FiniteMPO):
 #                 mpo.append(temp)
 #             super(XXZflipped, self).__init__(mpo)
 
-
 # class SpinlessFermions(MPO):
 #     """
 #     Spinless Fermions, you know them ...
@@ -878,7 +931,6 @@ class FiniteJ1J2(FiniteMPO):
 #                 tensor[4, 4, :, :] = np.eye(2)
 #                 mpo.append(np.copy(tensor))
 #             super(SpinlessFermions, self).__init__(mpo)
-
 
 # class HubbardChain(MPO):
 #     """
