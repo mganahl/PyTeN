@@ -947,8 +947,8 @@ class MPS(MPSBase):
 
   def get_env_right(self, site):
     """
-        obtain the right environment of ```site```
-        """
+    obtain the right environment of ```site```
+    """
 
     site = site % len(self)
     if site >= len(self) or site < 0:
@@ -2706,7 +2706,8 @@ class FiniteMPDO(FiniteMPS):
     return out
 
   def get_env_left(self, site):
-    env = self._tensors[0].eye(0)  #np.ones((1)).view(Tensor)
+    env, _ = self._tensors[0].eye(0).merge([[0, 1]])  #np.ones((1)).view(Tensor)
+    #env = np.ones((1)).view(Tensor)
     for n in range(site):
       A = self.get_tensor(n)
       env = ncon.ncon([env, A, self.eyes[n]], [[1], [1, -1, 2], [2]])
@@ -2714,7 +2715,8 @@ class FiniteMPDO(FiniteMPS):
 
   def get_env_right(self, site):
 
-    env = self._tensors[-1].eye(1)  #np.ones((1)).view(Tensor)
+    env, _ = self._tensors[-1].eye(1).merge([[0,
+                                              1]])  #np.ones((1)).view(Tensor)
     for n in reversed(range(site + 1, len(self))):
       A = self.get_tensor(n)
       env = ncon.ncon([env, A, self.eyes[n]], [[1], [-1, 1, 2], [2]])
