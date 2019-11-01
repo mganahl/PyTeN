@@ -595,11 +595,21 @@ class FiniteXXZ(FiniteMPO):
 class Finite2DXXX(FiniteMPO):
   """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
+      |---J2---|
+      |        |
+     J1        J1
+      |        |
+      |---J2---|
+    
+
     """
 
-  def __init__(self, J1, J2, Bz, N1, N2, dtype=np.float64):
-    self.J1 = J1
-    self.J2 = J2
+  def __init__(self, Jz1, Jxy1, Jz2, Jxy2, Bz, N1, N2, dtype=np.float64):
+    self.Jz1 = Jz1
+    self.Jxy1 = Jxy1
+    self.Jz2 = Jz2
+    self.Jxy2 = Jxy2
+
     self.N1 = N1
     self.N2 = N2
     self.Bz = Bz
@@ -612,16 +622,32 @@ class Finite2DXXX(FiniteMPO):
     mpo = []
     mat = Tensor.zeros((1, mpo_dim, 2, 2), dtype=np.complex128)
     mat[0, 0, :, :] = Bz * Sz
-    mat[0, 1] = J1 * Sx
-    mat[0, 2] = J1 * Sy
-    mat[0, 3] = J1 * Sz
-    mat[0, 3 * (N1 - 1) + 1, :, :] = J2 * Sx
-    mat[0, 3 * (N1 - 1) + 2, :, :] = J2 * Sy
-    mat[0, 3 * (N1 - 1) + 3, :, :] = J2 * Sz
+    mat[0, 1] = Jxy1 * Sx
+    mat[0, 2] = Jxy1 * Sy
+    mat[0, 3] = Jz1 * Sz
+    mat[0, 3 * (N1 - 1) + 1, :, :] = Jxy2 * Sx
+    mat[0, 3 * (N1 - 1) + 2, :, :] = Jxy2 * Sy
+    mat[0, 3 * (N1 - 1) + 3, :, :] = Jz2 * Sz
     mat[0, -1, :, :] = np.eye(2)
     mpo.append(mat.copy())
-    n2 = 0
-    for n in range(1, N1 * N2 - 1):
+    for n2, n1 in itertools.product(list(range(N2)), list(range(N1))):
+      if ((n1, n2) == (0, 0)) or ((n1, n2) == (N1 - 1, N2 - 1)):
+        continue
+      if n1 == N1 - 1:
+        jz1 = 0
+        jxy1 = 0
+      else:
+        jz1 = Jz1
+        jxy1 = Jxy1
+
+      if n2 < N2 - 1:
+        jz2 = Jz2
+        jxy2 = Jxy2
+      else:
+        j1_hor = 0
+        j2_1 = 0
+        j2_2 = 0
+
       if (n + 1) % N2 == 0:
         j1 = 0
       else:
@@ -803,7 +829,7 @@ class Finite2D_J1J2(FiniteMPO):
     self.N2 = N2
 
     Sx = np.array([[0, 0.5], [0.5, 0]])
-    Sy = np.array([[0,0.5], [-0.5, 0]])  #imaginary part is added below
+    Sy = np.array([[0, 0.5], [-0.5, 0]])  #imaginary part is added below
     Sz = np.diag([-0.5, 0.5])
 
     mpo_dim = 3 * (N1 + 1) + 2
@@ -816,22 +842,22 @@ class Finite2D_J1J2(FiniteMPO):
     mat[0, 3 * (N1 - 2) + 1, :, :] = 0 * Sx
     mat[0, 3 * (N1 - 2) + 2, :, :] = -0 * Sy
     mat[0, 3 * (N1 - 2) + 3, :, :] = 0 * Sz
-    
+
     mat[0, 3 * (N1 - 1) + 1, :, :] = J1 * Sx
     mat[0, 3 * (N1 - 1) + 2, :, :] = -J1 * Sy
     mat[0, 3 * (N1 - 1) + 3, :, :] = J1 * Sz
-    
+
     mat[0, 3 * N1 + 1, :, :] = J2 * Sx
     mat[0, 3 * N1 + 2, :, :] = -J2 * Sy
     mat[0, 3 * N1 + 3, :, :] = J2 * Sz
     mat[0, -1, :, :] = np.eye(2)
-    assert(mat.shape[1] == 3 * N1 + 5)
-    mpo.append(mat.copy())        
-    points.append((0, 0, J1, J1, J2, 0))    
+    assert (mat.shape[1] == 3 * N1 + 5)
+    mpo.append(mat.copy())
+    points.append((0, 0, J1, J1, J2, 0))
     for n2, n1 in itertools.product(list(range(N2)), list(range(N1))):
-      if ((n1,n2) == (0,0)) or ((n1,n2) == (N1-1,N2-1)):
+      if ((n1, n2) == (0, 0)) or ((n1, n2) == (N1 - 1, N2 - 1)):
         continue
-      if n1 == N1-1:
+      if n1 == N1 - 1:
         j1_vert = 0
         j2_1 = 0
       else:
@@ -849,7 +875,7 @@ class Finite2D_J1J2(FiniteMPO):
         j1_hor = 0
         j2_1 = 0
         j2_2 = 0
-      points.append((n1, n2, j1_vert, j1_hor, j2_1, j2_2))      
+      points.append((n1, n2, j1_vert, j1_hor, j2_1, j2_2))
       mat = np.zeros((mpo_dim, mpo_dim, 2, 2), dtype=dtype)
       mat[0, 0] = np.eye(2)
       mat[1, 0] = Sx
@@ -878,16 +904,15 @@ class Finite2D_J1J2(FiniteMPO):
       # print(
       #     '(n1, n2) = ({}, {}), J1_vert, J1_hor = ({},{}), J2_1, J2_2=({},{})'.
       #     format(n % N1, n2, j1_vert, j1_hor, j2_1, j2_2))
-      mpo.append(mat.copy())    
+      mpo.append(mat.copy())
 
     mat = np.zeros((mpo_dim, 1, 2, 2), dtype=dtype)
     mat[0, 0] = np.eye(2)
     mat[1, 0] = Sx
     mat[2, 0] = Sy
     mat[3, 0] = Sz
-    mpo.append(mat.copy())    
+    mpo.append(mat.copy())
     super().__init__(tensors=mpo, name='Finite2DJ1J2_MPO')
-
 
     super().__init__(tensors=mpo, name='Finite2DJ1J2_MPO')
 
