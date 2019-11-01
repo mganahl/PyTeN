@@ -312,7 +312,7 @@ class FiniteTFI(FiniteMPO):
   """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
-    this is X * X + Z    
+    this is Jx * X * X + Bz * Z    
     """
 
   def __init__(self, Jx, Bz, dtype=np.float64):
@@ -366,7 +366,7 @@ class FiniteTFI_2(FiniteMPO):
   """ 
     the good old transverse field Ising MPO
     convention: sigma_z=diag([-1,1])
-    this is Z*Z + X
+    this is Jz * Z*Z + Bx * X
     
     """
 
