@@ -69,8 +69,8 @@ def ndarray_initializer(numpy_func, shapes, *args, **kwargs):
   if numpy_func in (np.random.random_sample, np.random.rand):
     if np.issubdtype(dtype, np.complexfloating):
       return [
-          ((maxval - minval) * numpy_func(shape).view(Tensor) + minval + 1j * (
-              (maxval - minval) * numpy_func(shape).view(Tensor) + minval)
+          ((maxval - minval) * numpy_func(shape).view(Tensor) + minval + 1j *
+           ((maxval - minval) * numpy_func(shape).view(Tensor) + minval)
           ).astype(dtype) for shape in shapes
       ]
 
@@ -261,11 +261,11 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
                          initializer(*args,**kwargs) should return the initial tensors
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
-    return cls(
-        tensors=initializer(np.random.random_sample,
-                            np.prod(shape) * [tensorshapes], *args, **kwargs),
-        name=name,
-        shape=shape)
+    return cls(tensors=initializer(np.random.random_sample,
+                                   np.prod(shape) * [tensorshapes], *args,
+                                   **kwargs),
+               name=name,
+               shape=shape)
 
   @classmethod
   def zeros(cls,
@@ -290,11 +290,11 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
                         
         """
-    return cls(
-        tensors=initializer(np.zeros,
-                            np.prod(shape) * [tensorshapes], *args, **kwargs),
-        name=name,
-        shape=shape)
+    return cls(tensors=initializer(np.zeros,
+                                   np.prod(shape) * [tensorshapes], *args,
+                                   **kwargs),
+               name=name,
+               shape=shape)
 
   @classmethod
   def ones(cls,
@@ -319,11 +319,11 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
                         
         """
-    return cls(
-        tensors=initializer(np.ones,
-                            np.prod(shape) * [tensorshapes], *args, **kwargs),
-        name=name,
-        shape=shape)
+    return cls(tensors=initializer(np.ones,
+                                   np.prod(shape) * [tensorshapes], *args,
+                                   **kwargs),
+               name=name,
+               shape=shape)
 
   @classmethod
   def empty(cls,
@@ -347,11 +347,11 @@ class TensorNetwork(Container, np.lib.mixins.NDArrayOperatorsMixin):
                          initializer(*args,**kwargs) should return the initial tensors
         *args,**kwargs:  arguments and keyword arguments for ```initializer```
         """
-    return cls(
-        tensors=initializer(np.empty,
-                            np.prod(shape) * [tensorshapes], *args, **kwargs),
-        name=name,
-        shape=shape)
+    return cls(tensors=initializer(np.empty,
+                                   np.prod(shape) * [tensorshapes], *args,
+                                   **kwargs),
+               name=name,
+               shape=shape)
 
   def __getitem__(self, n, **kwargs):
     return self._tensors[n]
@@ -1056,12 +1056,11 @@ class MPS(MPSBase):
     if np.all(init != None):
       initial = init
     tensors = [self.get_tensor(n) for n in range(len(self))]
-    return mf.TMeigs_power_method(
-        tensors=tensors,
-        direction=direction,
-        init=init,
-        precision=precision,
-        nmax=nmax)
+    return mf.TMeigs_power_method(tensors=tensors,
+                                  direction=direction,
+                                  init=init,
+                                  precision=precision,
+                                  nmax=nmax)
 
   def TMeigs(self,
              direction,
@@ -1111,15 +1110,14 @@ class MPS(MPSBase):
     if np.all(init != None):
       initial = init
     tensors = [self.get_tensor(n) for n in range(len(self))]
-    return mf.TMeigs(
-        tensors=tensors,
-        direction=direction,
-        init=init,
-        precision=precision,
-        ncv=ncv,
-        nmax=nmax,
-        numeig=numeig,
-        which='LR')
+    return mf.TMeigs(tensors=tensors,
+                     direction=direction,
+                     init=init,
+                     precision=precision,
+                     ncv=ncv,
+                     nmax=nmax,
+                     numeig=numeig,
+                     which='LR')
 
   def regauge(self,
               gauge,
@@ -1130,7 +1128,6 @@ class MPS(MPSBase):
               numeig=6,
               pinv=1E-50,
               warn_thresh=1E-8):
-    raise NotImplementedError()
     """
         regauge the MPS into left or right canonical form (inplace)
 
@@ -1165,13 +1162,12 @@ class MPS(MPSBase):
 
     if gauge in ('left', 'l', 1):
       self.position(0)
-      eta, l = self.TMeigs(
-          direction='left',
-          init=init,
-          precision=precision,
-          ncv=ncv,
-          nmax=nmax,
-          numeig=numeig)
+      eta, l = self.TMeigs(direction='left',
+                           init=init,
+                           precision=precision,
+                           ncv=ncv,
+                           nmax=nmax,
+                           numeig=numeig)
       self.mat /= np.sqrt(eta)
       if np.abs(np.imag(eta)) / np.abs(np.real(eta)) > warn_thresh:
         print(
@@ -1219,13 +1215,12 @@ class MPS(MPSBase):
 
     if gauge in ('right', 'r', -1):
       self.position(len(self))
-      eta, r = self.TMeigs(
-          direction='right',
-          init=init,
-          precision=precision,
-          ncv=ncv,
-          nmax=nmax,
-          numeig=numeig)
+      eta, r = self.TMeigs(direction='right',
+                           init=init,
+                           precision=precision,
+                           ncv=ncv,
+                           nmax=nmax,
+                           numeig=numeig)
       self.mat /= np.sqrt(eta)
       if np.abs(np.imag(eta)) / np.abs(np.real(eta)) > warn_thresh:
         print(
@@ -1271,13 +1266,13 @@ class MPS(MPSBase):
                nmax=1000,
                numeig=1,
                power_method=False,
-               pinv=1E-30,
+               pinv=1E-300,
                truncation_threshold=1E-15,
                D=None,
                warn_thresh=1E-8):
     """
         bring the MPS into Schmidt canonical form
-
+        puts self.pos=len(self)
         Parameters:
         ------------------------------
         init:          Tensor
@@ -1316,16 +1311,17 @@ class MPS(MPSBase):
       self.normalize()
     else:
       if not power_method:
-        eta, l = self.TMeigs(
-            direction='left',
-            init=init,
-            nmax=nmax,
-            precision=precision,
-            ncv=ncv,
-            numeig=numeig)
+        eta, l = self.TMeigs(direction='left',
+                             init=init,
+                             nmax=nmax,
+                             precision=precision,
+                             ncv=ncv,
+                             numeig=numeig)
       elif power_method:
-        eta, l, _, _ = self.TMeigs_power_method(
-            direction='left', init=init, nmax=nmax, precision=precision)
+        eta, l, _, _ = self.TMeigs_power_method(direction='left',
+                                                init=init,
+                                                nmax=nmax,
+                                                precision=precision)
       sqrteta = np.real(eta)
       self.mat /= sqrteta
 
@@ -1349,16 +1345,17 @@ class MPS(MPSBase):
       invy = ncon.ncon([np.sqrt(inveigvals_left).diag(),
                         u_left.conj()], [[-2, 1], [-1, 1]])
       if not power_method:
-        eta, r = self.TMeigs(
-            direction='right',
-            init=init,
-            nmax=nmax,
-            precision=precision,
-            ncv=ncv,
-            numeig=numeig)
+        eta, r = self.TMeigs(direction='right',
+                             init=init,
+                             nmax=nmax,
+                             precision=precision,
+                             ncv=ncv,
+                             numeig=numeig)
       elif power_method:
-        eta, r, _, _ = self.TMeigs_power_method(
-            direction='right', init=init, nmax=nmax, precision=precision)
+        eta, r, _, _ = self.TMeigs_power_method(direction='right',
+                                                init=init,
+                                                nmax=nmax,
+                                                precision=precision)
 
       r = r / r.tr()
       r = (r + r.conj().transpose()) / 2.0
@@ -1531,13 +1528,12 @@ class MPS(MPSBase):
     if len(D) != len(d) + 1:
       raise ValueError('len(D)!=len(d)+1')
 
-    return cls(
-        tensors=initializer(
-            numpy_func=numpy_func,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=numpy_func,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   @classmethod
   def zeros(cls,
@@ -1554,13 +1550,12 @@ class MPS(MPSBase):
         """
     if len(D) != len(d) + 1:
       raise ValueError('len(D)!=len(d)+1')
-    return cls(
-        tensors=initializer(
-            numpy_func=np.zeros,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=np.zeros,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   @classmethod
   def ones(cls,
@@ -1577,13 +1572,12 @@ class MPS(MPSBase):
         """
     if len(D) != len(d) + 1:
       raise ValueError('len(D)!=len(d)+1')
-    return cls(
-        tensors=initializer(
-            numpy_func=np.ones,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=np.ones,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   @classmethod
   def empty(cls,
@@ -1600,13 +1594,12 @@ class MPS(MPSBase):
         """
     if len(D) != len(d) + 1:
       raise ValueError('len(D)!=len(d)+1')
-    return cls(
-        tensors=initializer(
-            numpy_func=np.empty,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=np.empty,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   def __str__(self):
     """
@@ -1672,8 +1665,9 @@ class MPS(MPSBase):
                                        [[-1, 1], [1, -2, -3]])
       for n in range(self._position, bond):
         if schmidt_thresh < 1E-15 and D == None:
-          tensor, self.mat, Z = mf.prepare_tensor_QR(
-              self[n], direction=1, walltime_log=walltime_log)
+          tensor, self.mat, Z = mf.prepare_tensor_QR(self[n],
+                                                     direction=1,
+                                                     walltime_log=walltime_log)
         else:
           tensor,s,v,Z=mf.prepare_tensor_SVD(self[n],direction=1,D=D,thresh=schmidt_thresh,\
                                                           r_thresh=r_thresh)
@@ -1689,8 +1683,9 @@ class MPS(MPSBase):
                                            [[-1, 1, -3], [1, -2]])
       for n in range(self._position - 1, bond - 1, -1):
         if schmidt_thresh < 1E-15 and D == None:
-          self.mat, tensor, Z = mf.prepare_tensor_QR(
-              self[n], direction=-1, walltime_log=walltime_log)
+          self.mat, tensor, Z = mf.prepare_tensor_QR(self[n],
+                                                     direction=-1,
+                                                     walltime_log=walltime_log)
         else:
           u,s,tensor,Z=mf.prepare_tensor_SVD(self[n],direction=-1,D=D,thresh=schmidt_thresh,\
                                                        r_thresh=r_thresh)
@@ -1746,14 +1741,13 @@ class MPS(MPSBase):
                                warn_thresh=1E-8,
                                canonize=True):
     if canonize:
-      self.canonize(
-          init=init,
-          precision=precision,
-          ncv=ncv,
-          nmax=nmax,
-          numeig=numeig,
-          pinv=pinv,
-          warn_thresh=warn_thresh)
+      self.canonize(init=init,
+                    precision=precision,
+                    ncv=ncv,
+                    nmax=nmax,
+                    numeig=numeig,
+                    pinv=pinv,
+                    warn_thresh=warn_thresh)
     imps = self.__new__(type(self))
     imps.__init__(tensors=[self.get_tensor(n) for n in range(len(self))])
     return imps
@@ -1768,14 +1762,13 @@ class MPS(MPSBase):
                                 warn_thresh=1E-8,
                                 canonize=True):
     if canonize:
-      self.canonize(
-          init=init,
-          precision=precision,
-          ncv=ncv,
-          nmax=nmax,
-          numeig=numeig,
-          pinv=pinv,
-          warn_thresh=warn_thresh)
+      self.canonize(init=init,
+                    precision=precision,
+                    ncv=ncv,
+                    nmax=nmax,
+                    numeig=numeig,
+                    pinv=pinv,
+                    warn_thresh=warn_thresh)
     self.position(0)
     A = ncon.ncon([self.connector, self.mat, self._tensors[0]],
                   [[-1, 1], [1, 2], [2, -2, -3]])
@@ -1816,8 +1809,9 @@ class MPS(MPSBase):
         [[-1, 1, 3], [1, 2], [2, -4, 4], [-2, -3, 3, 4]])
     [Dl, d1, d2, Dr] = newState.shape
     newState, merge_data = newState.merge([[0, 1], [2, 3]])
-    U, S, V, tw = newState.svd(
-        truncation_threshold=truncation_threshold, D=D, full_matrices=False)
+    U, S, V, tw = newState.svd(truncation_threshold=truncation_threshold,
+                               D=D,
+                               full_matrices=False)
     S /= S.norm()
     self[site] = U.split([merge_data[0], [S.shape[0]]]).transpose(0, 2, 1)
     self[site + 1] = V.split([[S.shape[0]], merge_data[1]]).transpose(0, 2, 1)
@@ -1899,13 +1893,12 @@ class FiniteMPS(MPS):
     if len(D) != len(d) - 1:
       raise ValueError('len(D)!=len(d)-1')
     D = [1] + D + [1]
-    return cls(
-        tensors=initializer(
-            numpy_func=numpy_func,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=numpy_func,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   def __init__(self,
                tensors=[],
@@ -1938,14 +1931,13 @@ class FiniteMPS(MPS):
       raise ValueError('FiniteMPS got a wrong shape {0} for tensor[-1]'.format(
           tensors[-1].shape))
 
-    super().__init__(
-        tensors=tensors,
-        name=name,
-        fromview=fromview,
-        centermatrix=centermatrix,
-        connector=connector,
-        right_mat=right_mat,
-        position=position)
+    super().__init__(tensors=tensors,
+                     name=name,
+                     fromview=fromview,
+                     centermatrix=centermatrix,
+                     connector=connector,
+                     right_mat=right_mat,
+                     position=position)
     #self.position(0)
     #self.position(len(self))
 
@@ -1969,13 +1961,12 @@ class FiniteMPS(MPS):
     if len(D) != len(d) - 1:
       raise ValueError('len(D) != len(d) - 1')
     D = [1] + D + [1]
-    return cls(
-        tensors=initializer(
-            numpy_func=np.ones,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=np.ones,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   @classmethod
   def empty(cls,
@@ -1993,13 +1984,12 @@ class FiniteMPS(MPS):
     if len(D) != len(d) - 1:
       raise ValueError('len(D) != len(d) - 1')
     D = [1] + D + [1]
-    return cls(
-        tensors=initializer(
-            numpy_func=np.empty,
-            shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
-            *args,
-            **kwargs),
-        name=name)
+    return cls(tensors=initializer(
+        numpy_func=np.empty,
+        shapes=[(D[n], D[n + 1], d[n]) for n in range(len(d))],
+        *args,
+        **kwargs),
+               name=name)
 
   def __add__(self, other):
     """
@@ -2205,18 +2195,16 @@ class FiniteMPS(MPS):
     for site in range(len(self)):
       stdout.write("\rgenerating samples at site %i" % (site))
       Z0 = np.expand_dims(
-          np.linalg.norm(
-              np.reshape(lenv, (num_samples, Ds[site] * Ds[site])), axis=1),
-          1)  #shape (num_samples, 1)
+          np.linalg.norm(np.reshape(lenv, (num_samples, Ds[site] * Ds[site])),
+                         axis=1), 1)  #shape (num_samples, 1)
       lenv /= np.expand_dims(Z0, 2)
-      p_joint_0 = np.diagonal(
-          ncon.ncon([
-              lenv,
-              self.get_tensor(site),
-              np.conj(self.get_tensor(site)), right_envs[site]
-          ], [[-1, 1, 2], [1, 3, -2], [2, 4, -3], [3, 4]]),
-          axis1=1,
-          axis2=2)  #shape (Nt, d)
+      p_joint_0 = np.diagonal(ncon.ncon([
+          lenv,
+          self.get_tensor(site),
+          np.conj(self.get_tensor(site)), right_envs[site]
+      ], [[-1, 1, 2], [1, 3, -2], [2, 4, -3], [3, 4]]),
+                              axis1=1,
+                              axis2=2)  #shape (Nt, d)
 
       p_cond = Z0 / Z1 * np.abs(p_joint_0 / p_joint_1)
 
@@ -2231,9 +2219,8 @@ class FiniteMPS(MPS):
 
       tmp = ncon.ncon([self.get_tensor(site), one_hots],
                       [[-2, -3, 1], [-1, 1]])  #tmp has shape (Nt, Dl, Dr)
-      tmp2 = np.transpose(
-          np.matmul(np.transpose(lenv, (0, 2, 1)), tmp),
-          (0, 2, 1))  #has shape (Nt, Dr, Dl')
+      tmp2 = np.transpose(np.matmul(np.transpose(lenv, (0, 2, 1)), tmp),
+                          (0, 2, 1))  #has shape (Nt, Dr, Dl')
       lenv = np.matmul(tmp2, np.conj(tmp))  #has shape (Nt, Dr, Dr')
 
       Z1 = Z0
@@ -2541,8 +2528,10 @@ class CanonizedFiniteMPS(CanonizedMPS):
           'CanonizedFiniteMPS got a wrong shape {0} for gammas[-1]'.format(
               gammas[-1].shape))
 
-    super().__init__(
-        gammas=gammas, lambdas=lambdas, name=name, fromview=fromview)
+    super().__init__(gammas=gammas,
+                     lambdas=lambdas,
+                     name=name,
+                     fromview=fromview)
 
   @classmethod
   def random(cls,
@@ -2552,8 +2541,12 @@ class CanonizedFiniteMPS(CanonizedMPS):
              initializer=ndarray_initializer,
              *args,
              **kwargs):
-    mps = FiniteMPS.random(
-        D=D, d=d, name=name, initialize=initializer, *args, **kwargs)
+    mps = FiniteMPS.random(D=D,
+                           d=d,
+                           name=name,
+                           initialize=initializer,
+                           *args,
+                           **kwargs)
     return mps.canonize()
 
   @classmethod
