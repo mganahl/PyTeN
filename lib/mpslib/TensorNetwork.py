@@ -1326,7 +1326,7 @@ class MPS(MPSBase):
       elif power_method:
         eta, l, _, _ = self.TMeigs_power_method(
             direction='left', init=init, nmax=nmax, precision=precision)
-      sqrteta = np.real(eta)
+      sqrteta = np.real(np.sqrt(eta))
       self.mat /= sqrteta
 
       if np.abs(np.imag(eta)) / np.abs(np.real(eta)) > warn_thresh:
