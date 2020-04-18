@@ -592,6 +592,60 @@ class FiniteXXZ(FiniteMPO):
     super().__init__(mpo)
 
 
+class FiniteXX(FiniteMPO):
+  """
+  """
+
+  def __init__(self, Jxy, Bz, dtype=np.float64):
+    dtype = np.result_type(Jxy.dtype, Bz.dtype, dtype)
+    self.Jxy = Jxy.astype(dtype)
+    self.Bz = Bz.astype(dtype)
+    N = len(Bz)
+    mpo = []
+    temp = Tensor.zeros((1, 4, 2, 2), dtype)
+    #BSz
+    temp[0, 0, :, :] = np.diag([-0.5, 0.5]) * Bz[0]
+    #Sm
+    temp[0, 1, 0, 1] = Jxy[0] / 2.0 * 1.0
+    #Sp
+    temp[0, 2, 1, 0] = Jxy[0] / 2.0 * 1.0
+    #11
+    temp[0, 3, :, :] = np.eye(2)
+
+    mpo.append(temp.copy())
+    for n in range(1, N - 1):
+      temp = Tensor.zeros((4, 4, 2, 2), dtype)
+      #11
+      temp[0, 0, :, :] = np.eye(2)
+      #Sp
+      temp[1, 0, 1, 0] = 1.0
+      #Sm
+      temp[2, 0, 0, 1] = 1.0
+      #BSz
+      temp[3, 0, :, :] = np.diag([-0.5, 0.5]) * Bz[n]
+
+      #Sm
+      temp[3, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
+      #Sp
+      temp[3, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
+      #11
+      temp[3, 3, :, :] = np.eye(2)
+      mpo.append(temp.copy())
+
+    temp = Tensor.zeros((4, 1, 2, 2), dtype)
+    #11
+    temp[0, 0, :, :] = np.eye(2)
+    #Sp
+    temp[1, 0, 1, 0] = 1.0
+    #Sm
+    temp[2, 0, 0, 1] = 1.0
+    #BSz
+    temp[3, 0, :, :] = np.diag([-0.5, 0.5]) * Bz[-1]
+
+    mpo.append(temp.copy())
+    super().__init__(mpo)
+
+
 class Finite2DXXX(FiniteMPO):
   """
     the famous Heisenberg Hamiltonian, which we all know and love so much!
