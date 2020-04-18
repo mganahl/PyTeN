@@ -1131,7 +1131,6 @@ class MPS(MPSBase):
               numeig=6,
               pinv=1E-50,
               warn_thresh=1E-8):
-    raise NotImplementedError()
     """
         regauge the MPS into left or right canonical form (inplace)
 
@@ -1272,13 +1271,13 @@ class MPS(MPSBase):
                nmax=1000,
                numeig=1,
                power_method=False,
-               pinv=1E-30,
+               pinv=1E-300,
                truncation_threshold=1E-15,
                D=None,
                warn_thresh=1E-8):
     """
         bring the MPS into Schmidt canonical form
-
+        puts self.pos=len(self)
         Parameters:
         ------------------------------
         init:          Tensor
