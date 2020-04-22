@@ -345,12 +345,8 @@ class DMRGEngineBase(MPSSimulationBase):
     if solver.lower() == 'lan':
 
       def HAproduct(L, mpo, R, mps):
-        t1 = time.time()
-        result = ncon.ncon([L, mps, mpo, R],
-                           [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
-
-        self.timings['matvec'][site].append(time.time() - t2)
-        return result
+        return ncon.ncon([L, mps, mpo, R],
+                         [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
 
       mv = fct.partial(
           HAproduct,
