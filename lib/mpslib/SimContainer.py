@@ -7,7 +7,6 @@ from sys import stdout
 import pickle, warnings
 import numpy as np
 import os, copy
-import time
 import scipy as sp
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
@@ -323,7 +322,6 @@ class DMRGEngineBase(MPSSimulationBase):
     """
         local single-site optimization routine 
         """
-    t0 = time.time()
     if sweep_dir in (-1, 'r', 'right'):
       if self.mps.pos != site:
         raise ValueError(
@@ -345,8 +343,17 @@ class DMRGEngineBase(MPSSimulationBase):
                           [[-1, 1, -3], [1, -2]])
 
     if solver.lower() == 'lan':
+
+      def HAproduct(L, mpo, R, mps):
+        t1 = time.time()
+        result = ncon.ncon([L, mps, mpo, R],
+                           [[1, -1, 2], [1, 4, 3], [2, 5, -3, 3], [4, -2, 5]])
+
+        self.timings['matvec'][site].append(time.time() - t2)
+        return result
+
       mv = fct.partial(
-          mf.HA_product,
+          HAproduct,
           *[self.left_envs[site], self.mpo[site], self.right_envs[site]])
 
       def scalar_product(a, b):
@@ -360,7 +367,6 @@ class DMRGEngineBase(MPSSimulationBase):
           numeig=1,
           delta=landelta,
           deltaEta=landeltaEta)
-      t1 = time.time()
       energies, opt_result, nit = lan.simulate(initial)
       self.timings['lanczos'][site].append(time.time() - t1)
     elif solver.lower() == 'ar':
@@ -641,6 +647,7 @@ class FiniteDMRGEngine(DMRGEngineBase):
     lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
     rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]], dtype=mps.dtype)
     self.timings = {
+        'matvec': {site: [] for site in range(len(mps))},
         'lanczos': {site: [] for site in range(len(mps))},
         'qr': {site: [] for site in range(len(mps))},
         'total': {site: [] for site in range(len(mps))}
