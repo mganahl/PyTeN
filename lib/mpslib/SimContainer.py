@@ -7,7 +7,6 @@ from sys import stdout
 import pickle, warnings
 import numpy as np
 import os, copy
-import time
 import scipy as sp
 from scipy.sparse.linalg import LinearOperator
 from scipy.linalg import sqrtm
@@ -323,7 +322,6 @@ class DMRGEngineBase(MPSSimulationBase):
     """
         local single-site optimization routine 
         """
-    t0 = time.time()
     if sweep_dir in (-1, 'r', 'right'):
       if self.mps.pos != site:
         raise ValueError(
@@ -360,9 +358,7 @@ class DMRGEngineBase(MPSSimulationBase):
           numeig=1,
           delta=landelta,
           deltaEta=landeltaEta)
-      t1 = time.time()
       energies, opt_result, nit = lan.simulate(initial)
-      timings['lanczos'][site].append(time.time() - t1)
     elif solver.lower() == 'ar':
       energies, opt_result = mf.eigsh(
           self.left_envs[site],
@@ -397,12 +393,10 @@ class DMRGEngineBase(MPSSimulationBase):
     if sweep_dir in (-1, 'r', 'right'):
       t1 = time.time()
       A, mat, Z = mf.prepare_tensor_QR(opt, direction='l')
-      timings['qr'][site].append(time.time() - t1)
       A /= Z
     elif sweep_dir in (1, 'l', 'left'):
       t1 = time.time()
       mat, B, Z = mf.prepare_tensor_QR(opt, direction='r')
-      timings['qr'][site].append(time.time() - t1)
       B /= Z
 
     self.mps.mat = mat
@@ -426,7 +420,6 @@ class DMRGEngineBase(MPSSimulationBase):
           conjmps=self.mps[site],
           direction=-1)
 
-    timings['total'][site].append(time.time() - t0)
     return e
 
   def run_one_site(self,
