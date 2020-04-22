@@ -606,9 +606,9 @@ class FiniteXX(FiniteMPO):
     #BSz
     temp[0, 0, :, :] = np.diag([-0.5, 0.5]) * Bz[0]
     #Sm
-    temp[0, 1, 0, 1] = Jxy[0] / 2.0 * 1.0
+    temp[0, 1, 0, 1] = Jxy[0] / 2 * 1.0
     #Sp
-    temp[0, 2, 1, 0] = Jxy[0] / 2.0 * 1.0
+    temp[0, 2, 1, 0] = Jxy[0] / 2 * 1.0
     #11
     temp[0, 3, :, :] = np.eye(2)
 
@@ -625,9 +625,9 @@ class FiniteXX(FiniteMPO):
       temp[3, 0, :, :] = np.diag([-0.5, 0.5]) * Bz[n]
 
       #Sm
-      temp[3, 1, 0, 1] = Jxy[n] / 2.0 * 1.0
+      temp[3, 1, 0, 1] = Jxy[n] / 2 * 1.0
       #Sp
-      temp[3, 2, 1, 0] = Jxy[n] / 2.0 * 1.0
+      temp[3, 2, 1, 0] = Jxy[n] / 2 * 1.0
       #11
       temp[3, 3, :, :] = np.eye(2)
       mpo.append(temp.copy())
