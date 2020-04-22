@@ -322,6 +322,7 @@ class DMRGEngineBase(MPSSimulationBase):
     """
         local single-site optimization routine 
         """
+    t0 = time.time()
     if sweep_dir in (-1, 'r', 'right'):
       if self.mps.pos != site:
         raise ValueError(
@@ -359,6 +360,7 @@ class DMRGEngineBase(MPSSimulationBase):
       def scalar_product(a, b):
         return ncon.ncon([a.conj(), b], [[1, 2, 3], [1, 2, 3]])
 
+      t1 = time.time()
       lan = LZ.LanczosEngine(
           matvec=mv,
           scalar_product=scalar_product,
