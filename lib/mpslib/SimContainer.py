@@ -102,7 +102,6 @@ class MPSSimulationBase(Container):
         Tensor of shape (Dr,Dr',Mr) for direction in (1,'l','left')
         Tensor of shape (Dl,Dl',Ml) for direction in (-1,'r','right')
         """
-
     return mf.add_layer(B, mps, mpo, conjmps, direction)
 
   def position(self, n):
@@ -179,6 +178,14 @@ class DMRGEngineBase(MPSSimulationBase):
                   user can provide lb and rb to fix the boundary condition of the mps
                   shapes of lb, rb, mps[0] and mps[-1] have to be consistent
         """
+    self.timings = {
+        'matvec': {site: [] for site in range(len(mps))},
+        'lanczos': {site: [] for site in range(len(mps))},
+        'qr': {site: [] for site in range(len(mps))},
+        'add_layer': {site: [] for site in range(len(mps))},
+        'total': {site: [] for site in range(len(mps))}
+    }
+
     super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
     self.mps.position(0)
     self.compute_right_envs()
@@ -417,23 +424,26 @@ class DMRGEngineBase(MPSSimulationBase):
     if sweep_dir in (-1, 'r', 'right'):
       self.mps._tensors[site] = A
       self.mps._position += 1
+      t0 = time.time()
       self.left_envs[site + 1] = self.add_layer(
           B=self.left_envs[site],
           mps=self.mps[site],
           mpo=self.mpo[site],
           conjmps=self.mps[site],
           direction=1)
+      self.timings['add_layer'][site].append(time.time() - t0)
 
     elif sweep_dir in (1, 'l', 'left'):
       self.mps._tensors[site] = B
       self.mps._position = site
+      t0 = time.time()
       self.right_envs[site - 1] = self.add_layer(
           B=self.right_envs[site],
           mps=self.mps[site],
           mpo=self.mpo[site],
           conjmps=self.mps[site],
           direction=-1)
-
+      self.timings['add_layer'][site].append(time.time() - t0)
     self.timings['total'][site].append(time.time() - t0)
     return e
 
@@ -648,12 +658,6 @@ class FiniteDMRGEngine(DMRGEngineBase):
 
     lb = type(mps[0]).ones([mps.D[0], mps.D[0], mpo.D[0]], dtype=mps.dtype)
     rb = type(mps[-1]).ones([mps.D[-1], mps.D[-1], mpo.D[-1]], dtype=mps.dtype)
-    self.timings = {
-        'matvec': {site: [] for site in range(len(mps))},
-        'lanczos': {site: [] for site in range(len(mps))},
-        'qr': {site: [] for site in range(len(mps))},
-        'total': {site: [] for site in range(len(mps))}
-    }
     super().__init__(mps=mps, mpo=mpo, lb=lb, rb=rb, name=name)
 
 
